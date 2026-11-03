@@ -1,0 +1,525 @@
+"""Disposable installer provenance tests; these fixtures confer no trust."""
+
+import base64
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import oracle_install as installer
+import oracle_owner as verifier
+import oracle_portal as runner
+
+
+class Source:
+    def __init__(self, files):
+        self.files = files
+        self.failed = False
+        self.truncated = False
+        self.mode = "100644"
+
+    def owner(self):
+        return verifier.OWNER
+
+    def qualify(self, binding):
+        verifier.require(not self.failed, "Real CI fixture failed")
+        return [{"run_id": 123, "run_attempt": 1}]
+
+    def api(self, path):
+        if "/git/commits/" in path:
+            verifier.require(
+                hasattr(self, "baseline_expected")
+                and path.endswith(self.baseline_expected[0]),
+                "Unknown baseline commit",
+            )
+            return {
+                "sha": self.baseline_expected[0],
+                "tree": {"sha": self.baseline_expected[1]},
+            }
+        if "/git/trees/" in path:
+            return {
+                "truncated": self.truncated,
+                "tree": [
+                    {
+                        "type": "blob",
+                        "mode": self.mode,
+                        "path": name,
+                        "sha": hashlib.sha1(data).hexdigest(),
+                    }
+                    for name, data in self.files.items()
+                ],
+            }
+        data = next(
+            data
+            for data in self.files.values()
+            if hashlib.sha1(data).hexdigest() == path.rsplit("/", 1)[1]
+        )
+        return {"encoding": "base64", "content": base64.b64encode(data).decode()}
+
+
+class InstallTests(unittest.TestCase):
+    allowed = installer.ALLOWED
+    component = "frontend"
+    script = "oracle_portal_frontend.py"
+    prefix = "portal-"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(
+            dir=(
+                Path.home()
+                if os.getuid() == 0
+                else "/private/tmp" if Path("/private/tmp").exists() else None
+            )
+        )
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.root.chmod(0o700)
+        self.manifest = {
+            "schema_version": 1,
+            "repository": "DruHustle/onesa-company-portal",
+            "candidate_commit": "a" * 40,
+            "source_tree": "",
+            "files": {},
+            "policy_sha256": "",
+            "tool_source_sha256": "",
+        }
+        files = {}
+        source_root = self.root / "synthetic-source"
+        source_root.mkdir(mode=0o700)
+        repo = Path(__file__).resolve().parents[2]
+        for local, source in self.allowed.items():
+            data = (repo / source).read_bytes()
+            files[source] = data
+            self.put(local, data)
+            self.manifest["files"][local] = hashlib.sha256(data).hexdigest()
+        for name in [
+            "onesa-company-portal-frontend/package.json",
+            "onesa-company-portal-frontend/package-lock.json",
+            "onesa-company-portal-frontend/vendor/onesa-portal-minimatch-callable-1.0.0.tgz",
+            "scripts/check_tls_bundle.mjs",
+        ]:
+            files[name] = (repo / name).read_bytes()
+        for name in ["src/config/products.ts", "src/components/home-products.tsx"]:
+            files["onesa-company-portal-frontend/" + name] = (
+                b"// disposable parser fixture only\n"
+            )
+        if self.component in {"identity", "identity-acceptance"}:
+            for name in subprocess.check_output(
+                ["git", "-C", str(repo), "ls-files", "onesa-company-portal-backend"],
+                text=True,
+            ).splitlines():
+                files[name] = (repo / name).read_bytes()
+        for name, data in files.items():
+            path = source_root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        subprocess.run(
+            ["git", "init", "--quiet", str(source_root)],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(source_root), "add", "."], check=True, capture_output=True
+        )
+        tree = subprocess.check_output(
+            ["git", "-C", str(source_root), "write-tree"], text=True
+        ).strip()
+        self.manifest["source_tree"] = tree
+        archive = subprocess.check_output(
+            ["git", "-C", str(source_root), "archive", tree]
+        )
+        self.put("tool-source.tar", archive)
+        self.manifest["tool_source_sha256"] = hashlib.sha256(archive).hexdigest()
+        self.github = Source(files)
+        target = installer.INSTALL_PARENT / (self.prefix + tree)
+        self.policy = {
+            "schema_version": 1,
+            "components": {},
+            "toolchain": {
+                "source_commit": "a" * 40,
+                "source_tree": tree,
+                "source_sha256": self.manifest["tool_source_sha256"],
+                "probe_image": "sha256:" + "1" * 64,
+                "cli_image": "sha256:" + "2" * 64,
+                "builder_image": "sha256:" + "3" * 64,
+                "builder_sha256": self.manifest["files"][
+                    "runners/oracle_frontend_build.py"
+                ],
+                "transport_guard_sha256": self.manifest["files"][
+                    "runners/oracle_vercel_transport_guard.cjs"
+                ],
+                "probe_files": runner.probe_source_files(
+                    {
+                        name: hashlib.sha256(data).hexdigest()
+                        for name, data in files.items()
+                    }
+                ),
+            },
+        }
+        for component, script in [(self.component, self.script)]:
+            self.policy["components"]["DruHustle/onesa-company-portal:" + component] = {
+                "qualification_attempt_limit": 1,
+                "runners": {
+                    phase: {
+                        "path": str(target / "runners" / script),
+                        "sha256": self.manifest["files"]["runners/" + script],
+                        "timeout_seconds": 1800,
+                    }
+                    for phase in verifier.PHASES
+                },
+                "required_checks": {
+                    phase: sorted(verifier.REQUIRED_CHECKS[phase])
+                    for phase in verifier.PHASES
+                },
+            }
+        if self.component in {
+            "scanner",
+            "worker",
+            "api",
+            "identity",
+            "identity-acceptance",
+        }:
+            tool = self.policy["toolchain"]
+            self.policy["toolchain"] = {
+                **{
+                    key: tool[key]
+                    for key in ["source_commit", "source_tree", "source_sha256"]
+                },
+                "probe_files": {
+                    "scripts/oracle_backup_store.mjs": hashlib.sha256(
+                        files["scripts/oracle_backup_store.mjs"]
+                    ).hexdigest()
+                },
+                "transport_image": "sha256:" + "4" * 64,
+                "workflow_files": {
+                    upstream: hashlib.sha256(files[upstream]).hexdigest()
+                    for local, upstream in self.allowed.items()
+                    if local not in installer.ALLOWED
+                    and local != "runners/" + self.script
+                },
+            }
+        if self.component == "api":
+            self.policy["toolchain"]["accepted_api_baseline"] = {
+                "candidate_commit": "b" * 40,
+                "source_tree": "c" * 40,
+                "source_sha256": "d" * 64,
+                "artifact_digest": "sha256:" + "e" * 64,
+            }
+            self.github.baseline_expected = ("b" * 40, "c" * 40)
+        if self.component in {"identity", "identity-acceptance"}:
+            import oracle_portal_identity as identity
+            import oracle_portal_identity_acceptance as acceptance
+
+            selected = identity if self.component == "identity" else acceptance
+            profile = self.policy["components"][
+                "DruHustle/onesa-company-portal:" + self.component
+            ]
+            profile["qualification_profile"] = selected.PROFILE
+            profile["required_checks"] = {
+                phase: sorted(values) for phase, values in selected.CHECKS.items()
+            }
+            self.policy["toolchain"].update(
+                identity_files=identity.identity_source_files(
+                    {
+                        name: hashlib.sha256(data).hexdigest()
+                        for name, data in files.items()
+                    }
+                ),
+                probe_image="sha256:" + "5" * 64,
+                postgres_image="sha256:" + "6" * 64,
+            )
+        self.seal()
+
+    def put(self, name, data):
+        p = self.root / name
+        p.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        p.write_bytes(data)
+        p.chmod(0o600)
+
+    def seal(self):
+        data = verifier.canonical(self.policy)
+        self.put("policy.json", data)
+        self.manifest["policy_sha256"] = hashlib.sha256(data).hexdigest()
+        data = verifier.canonical(self.manifest)
+        self.put("manifest.json", data)
+        self.pin = hashlib.sha256(data).hexdigest()
+
+    def validate(self):
+        return installer.validate(self.root, self.pin, self.github, uid=os.getuid())
+
+    @unittest.skipUnless(os.getuid() == 0, "Root custody ancestor policy")
+    def test_shared_writable_parent_still_refused(self):
+        shared = self.root / "shared-parent"
+        shared.mkdir(mode=0o700)
+        shared.chmod(0o777)
+        child = shared / "custody"
+        child.mkdir(mode=0o700)
+        with self.assertRaisesRegex(verifier.Rejected, "ancestors"):
+            verifier.private(child, directory=True, uid=0)
+
+    def test_exact_main_bytes_and_complete_policy(self):
+        m, _target, files, ci = self.validate()
+        self.assertEqual(m, self.manifest)
+        self.assertEqual(ci[0]["run_id"], 123)
+        self.assertIn("policy.json", files)
+
+    def test_tamper_wrong_pin_and_unreviewed_blob(self):
+        self.put("oracle_owner.py", b"candidate replacement")
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+        self.manifest["files"]["oracle_owner.py"] = hashlib.sha256(
+            b"candidate replacement"
+        ).hexdigest()
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_ci_tree_and_source_type_fail_closed(self):
+        for field, value in [("failed", True), ("truncated", True), ("mode", "120000")]:
+            original = getattr(self.github, field)
+            setattr(self.github, field, value)
+            with self.subTest(field=field), self.assertRaises(verifier.Rejected):
+                self.validate()
+            setattr(self.github, field, original)
+
+    def test_incomplete_policy_refused(self):
+        self.policy["components"]["DruHustle/onesa-company-portal:" + self.component][
+            "required_checks"
+        ]["staging"].remove("persistence")
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_extra_component_cannot_be_commissioned(self):
+        import copy
+
+        extra = "frontend" if self.component == "api" else "api"
+        self.policy["components"]["DruHustle/onesa-company-portal:" + extra] = (
+            copy.deepcopy(
+                self.policy["components"][
+                    "DruHustle/onesa-company-portal:" + self.component
+                ]
+            )
+        )
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_alias_and_mode_refused(self):
+        p = self.root / "oracle_owner.py"
+        data = p.read_bytes()
+        p.unlink()
+        other = self.root / "other"
+        other.write_bytes(data)
+        other.chmod(0o600)
+        p.symlink_to(other)
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_dry_run_performs_no_install_or_authority_write(self):
+        with patch.object(installer, "INSTALL_PARENT", self.root / "not-created"):
+            # Regenerate paths in the checked policy for this disposable location.
+            for component, script in [(self.component, self.script)]:
+                for r in self.policy["components"][
+                    "DruHustle/onesa-company-portal:" + component
+                ]["runners"].values():
+                    r["path"] = str(
+                        installer.INSTALL_PARENT
+                        / (self.prefix + self.manifest["source_tree"])
+                        / "runners"
+                        / script
+                    )
+            self.seal()
+            result = installer.install(
+                self.root, self.pin, self.github, dry_run=True, uid=os.getuid()
+            )
+            self.assertEqual(result["state"], "INSTALLATION_READY")
+            self.assertFalse(installer.INSTALL_PARENT.exists())
+
+
+class ScannerInstallTests(InstallTests):
+    allowed = installer.SCANNER_ALLOWED
+    component = "scanner"
+    script = "oracle_portal_scanner.py"
+    prefix = "portal-scanner-"
+
+    def test_scanner_profile_cannot_install_or_authorize_frontend(self):
+        profile = self.policy["components"].pop(
+            "DruHustle/onesa-company-portal:scanner"
+        )
+        self.policy["components"]["DruHustle/onesa-company-portal:frontend"] = profile
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+
+class WorkerInstallTests(InstallTests):
+    allowed = installer.WORKER_ALLOWED
+    component = "worker"
+    script = "oracle_portal_worker.py"
+    prefix = "portal-worker-"
+
+    def test_worker_installation_cannot_authorize_scanner(self):
+        profile = self.policy["components"].pop("DruHustle/onesa-company-portal:worker")
+        self.policy["components"]["DruHustle/onesa-company-portal:scanner"] = profile
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_missing_production_tool_refuses_incomplete_installation(self):
+        name = "runners/oracle_portal_worker_production.mjs"
+        self.manifest["files"].pop(name)
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_shared_scanner_code_pin_is_required_for_worker_installation(self):
+        self.policy["toolchain"]["workflow_files"][
+            "scripts/release/oracle_portal_scanner.py"
+        ] = ("f" * 64)
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+
+class APIInstallTests(InstallTests):
+    allowed = installer.API_ALLOWED
+    component = "api"
+    script = "oracle_portal_api.py"
+    prefix = "portal-api-"
+
+    def test_api_conditional_probe_is_pinned_and_cannot_be_omitted(self):
+        name = "runners/oracle_portal_worker_production.mjs"
+        self.assertIn(name, self.manifest["files"])
+        self.manifest["files"].pop(name)
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_api_profile_cannot_install_or_authorize_worker(self):
+        profile = self.policy["components"].pop("DruHustle/onesa-company-portal:api")
+        self.policy["components"]["DruHustle/onesa-company-portal:worker"] = profile
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_missing_or_foreign_baseline_and_incomplete_tool_refuse_installation(self):
+        for change in [
+            lambda: self.policy["toolchain"]["accepted_api_baseline"].update(
+                source_tree="f" * 40
+            ),
+            lambda: self.policy["toolchain"].pop("accepted_api_baseline"),
+        ]:
+            self.setUp()
+            change()
+            self.seal()
+            with self.assertRaises(verifier.Rejected):
+                self.validate()
+        self.setUp()
+        self.manifest["files"].pop("runners/oracle_portal_api_production.mjs")
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+
+class IdentityInstallTests(InstallTests):
+    allowed = installer.IDENTITY_ALLOWED
+    component = "identity"
+    script = "oracle_portal_identity.py"
+    prefix = "portal-identity-"
+
+    def test_auth_migration_browser_and_restore_closure_cannot_be_trimmed(self):
+        for name in [
+            "oracle_portal_identity_migrate.mjs",
+            "oracle_portal_identity_browser.mjs",
+            "oracle_portal_identity_mail.mjs",
+            "restore_lockdown.py",
+        ]:
+            prior = self.manifest["files"].pop("runners/" + name)
+            self.seal()
+            with self.subTest(name=name), self.assertRaises(verifier.Rejected):
+                self.validate()
+            self.manifest["files"]["runners/" + name] = prior
+
+    def test_identity_requires_reviewed_source_map_and_explicit_migration_checks(self):
+        tool = self.policy["toolchain"]
+        name = "onesa-company-portal-backend/src/identity/routes.ts"
+        original = tool["identity_files"][name]
+        tool["identity_files"][name] = "0" * 64
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+        tool["identity_files"][name] = original
+        self.policy["components"]["DruHustle/onesa-company-portal:identity"][
+            "required_checks"
+        ]["staging"].remove("identity_migration")
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+
+class IdentityAcceptanceInstallTests(IdentityInstallTests):
+    component = "identity-acceptance"
+    script = "oracle_portal_identity_acceptance.py"
+    prefix = "portal-identity-acceptance-"
+
+    def test_identity_requires_reviewed_source_map_and_explicit_migration_checks(self):
+        name = "onesa-company-portal-backend/src/identity/routes.ts"
+        self.policy["toolchain"]["identity_files"].pop(name)
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+    def test_account_profile_cannot_issue_integrated_acceptance(self):
+        profile = self.policy["components"][
+            "DruHustle/onesa-company-portal:identity-acceptance"
+        ]
+        profile["qualification_profile"] = "portal-shared-identity-v1"
+        self.seal()
+        with self.assertRaises(verifier.Rejected):
+            self.validate()
+
+
+class IsolatedInstallerEntryTests(unittest.TestCase):
+    def test_isolated_python_resolves_the_bundled_verifier(self):
+        result = subprocess.run(
+            [sys.executable, "-I", str(Path(installer.__file__)), "--help"],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertIn(b"--manifest-pin", result.stdout)
+
+    def test_installed_identity_runners_import_the_complete_bundle_under_isolated_python(
+        self,
+    ):
+        source = Path(installer.__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for destination, upstream in installer.IDENTITY_ALLOWED.items():
+                target = root / destination
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source / upstream, target)
+            for runner in (
+                "oracle_portal_identity.py",
+                "oracle_portal_identity_acceptance.py",
+            ):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-c",
+                        "import runpy,sys; runpy.run_path(sys.argv[1],run_name='installed_probe')",
+                        str(root / "runners" / runner),
+                    ],
+                    capture_output=True,
+                    timeout=10,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr.decode())

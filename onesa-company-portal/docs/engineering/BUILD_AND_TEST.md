@@ -1,0 +1,1391 @@
+# Separate application builds and tests
+
+## NVIDIA reference asset gallery
+
+The product index and Drone product page contain three browser derivatives from
+NVIDIA's `nvidia/simready-assets` dataset, pinned to revision
+`4763fbfaa4f8e97658e68b57d01b4c86659e08b5`. The local catalog binds each GLB,
+rendered preview, original license and source record by SHA-256 and byte length.
+The CC BY 4.0 source credit and Onesa geometry/material modifications remain
+visible beside the viewer. Three.js `0.186.1` and its type definitions are pinned
+in the frontend lockfile; this gallery does not change backend contracts or
+grant simulation, sensor or physical-control authority.
+The renderer's complete MIT notice ships at `/licenses/three.txt`; the build
+compares it with the installed pinned package's license before emitting assets.
+Fixed same-origin model requests retain origin-scoped preview cookies and reject
+redirects; the application adds no credential headers or provider token.
+Only canonical GET/HEAD requests without a query for the three catalog GLBs use
+`Cache-Control: private, no-cache`. These public, pinned reference models may be
+stored by the individual browser but must be revalidated; shared caches receive
+no permission. Other resources and private pages retain their existing policies,
+including `private, no-store` in the application proxy. Host routing, preview
+protection, CSP and per-response nonces are unchanged. This narrow correction
+addresses the [upstream Chromium streamed no-store response defect](https://github.com/microsoft/playwright/issues/42742),
+which can report an aborted transport and make the original response body
+unavailable after a byte-counted reader reaches EOF. The bounded streaming reader,
+asset hashes and pinned browser versions remain unchanged. Qualification still
+requires successful completion and exact bytes from the original browser response;
+an API refetch or rendered state alone cannot replace that evidence.
+
+The enlarged-text observation also checks the Drone page surrounding the gallery.
+Native Chromium and Firefox exposed German copy expanding a 320px viewport to
+420px at 200% text size: the mobile portfolio grid and software rows retained
+content-based minimum widths. Their copy now wraps within shrinkable tracks;
+the narrow-screen film control flows below the poster so enlarged text can grow
+without being clipped. The observer retains the gallery and full-page overflow
+assertions, and checks the measured portfolio/software copy and film button's own
+scroll dimensions and clipping ancestors. The qualification profile pins this
+exact reviewed stylesheet; hiding overflow or adding unrelated CSS fails closed.
+Actual rendering and reflow still require the pinned three-engine native run.
+
+Follow-up native measurements and retained images showed two additional scroll
+pixels below otherwise visible headings, with no clipping ancestor. The shared
+DOM measurement therefore rejects own vertical overflow only for computed
+`hidden`, `clip`, `auto` or `scroll`; normal visible font overflow is accepted.
+Original horizontal, viewport, target-count and ancestor checks keep their
+one-pixel tolerance. Against actual `hidden` or `clip` ancestors, both the block
+and its content range must fit, so text extending from a fitting block cannot
+be hidden by a wrapper. Each real-engine fixture checks default visible text,
+actual own clipping/scrolling, both kinds of ancestor clipping, and horizontal
+overflow. These adverse DOM measurements write no failure artifacts or receipts.
+
+On a targeted reflow failure, the observer keeps the original assertion and logs
+at most eight public target records: geometry, own scroll/client dimensions,
+font size, line height, overflow modes and the first clipping ancestor. A capture
+attempt has a two-second total deadline and can retain one cropped, at most
+480×320 CSS-pixel PNG per failed engine. The crop includes a small amount of the
+same public copy container around the text so the crop itself does not imply CSS
+clipping. No text, HTML, request URLs, cookies or arbitrary error strings enter
+the diagnostic metadata. Capture failure never replaces the original error.
+The native fixture copies only explicit engine-named JSON/PNG files into
+`test-results/public-diagnostics`, which is already covered by the verification
+artifact. Retention validates exact metadata shape, file type, checksums,
+compressed/decoded image bounds and canonical non-symlink paths; browser receipts,
+session files and other temporary files are excluded. The standalone Drone
+journey also writes one bounded failure-only JSON record with case/phase,
+liveness, error/crash counts, known model states and a short optional summary
+geometry read. Its original click, timeouts, assertions and error are preserved,
+and its exact reviewed script is source-pinned. These optional failure files do
+not supply a PASS receipt or replace any qualification observation.
+
+Run these from `onesa-company-portal-frontend` after a locked install:
+
+```sh
+npm run test:nvidia-assets
+npm run build
+npm run test:nvidia-browser
+```
+
+The asset tests validate actual bytes, immutable provenance, license text and
+static geometry budgets, then parse all three files with the real GLTF loader
+while forbidding external resource requests. Corrupt hashes, mutable revision
+names, traversal paths, duplicate identities and malformed files must fail.
+The production build also validates that the compiled and public catalogs agree.
+
+The browser suite starts an isolated production frontend and loopback synthetic
+API. Its default run uses the locked Chromium, Firefox and WebKit engines to
+check both languages, light/dark appearance, desktop/mobile widths, all three
+models, keyboard controls, accessibility, download failure/retry, graphics-context
+loss, no-WebGL and no-JavaScript previews. A synthetic HttpOnly cookie gate rejects
+anonymous model requests, then requires actual rendering of all three authorized
+models. Same-origin and foreign redirects must fail without reaching their targets;
+retry must restore actual rendering after each refusal.
+Initial lighting applies the same system-appearance handler used for later
+changes. For each model in all three engines, the gallery regression checks
+stable same-session canvas images, a changed dark appearance, and equality of
+initial light with returned light after a dark/light cycle, without reloading
+the model. It uses no cross-engine or cross-machine image baseline.
+Native run `41321003379`, artifact `13088888322` (`verification-evidence`),
+retained an initial/returned mismatch of 22 out of 64,530 decoded pixels, with
+maximum channel difference 1: 14 pixels at the badge's rounded edge and 8 at the
+stage's rounded clipping edge. All model and other pixels, and all retained
+initial/returned geometry, styles and media state, matched exactly. The specific
+Chromium rasterization mechanism was not established by that evidence.
+Renderer-comparison captures therefore use Playwright's screenshot-scoped style
+to set the unique gallery stage's border radius to zero and hide its one direct
+badge span. The full canvas crop, background, border width, overflow, opacity,
+geometry, camera and assets remain unchanged; exact PNG equality is retained.
+Mandatory bounded normal-state snapshots before and after each screenshot require
+exactly one stage, badge and canvas with their expected identities, a visible
+badge, ready rendering and no context loss. They record corner radii, overflow and
+visibility as well as the geometry and colors below. The canvas is scrolled into
+view and painted before the first snapshot to establish a stable capture position.
+Each screenshot must restore
+the exact normal state, and initial/returned normal UI state must also match.
+For the first model in each engine, real DOM adverse checks hide the badge and
+change the stage radius, require guard rejection, then verify exact restoration.
+The existing one-degree slider movement must also change the renderer capture.
+Ordinary gallery screenshots and accessibility checks retain the normal styling.
+If that unchanged initial/returned comparison fails, the journey retains exactly
+its three existing initial-light, dark and returned-light PNG buffers plus one
+fixed-schema JSON file under `test-results/public-diagnostics`. Each image is
+limited to 480×320 pixels and 512 KiB; JSON is limited to 16 KiB. Fixed engine/model
+names, canonical non-symlink directories and exclusive writes prevent traversal
+or overwrites. Required one-second reads before and after each screenshot
+record canvas/host/stage/badge geometry, foreground/background RGBA, opacity and numeric transforms,
+backing dimensions, DPR, viewport/scroll position and media/renderer state.
+The renderer capture remains the composited full canvas area with only the two
+specified screenshot decorations controlled; it is not an isolated WebGL bitmap.
+No text, HTML, credentials,
+arbitrary URLs or error bodies enter the metadata. Diagnostic failure preserves
+the original assertion. This repository-only journey imports the existing pure
+PNG validator/deadline from `scripts/release/oracle_portal_nvidia_contract.mjs`;
+it requires the full source checkout and adds no production dependency.
+This fixture uses real loopback HTTP responses and server-side cookie observation;
+[Playwright routing hooks](https://playwright.dev/docs/network#headers-owned-by-the-network-stack)
+run before network-owned headers are attached.
+Both scripts are mandatory named
+`Release requirement:` steps in `verify.yml`; skipped or failed steps cannot
+qualify a release. CI captures temporary per-model screenshots before the theme
+and accessibility checks to retain their scrolling and theme-transition regression.
+The mandatory CI run uses a 1920×1080, 24-bit Xvfb display and
+`NVIDIA_FIREFOX_HEADED=true` to exercise
+Firefox's real WebGL renderer on the Linux runner; Chromium and WebKit stay
+headless. All three engines retain every rendering and recovery assertion.
+A `LOCAL_NVIDIA_CHROMIUM_EXECUTABLE` run is explicitly reported
+as supplemental local evidence and does not satisfy the pinned-engine or hosted
+release requirements. No provider request or production data is used by these tests.
+
+Browser dependency preparation runs only on the expected disposable GitHub-hosted
+runner and validates all existing APT sources before writing. An unexpected
+mirror URI fails closed with bounded scheme/hostname/port diagnostics, a recognized
+Ubuntu-path label or redacted path length, and credential/query/fragment presence
+flags. Credentials, arbitrary paths and query/fragment values are never logged.
+Explicit ports, including zero, and empty user information are rejected; malformed
+URI parser errors are redacted. The existing mirror allowlist, archive signing and
+canonical HTTPS requirement remain.
+
+The frontend's development dependency correction scopes patched minimatch to its
+reviewed consumers. ESLint, `@eslint/config-array`, `@eslint/eslintrc` and Redocly
+use the independent local callable adapter; `@typescript-eslint/typescript-estree`
+uses minimatch's native named exports. The already locked ESLint version is pinned
+in `package.json` so its exact-parent override remains reproducible. This is a
+consumer-specific change and does not replace every minimatch dependency globally.
+Run `npm --prefix onesa-company-portal-frontend run test:dependency-security` after
+a clean locked install. Its six cases check installed identities and upstream
+integrity, legacy pattern behavior, actual ESLint enumeration and error detection,
+Redocly header matching, estree's native exports and bounded adverse preprocessing.
+The command is a mandatory named `Release requirement:` step before the asset tests;
+dependency audits and generated-contract checks remain separate requirements.
+Both the application and Oracle probe dependency stages copy `vendor/` before
+their locked installations so the local adapter archive is available in clean
+image builds. `scripts/test_oracle_probe_dependencies.py` reconstructs the
+probe's actual COPY inputs, performs a clean offline install from the warmed CI
+cache, checks its installed consumers and verifies both commissioned source
+closures. It runs in the existing Oracle preparation suite after frontend install.
+
+The backend now carries its own independently packaged callable adapter for the
+same patched minimatch 11.0.1 implementation. Its exact ESLint consumers use the
+callable interface, while TypeScript's parser retains the upstream named exports.
+Run `npm --prefix onesa-company-portal-backend run test:dependency-security` after
+a clean locked install. Five tests check the actual installed consumers, upstream
+integrity/license, ESLint file enumeration and errors, pattern behavior and bounded
+adverse preprocessing. Verification runs both frontend and backend suites. The
+backend Docker stages copy the reviewed archive before `npm ci`; the final stage
+still omits development dependencies and removes the archive. Production package
+versions and integrity values remain unchanged. A fresh backend audit reports no
+findings; this does not replace image scanning or hosted acceptance.
+
+The explicit Oracle `frontend-nvidia-v1` profile adds anonymous public-renderer
+qualification while retaining the original presentation-only source gate.
+Selecting it requires matching commissioned policy and target configuration,
+the exact newly installed main source, the actual retained frontend as comparison
+baseline, and the complete pinned observer/catalog/license/dependency inputs.
+Its source gate permits only the reviewed renderer integrations, dependency/build
+delta and exact Robot naming substitutions; it does not accept arbitrary frontend,
+authentication, Home hero or application-routing changes. The component remains
+`frontend`, with the existing one-context and provider-operation limits.
+
+The new observer fetches and hashes the 14 public catalog, model, preview,
+license and source-record files in each real engine. It requires all three models
+in 24 distinct Chromium/Firefox/WebKit, EN/DE, 320/1440px and light/dark cases,
+keyboard controls, retained models across system appearance changes, accessibility
+and 200% text reflow. Six engine/language cases require actual product-index
+rendering, graphics-context loss/recovery and no-WebGL/no-JavaScript previews.
+Only those adverse browser capabilities are changed; hosted HTTP responses are
+never intercepted or replaced. The 1400 MiB, bounded CPU and 900-second probe
+limits remain. Firefox uses the pinned engine in Xvfb; no executable override or
+single-engine substitute can qualify. Missing, duplicated, skipped or failed
+cases and incorrect identities/bytes reject the receipt.
+
+Run the release Python suite and the mandatory
+`Release requirement: owner probe readiness and NVIDIA observations` CI step.
+The latter mirrors the probe's helper/data layout in a disposable directory and
+uses a credential-free loopback production build for the real observer regression.
+It checks actual model GET/HEAD cache headers and byte hashes, and rejects the
+model-only policy on queries, noncanonical/unknown model paths, other public
+files, private/Docs/API routes and POST. Source-scope tests require the exact
+proxy import, catalog path set and header-selection delta; simultaneous host,
+CSP, method, query or broad cache-scope changes are refused. Original model
+response collection has a 20-second deadline and is drained before selecting
+another model or closing its context. Failed observations retain only bounded
+engine/view identifiers, catalog IDs, transport/cache-policy states and visible
+element tags/classes/roles/dimensions; they log no HTML, text, cookies or bodies.
+The shared origin/preview-session helper is pinned in both profiles. A separate
+regression starts the actual CLI in a fresh Node process and requires malformed
+synthetic input to fail after the NVIDIA observer import, before browser or
+network activity; an unresolved top-level-await cycle cannot pass through the
+import-only test route.
+These tests remain `LOCAL_SYNTHETIC_NOT_HOSTED`. Network corruption/redirect
+fixtures in the existing local gallery suite also remain synthetic; they are
+not represented as injected hosted success. The new profile claims no signed-in
+business-workflow, database restore, simulation, sensor or hardware acceptance.
+The disposable product/NVIDIA tests connect Node test cancellation to closing
+their owned browser or context, bound startup HTTP headers and bodies, and wait
+for only their own Next child to exit after SIGTERM, with a bounded SIGKILL
+fallback. Run `node --test scripts/release/oracle_portal_test_lifecycle.test.mjs`
+for actual cancellation, held-loopback-response and child-process regressions.
+Existing test deadlines, rendered assertions and production probe limits remain
+unchanged. Cleanup attempts have their own deadline; a noncooperative browser
+driver can still require the unchanged outer CI timeout. The helper never searches
+for or terminates unrelated processes.
+If Firefox reaches its existing test deadline, the disposable observer test logs
+one bounded snapshot of pending API operations and recent outcomes. It records
+fixed phase labels only, returns the actual API promises unchanged, and does not
+record request arguments, URLs, page content, responses or credentials.
+Preview readiness uses synchronous pixel readback from the actual same-origin
+image into a detached 32×32 canvas. The image must remain visible, complete, have
+positive intrinsic dimensions, and produce nontransparent decoded pixels under
+bounded Node-side polling. This avoids awaiting a page-realm image-decoding
+Promise while Firefox has application scripting disabled, a behavior documented
+in [Mozilla issue 1942990](https://bugzilla.mozilla.org/show_bug.cgi?id=1942990)
+and reproduced with the pinned headed browser. The actual-browser regression
+requires the same document's script sentinel to execute in its enabled control
+and remain untouched with scripts disabled; malformed HTTP-200 data, truncated
+PNG data, a held unloaded response and a fully transparent decoded image must
+all be rejected. The measurement does not insert a canvas or enable page scripts.
+Existing real readiness, anonymous denials, retained data-service checks, backup
+evidence, exact hosted artifact checks and owner-controlled release remain required.
+Source implementation and local tests do not install, commission, qualify or
+deploy this profile; current hosted receipts are still necessary.
+
+Operations notification regressions retain raw failed health samples while requiring
+three consecutive transport-only failures spanning two minutes before opening an
+email incident for a healthy API container. DNS/connect/timeout probes get one bounded
+retry; HTTP, TLS, unhealthy-container and shared-service failures remain immediate.
+Different APIs, clock rollback, rapid invocations and observation gaps cannot combine
+into a confirmed outage. Existing delivery identities, reconciliation holds, cooldowns
+and sustained recovery checks remain. Run
+`python3 -m unittest discover -s scripts -p 'test_oracle*.py'`; delivery is mocked
+throughout. Independent backend probes overlap the database/queue read. A synchronized
+regression requires both reads to start before either completes, exercises every
+probe retry, and measures the configured acquisition/delivery allowances against
+the installed-source service deadline. The configured critical path is 49 seconds
+before ordinary overhead within the unchanged 60-second service limit. Timer
+accuracy is one second, with the existing one-minute cadence. Source qualification
+does not prove live timing; verify installed unit properties and ordinary scheduled
+samples through the protected operations-component procedure.
+
+Worker release regressions distinguish an independently replaced image revision
+from its retained Compose recipe directory. The actual project and working
+directory are part of the configuration-bound runtime profile. A different image
+source may retain that recipe; changed project/directory metadata, recipe paths,
+identity-file bytes and runtime settings still fail before deployment. Run the
+existing offline release suite and actual Compose identity test before promotion.
+
+Read-only API observer tests also require the original accepted Robot API chain
+before recognizing an equivalent existing staging runtime. Backend, edge and ROS
+bytes and executable modes, current image checks, immutable runtime code and
+configuration must match. A revoked stage qualification stays revoked and grants
+no authority; the derived baseline preserves an unrelated workload only. Signed
+fixtures reject missing acceptance, changed source, code mounts, interpreter
+injection, physical flags and changed inspector pins. No provider write occurs.
+
+
+The frontend release regression injects a CLI default of production. Staging must
+explicitly select preview before dispatch; an unexpected provider target still
+retains the single durable intent and refuses alias assignment. The tests use no
+provider, credentials or actual CLI deployment. Installed runners require fresh
+source qualification and commissioning before using this correction.
+
+Installer fixtures also place disposable custody under the private home directory
+when executed as root. The explicit writable-parent regression still requires the
+production verifier to reject shared writable ancestors; no custody guard changes.
+
+Release-unit fixtures pin a disposable commissioning registry and keep its keys,
+policy and database inside their temporary directory. Root test execution uses a
+private home-directory parent and never reads the host's production trust registry.
+Scanner fixtures that deliberately replace their policy explicitly update their
+synthetic commissioning record. Production trust checks and release authority are unchanged.
+
+The scanner release regressions run in the existing Python release suite. They
+exercise real Ed25519 signatures in a disposable issuer fixture, source/artifact
+and environment mismatches, revoked/expired or consumed contexts, unsafe rendered
+settings, concurrent attempts and interrupted provider requests. The sanitized
+`scanner-compose.fixture.json` describes public configuration for parsing tests;
+it is neither a provider receipt nor owner authorization. Real default-entrypoint,
+socket access, benign/EICAR, signature persistence and restart observations still
+require the separately commissioned isolated owner-run path.
+
+The database fixture now uses an owner with `CREATEDB` and `CREATEROLE`, without
+superuser access. PostgreSQL does not grant a role creator `SET`/`INHERIT` access
+by default. The provisioner checks the exact source/context marker before granting
+access to its temporary non-login owner role. Read-only inspection grants nothing;
+cleanup still refuses active connections and preserves the existing catalog.
+See [PostgreSQL's role-creator settings](https://www.postgresql.org/docs/17/runtime-config-client.html#GUC-CREATEROLE-SELF-GRANT).
+
+The owned worker-fixture tests use a fresh internal Docker network, synthetic TLS
+certificate and disposable PostgreSQL 17 database. The approved staging hostname
+resolves only to that test container; no hosted credential, published port, provider
+account or application environment is used. The actual backend image applies its
+canonical migrations to the empty fixture and proves concurrent provisioning,
+runtime least privilege, expiry/source/context refusal and cleanup without forced
+connection termination or changes to the existing catalog. CI requires this proof
+after building the backend image. A local run uses
+`python3 scripts/release/worker_fixture_smoke.py <immutable-backend-image-ID>` with
+the pinned PostgreSQL image already downloaded. The nine guard/TLS SMTP tests run
+with `node --test scripts/release/oracle_portal_worker_fixture.test.mjs scripts/release/oracle_portal_worker_smtp.test.mjs`.
+SMTP accepts one named synthetic recipient over TLS and reports acceptance only.
+These checks create no release authority or hosted qualification. The owner worker
+adapter still requires separate review, commissioning and exact-source evidence.
+
+Oracle CI selection keeps an existing push authoritative, including failed,
+pending, skipped or cancelled evidence. Only an absent push permits the existing
+owner-dispatched full workflow; both owner identities, a complete run listing,
+first attempt and every mandatory job/security step remain required. Signed
+references preserve the actual CI event. Synthetic mixed-event regressions must
+reject a newer successful manual run presented over a failing push.
+
+Production observations check readiness and anonymous private-route denials on the
+existing Portal hostname, and require the Company hostname to keep those routes
+blocked. Isolated staging still uses its combined protected Preview. The public
+UI and served-asset checks continue on the Company hostname. An interrupted release
+keeps its actual current deployment separate from the hash-checked source comparison
+baseline and explicitly retained rollback artifact; none of these substitutes for
+fresh qualification and authorization of a corrected candidate.
+
+The read-only API observer preserves an omitted publication variable's existing
+application default of false; invalid explicit values and runtime drift still fail.
+The new operation-scoped observer recovery command requires explicit external owner
+commissioning of its complete reviewed source before observing an existing intent.
+It retains the original signed qualification, authorization and successful provider
+command, checks revocation and fresh observation, and sends no deployment request.
+Disposable signature/ledger tests cover modified or expired commissions, original
+failed/skipped checks, wrong identities, interrupted reads and simultaneous observers.
+This recovery cannot qualify changed application source or accept an uncertain
+provider command. Operational commands remain in the protected canonical procedure.
+
+Independent-runtime recovery tests require a genuine externally commissioned peer
+issuer, its independently pinned verifier and complete signed runtime identity.
+A staging receipt cannot reconcile production; production needs its accepted
+deployment chain. Revoked ancestors, missing/skipped checks, unknown component
+scope and source/image/configuration drift fail closed. The operation-scoped
+commission retains the original plan and records; the observer rechecks peer
+revocation and identity before and after its read-only production verification.
+Historical receipts recognize an already existing runtime without renewing a
+qualification, transferring authorization or issuing another deployment request.
+
+The browser verification job uses supported Ubuntu24.04 explicitly, retaining all
+three engines, the bounded signed dependency installer and every existing deadline.
+
+The offline release suite includes `test_oracle_inventory.py`: completed temporary
+monitoring clients and list/inspect races do not become preservation baselines.
+Long-lived temporary workloads, unchanged-inventory command failures, incomplete
+metadata and real independent runtime changes still fail closed. These fixtures
+make only mocked Docker reads and do not establish hosted qualification.
+
+Owner-run static artifact checks treat Next.js catch-all chunk names such as
+`[...path]` as literal filenames, encode them for HTTP, and reject traversal
+segments, encoded paths, controls, query strings and fragments. Regressions verify
+that every accepted asset is read and hashed; changed or oversized bodies still fail.
+
+`scripts/test_oracle_backup_output.py` exercises the backup decoder and read transport
+with synthetic encrypted objects and a deliberately slow pipe reader. It verifies
+complete bytes under backpressure, reproduces the former synchronous truncation and
+rejects failed or oversized reads. Owner-run qualification pins the read transport
+to its separately installed, exact-source tool bundle.
+
+The pinned backup container runs as its existing unprivileged user. Its reader is
+a hash-verified temporary copy of public transport source, mode `0444` inside a
+private temporary directory. The installed source and credential file stay `0600`.
+Copy tests reject changed bytes, reused destinations and failed custody; a
+network-disabled pinned-container fixture must reproduce private-source EACCES
+and read all 512 KiB through the unchanged nonblocking writer from the copied source.
+
+CI and hosted artifact-build workflows pin Node 24.22.1 explicitly; a cached
+`24` major selector can otherwise select an older vulnerable patch. Runtime images
+and provider-managed runtimes require their own source-bound verification.
+
+> Current pipeline: [automated review, staging qualification and owner activation](../development/CI_CD_PIPELINE_REPORT.md). Prepared local changes are not live deployments; branch/PR optimization and automatic technical evidence supersede older manual-only details.
+
+Run from the repository root with Node 24, Python 3 and Docker when building images.
+Commit lockfiles; `npm ci` installs their exact dependency resolutions.
+
+Reviewed dependency changes use `dev → staging → main`; automatic version PR creation is disabled while update configuration and compatibility constraints are retained.
+Keep the Portal frontend on TypeScript 5.9.3 while `openapi-typescript` 7.13.0
+requires `^5.x` and the installed typescript-eslint 8.71.1 peers require
+`>=4.8.4 <6.1.0`. The TypeScript 7.0.2 update in PR #28 failed `npm ci`
+with `ERESOLVE`; it must not enter a release. Dependabot ignores compiler major
+version updates until the generator, lint tooling and compiler can be upgraded
+together and pass contract generation, lint, type checks and builds. Do not use
+`--force` or `--legacy-peer-deps` to hide peer conflicts. Supported minor/patch updates are reviewed and applied on dev. Security updates remain on the default branch under
+[GitHub's documented target-branch behavior](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#target-branch)
+and still require compatibility checks and the qualified release path.
+
+## Frontend
+
+```sh
+npm --prefix onesa-company-portal-frontend ci
+npm --prefix onesa-company-portal-frontend run lint
+npm --prefix onesa-company-portal-frontend run typecheck
+npm --prefix onesa-company-portal-frontend run build
+docker build -t onesa-portal-frontend:local onesa-company-portal-frontend
+```
+
+For local development: `npm --prefix onesa-company-portal-frontend run dev`.
+Configure `BACKEND_URL` privately on the frontend server, never in a browser secret.
+The container listens on 3300 and needs same-origin routing for `/api/v1/*` to the
+backend. `SITE_URL` and public-release settings are build-time configuration.
+Frontend env example lives in its subdirectory; current native dev scripts load the
+root `.env`, so export values explicitly for independent deployments.
+
+After the production build, run the homepage loading regression:
+
+```sh
+npm --prefix onesa-company-portal-frontend run test:homepage-loading
+```
+
+It starts an isolated loopback mock API with synthetic content and exercises both
+public-release settings, slow responses and recovery. No database, provider credentials
+or hosted backend is required. Verify prompt hero rendering, bounded response completion,
+request-scoped publication checks and fail-closed approval behavior. Passing locally
+does not establish deployed performance or hosted acceptance.
+
+The Node-only transport regression is independent of Next startup and browser installation:
+
+```sh
+npm --prefix onesa-company-portal-frontend run test:public-fetch
+```
+
+It checks real synthetic loopback delayed headers, stalled bodies, upstream cancellation,
+recovery and404 with no database or provider. After installing the existing Chromium/WebKit
+Playwright browsers, also run:
+
+```sh
+npm --prefix onesa-company-portal-frontend run test:public-loading
+```
+
+This separate production-renderer regression binds synthetic loopback services and
+checks slow headers/bodies, optional copy/feed/related content, fresh publication and
+detail reads, genuine404 versus transient failure, recovery, EN/DE navigation and
+browser Back. Section copy and related stories stream independently; optional section
+SEO falls back to maintained metadata after250ms. Complete public response reads have
+a1500ms deadline and abort upstream on expiry. Required release/detail checks precede
+streaming. No public data or approval is cached across requests. The fixture never
+submits forms or uses a database/provider, and refuses local production env files.
+Renderer setup polls readiness for at most60s; page-response assertions retain their
+separate strict budgets. These are lab timings; exact-source hosted acceptance remains
+a separate gate.
+
+## Backend
+
+`tests/mail-claim.test.ts` exercises actual PostgreSQL claims and worker restart
+recovery, including a delivery retry after a 25-hour outage. Attempted mail older
+than 23 hours from creation fails closed for provider reconciliation; fresh retries
+and a first attempt of previously unsent mail remain available. Future creation
+times fail closed as well. The original payload and identity are preserved, with
+no external delivery. The conservative cutoff precedes
+[Resend's 24-hour idempotency expiry](https://resend.com/docs/dashboard/emails/idempotency-keys).
+It does not establish SMTP exactly-once delivery or actual inbox receipt.
+
+### Idle database and worker regression
+
+Oracle staging API container probes use `/api/v1/health`; the production image
+default retains `/api/v1/ready` for existing dependency monitoring. The full request-path regression
+poisons query and connection acquisition, supplies a session cookie, and proves
+that liveness succeeds while `/api/v1/ready` correctly returns 503. Deployment
+qualification retains real readiness, migration and restricted-role checks.
+
+Worker health reads its atomic local success/deadline record and checks the private
+scanner without SQL. A failed tick does not refresh that record. Successful
+processing, retry recovery and durable outboxes remain required.
+Restricted-role validation stays in startup and runs before processing when its
+30-second validation deadline is due; it cannot wake an idle worker independently.
+
+Explicit `WORKER_PROFILE=staging` permits `WORKER_IDLE_MAX_MS` from 5000 to 600000.
+The staging Compose profile opts into a ten-minute maximum. Empty successful ticks
+back off exponentially; actionable pending work, including delayed retries, keeps
+five-second polling, and failures reset the delay. Newly arriving work may wait up
+to ten minutes plus processing duration. Interactive staging sessions can select
+5000 through the qualified configuration procedure. Production retains its 5000
+default and no staging override. Disabled or unaddressed mail stays queued without
+counting as actionable work. SIGTERM interrupts idle sleep promptly.
+
+Run the complete backend suite on the guarded disposable PostgreSQL target.
+`liveness.test.ts`, `worker-polling.test.ts` and `worker-idle.test.ts` cover database
+failure, bounded success expiry, preserved pending mail, reminders, retry exhaustion
+and pending deletion detection. Local tests do not establish deployment or savings.
+`database-recovery.test.ts` terminates only its own idle connection on the guarded
+local test database and proves the next operation reconnects. The pool discards a
+failed idle client and logs a fixed event without exception text or credentials;
+in-flight transactions still fail normally and are never replayed automatically.
+
+After qualified staging installation, observe Neon control-plane status for at
+least ten minutes without SQL or database-backed HTTP polling, then send one real
+application request to verify wake-up. Free has a fixed five-minute idle tail.
+At 0.25 CU, ten-minute periodic idle polling approaches 90 CU-hours per 30 days
+before processing time, ramp-up and user traffic; continuous activity uses 180.
+These are forecasts summed across all project computes, not measured savings.
+Consumed allowance is not reset. See
+[Neon scale to zero](https://neon.com/docs/introduction/scale-to-zero).
+
+```sh
+npm --prefix onesa-company-portal-backend ci
+npm --prefix onesa-company-portal-backend run lint
+npm --prefix onesa-company-portal-backend run typecheck
+npm --prefix onesa-company-portal-backend run build
+(cd onesa-company-portal-backend && node --import tsx --test tests/unit.test.ts tests/contracts.test.ts)
+docker build -t onesa-portal-backend:local onesa-company-portal-backend
+```
+
+For a simpler unit command, from the backend directory use
+`node --import tsx --test tests/unit.test.ts`. Supply `DATABASE_URL`, `SESSION_KEY`
+and the other backend env values at runtime. Native development:
+`npm --prefix onesa-company-portal-backend run dev`; production: built server or image.
+The native scripts load root `.env` when present; examples are references, not auto-loaders.
+
+## Integrated checks
+
+`python3 scripts/check-contracts.py` and `python3 scripts/test-contract-break.py`
+validate contracts. Full backend `npm test` requires a disposable PostgreSQL database
+with `TEST_DATABASE_URL` ending `_test`; it truncates test tables. Never point it at
+application data. Browser tests need an isolated seeded stack and installed Chromium:
+`npm --prefix onesa-company-portal-frontend run test:e2e`.
+
+The test preload and every backend test entrypoint apply
+`tests/local-environment.ts` before importing runtime configuration. It rejects
+hosted database bindings even when their name ends `_test`, clears inherited
+S3/AWS storage credentials and endpoint aliases, scanner sockets/hosts and mail
+provider credentials, and disables cloud metadata discovery. Browser database
+fixtures use the same guard. Local fixtures use temporary files and explicit
+loopback scanner mocks; actual provider tests require their separate controlled
+acceptance scripts. An isolated SQL database alone does not isolate object storage
+or notification delivery. Keep this guard when adding new test entrypoints.
+
+The storage source also refuses inherited remote S3 configuration or orphan AWS
+credentials in `NODE_ENV=test`, before client use and before every storage operation.
+Explicit loopback storage requires a test bucket ending `-test`; default fixtures
+remain temporary local files. The negative regression imports unsanitized synthetic
+cloud settings and tries a runtime override with transport/file-write sentinels: both
+must fail with zero storage writes and zero client sends. Real hosted storage checks
+use the separately qualified, explicitly isolated acceptance target and procedure.
+
+Backend test files run serially because their shared fixture performs grants,
+migrations, truncation and sequence writes. The initialization regression creates
+and removes only its uniquely named disposable `_test` database and test role;
+it verifies rollback, strict refusal of existing objects and restricted permissions.
+
+Existing `verify.yml` runs lint/build/contracts/database/browser/docs/container checks
+under the `verify` job. Require `verify` and `publication-hygiene`. Full exact-source remote CI is a separate gate; inspect the actual current GitHub run and hosted acceptance receipts rather than treating local builds as deployed evidence.
+
+## Container readiness regression
+
+After backend tests create the restricted fixture role on an isolated
+`TEST_DATABASE_URL` ending `_test`, build `portal-backend-ci` and run
+`python3 scripts/startup_smoke.py portal-backend-ci`. This executes the actual
+production CMD at PORT 10000, checks liveness, unsafe-role/unavailable-DB 503,
+restricted-role 200, anonymous protected-route 401 and SIGTERM shutdown.
+Do not use production records or change a live database role to run this test.
+
+The read-only Portal inspection uses the retained reviewed development/staging/main workflow scopes. Its
+allowlisted phase identifies whether runtime or migration URL validation failed;
+never relax the established database identity guard or paste URLs into logs.
+Inspection reports actual role safety and grants only after verifying the database
+identity and schema. Applying a repair remains restricted to the original operator
+branches and successful exact-revision checks.
+
+
+After full backend tests provision the synthetic restricted role on the disposable
+`TEST_DATABASE_URL`, run `python3 scripts/startup_smoke.py onesa-portal-backend:local`.
+On Linux CI it uses host networking; for a dedicated Docker test database use
+`--network container:<isolated-test-db>`. It exercises the production image's default
+CMD at PORT=10000, health, owner-role 503, restricted-role 200, unavailable DB 503,
+authentication and SIGTERM. Never supply an application database to this test.
+
+## Approved company particulars and CMS
+
+The maintained private owner record is `onesa-company-portal-backend/records/company-facts.v1.json`.
+Only its eight expressly approved public fields are generated into independent product
+snapshots; unapproved business claims, private records and identifiers remain excluded.
+Run `python3 scripts/sync_company_details.py --workspace --check` when all three local
+repositories are available, or omit `--workspace` for the independent Portal build.
+The generated snapshots are committed, so CI and deployments require no private record
+or sibling checkout. Never commit the private record simply to make a check pass.
+
+`npm --prefix onesa-company-portal-backend run seed` is an explicit operator command,
+never an application startup action. It synchronizes the approved company particulars
+and EN/DE legal-notice CMS text transactionally, preserving previous CMS revisions.
+New pages remain drafts; existing publication states and all legal/privacy settings
+are preserved. Owner confirmation is identified as the source, not an independent
+register extract. Company approval does not approve processors, retention, transfers,
+recruitment or privacy disclosures. Check any assigned W-IdNr against the actual tax
+notification; [DDG section 5](https://www.gesetze-im-internet.de/ddg/__5.html) requires
+publication of assigned applicable identifiers. Do not invent an identifier or DPO.
+
+Run the mail and company-publication unit tests and the public legal-page browser
+checks, including contact links, exact EN/DE particulars, mobile layout and contrast.
+Mail signatures retain stable provider idempotency keys and are not duplicated on
+retries. Do not send actual email merely to execute the transport unit tests.
+
+## Retired local approval files
+
+`python3 scripts/release/qualify.py decision` always fails closed. Editable `gates.json` strings and a matching local source hash do not establish verified release authority. Use the existing trusted `release-qualification.yml`/`free-qualification.yml` workflow and owner-controlled promotion path. This does not add another reviewer or invalidate existing owner authorization. Contracts, isolated verification and safe anonymous smoke commands remain available.
+
+## Dependency maintenance and continuing detection
+
+Three permanent branches are retained: dev, staging and main. Temporary Dependabot
+security-update and necessary narrow security-release candidate branches are permitted.
+Automatic security-update PR creation is **enabled**, superseding the earlier scoped
+disablement. All three actual default branches are main; they were not changed.
+Security PRs target default main: ordinary version `target-branch: dev` does not
+redirect them. Version PR limits remain zero while registry/compatibility metadata is
+retained. Alerts are enabled, with zero open alerts at the 14 October readback; other
+reported protections are unchanged. Direct dependency-graph SBOM readback returned
+HTTP404, so that setting is not directly verified and was not modified. Existing
+security PRs/branches are preserved. The owner confirmed receiving and monitoring
+Actions failures and Dependabot alerts for all three repositories.
+
+For an ordinary fix, review the advisory, affected package/lockfile, license and full
+diff. Incorporate that single reviewed change on dev, retaining the bot PR/advisory
+reference. Run lint/types, unit/integration/API checks, production builds and dependency/
+image scans; promote through staging and main with actual hosted acceptance. Reconcile
+the bot PR only after main contains the equivalent fix; do not merge it again or close
+it just to shorten the branch list. Breaking changes, unexpected diffs, conflicts and
+failing checks require owner review; patch/minor numbering is insufficient evidence.
+
+For an urgent production finding, verify the actual deployed revision and prepare a
+narrow temporary candidate from it. Exclude unrelated unfinished dev work. Qualify
+that exact candidate against approved isolated staging resources and synthetic data,
+including compatibility with the existing production API/data, then use the current
+owner-controlled main release gate. Existing workflow credentials remain available
+only on allowlisted staging/main refs: a temporary branch does not unlock them.
+If staging already contains unfinished changes, do not reset it or deploy its unrelated
+content; obtain a separately tested candidate-bound staging qualification through the
+existing external owner path before release. The current staging dispatcher does not
+accept arbitrary temporary refs. A candidate without trusted exact-source qualification
+remains blocked. After deployment, reconcile the same fix into dev/staging and preserve
+its reviewed source, release receipts and advisory. Delete a temporary branch only
+after verified incorporation or legitimate supersession and no active dependencies.
+
+PR and installation jobs use credential-free GitHub-hosted runners, isolated test
+resources and synthetic data. Never add deployment secrets to Dependabot, use unsafe
+pull_request_target, execute privileged PR artifacts, or blanket auto-merge. Vercel Git
+configuration denies unspecified branches (including nested bot heads); only the
+existing staging branch can prepare a native Preview. Production stays owner-controlled.
+
+The existing full verification workflow runs weekly on Monday at 06:17 UTC after
+qualified main adoption, and continues required checks for dev/staging/main changes.
+Dependency/source/final-image gates, OS/application checks and Oracle maintenance are
+retained. Track each advisory, severity, affected version, remediation action, responsible
+owner, integration, release and deployed verification in the existing restricted findings
+register. Zero alerts or a fix on dev is not proof the production artifact is patched.
+A session is not a background monitor. Restore the security-PR setting with repository
+`automated-security-fixes` PUT; do not disable it again under superseded instructions.
+
+## System appearance and isolated browser fixtures
+
+Identity assets are versioned alongside the foundation in
+`design-system.consumer.json`. Their common O outline comes from the unchanged
+owner-supplied orbit artwork; Company, AI, Robot and Docs use distinct geometric
+frames. `node scripts/generate_identity_icons.mjs` deliberately regenerates the
+canonical SVG,16/32/64 ICO and180PNG files with the existing installed Playwright
+Chromium. Review the output and provenance, then explicitly copy the relevant
+versioned product files into each consumer and qualify its release. This does not
+run during application startup or silently update sibling builds. Native tab
+readability requires actual browser evidence in addition to HTTP/MIME/byte checks.
+
+`node scripts/test_system_appearance.mjs` validates the pinned shared foundation,
+ordinary text/control contrast, registry and removal of clock/persisted overrides.
+Browser checks use OS preference with an opposing mocked clock, plus live changes
+preserving an unsaved draft, focus and session. All three browser engines remain required.
+Read the canonical protected Onesa Design System and local consumer manifest before
+changing shared semantics. Test representative Company, AI, Robot and Docs views together.
+
+Every ordinary backend/browser fixture imports `tests/local-environment.ts` before
+runtime modules. It rejects hosted/non-test databases and removes inherited cloud,
+scanner and email credentials. Storage additionally rejects any remote binding in
+`NODE_ENV=test` before client construction or writes. Local server adapters bind loopback;
+no production bucket or credentials are prerequisites. Remote acceptance is a separate
+explicitly approved isolated target, never a fallback from ordinary local tests.
+
+## Engineering Docs identity verification
+
+`npm --prefix onesa-company-portal-frontend run test:domains` also checks the
+identity path/callback allowlist. After a production frontend build and Chromium
+installation, run `npm --prefix onesa-company-portal-frontend run test:engineering-sign-in`.
+It starts isolated loopback synthetic services and tests eight mobile/desktop
+appearance views, validation recovery, focus and axe; it sends no email and reads
+no database/provider configuration. Existing full backend tests exercise the actual
+OIDC/PKCE/signed-email flow, code expiry/replay, membership and owner controls using
+the disposable local test database and generated synthetic keys. The preload clears
+inherited ENGINEERING configuration before tests; deterministic schema export
+disables the provider. Local tests do not establish a successful Access integration
+or email inbox receipt. The separate activation sequence is in
+[Engineering Docs identity](ENGINEERING_DOCS_IDENTITY.md).
+
+## Controlled workspace draft regressions
+
+With Node 24, run `npm --prefix onesa-company-portal-frontend run test:workspace-drafts`
+for history-event ordering, including native confirmation's nested event loop. The
+Governance and editorial Playwright suites use the guarded loopback `_test` database
+and real synthetic accounts. They cover unnamed controlled payloads, review notes,
+failed saves, pending-mutation navigation, duplicate submission and all five publication
+summary states. Keep server rate limits intact; clear only the fixture's local login
+limiter between independent synthetic cases. Browser transport fixtures are not hosted
+authorization evidence. The full hosted CI and release qualification remain required.
+
+## Static-first optional hero media
+
+The approved poster, framing and HTML heading remain the default. No approved video
+exists; `src/config/hero-motion.ts` intentionally exports null. Enabling
+`ONESA_HERO_MOTION_ENABLED=true` alone cannot create a video request. Future activation
+requires rights-cleared local desktop/mobile variants, exact SHA-256/size provenance,
+3–5 second single playback and measured poster/video LCP, CLS, CPU and transfer
+acceptance. The owner-held asset brief describes the unchanged hand/Onesa-button scene.
+No third-party embed, audio, looping, new product UI or fabricated asset is permitted.
+Disable the frontend flag to retain the poster without changing any backend.
+
+`npm --prefix onesa-company-portal-frontend run test:hero-motion` runs policy and
+three-engine synthetic DOM controls. It verifies no source assignment for reduced
+motion, data saving, slow connections or invalid assets; rejected/stalled playback,
+mobile selection and changed constraints restore the poster. It does not qualify a
+real codec, video asset or performance claim. A no-JavaScript visitor retains the
+poster and actual HTML content. macOS Firefox uses its own application-data directory;
+synthetic browser scratch may need owner cleanup because of macOS protected folders.
+
+## Engineering sign-in request feedback
+
+After a frontend build, run
+`npm --prefix onesa-company-portal-frontend run test:engineering-sign-in`. The isolated
+renderer covers delayed-send disabled visuals in system light/dark appearance,
+duplicate submission prevention, failed-send email preservation, error clearance
+on retry, a single visible Sent status without a Sent button, the 30-second server
+resend boundary, expired interaction restart and stalled-request recovery. It also
+checks actionable password-setup/approval errors and distinguishes unavailable
+services from expired requests.
+The fixture sends no real mail and grants no hosted membership. Browser feedback
+checks complement the backend registration/link tests; they do not prove delivery
+to a real mailbox or production Engineering Docs access.
+
+The Engineering identity integration suite also checks an emailed link opened in
+a browser with no original interaction cookie, including expiration of the original
+interaction, a fresh PKCE/nonce/state exchange and explicit confirmation. Preparation
+does not consume the link; replay, wrong Origin/CSRF, tampered/expired handoff and
+disabled membership fail. The isolated UI fixture models the canonical redirect to
+a fresh interaction and verifies that no token enters a request URL or browser
+storage. It sends no real email and does not grant production membership.
+
+The maintained `navigation.spec.ts` homepage-topic journeys check distinct focused
+destinations, matching headings, substantive content and reloads in both languages.
+The complete Technology overview and its legacy bookmarked anchors remain supported.
+
+## Node TLS trust regression
+
+Use Node 24.22.1 or a later reviewed security patch in the 24 series. Run
+`node --test scripts/test_tls_trust.mjs` from the repository root. The test uses
+a known public CA certificate and newly generated synthetic localhost certificates
+in isolated child processes. It proves native fetch/HTTPS trust, rejection of
+untrusted certificates and hostname mismatches, idempotence and fail-closed startup.
+Temporary test keys are removed; it sends no application/provider requests.
+
+The startup policy excludes only the SHA-256 fingerprint of the affected
+emSign ECC Root CA - G3 from the effective application default store. It retains
+other default/extra authorities and never disables certificate verification.
+Node changes are thread-local. The API and worker preload the policy before
+client construction; the Next frontend uses its Node-only instrumentation hook.
+Container Node entry points also preload the policy.
+See the [advisory](https://github.com/advisories/GHSA-6q48-6c7w-9gw2) and
+[Node TLS API](https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts).
+Source tests are separate from source-bound staging and production acceptance.
+After the frontend build, run `node scripts/check_tls_bundle.mjs
+onesa-company-portal-frontend` from the repository root. The guard checks actual
+gateway and sign-in server traces and rejects trust-code inclusion in browser
+bundles. Check owner-built Vercel artifacts too by supplying their `.vercel/output`
+directory as the third argument. Instrumentation source alone is insufficient
+evidence that a serverless adapter included the policy.
+
+## Remember-browser and shared Portal session controls
+
+The existing Engineering sign-in renderer covers unchecked-by-default remember
+controls, retained selection between methods, actual request payloads, failed
+submission, keyboard/appearance and an explicit approved Portal-session choice.
+These synthetic controls send no real email and establish no production membership.
+The backend integration and access-registration suites check session versus
+persistent cookies for password and email-link MFA, unchanged server expiry,
+rotation, logout/revocation and one-use factors. The actual OIDC integration checks
+transient versus remembered provider cookies, signed identity, PKCE, missing or
+disabled membership, expired/non-MFA Portal sessions, forced login and max_age.
+Remembering a browser grants no product role and never counts as fresh MFA.
+
+MFA reuse additionally requires purpose-signed, session-bound authentication-time
+proof. `session-proof.test.ts` checks tampering, another signing purpose, token
+substitution, future/expired/malformed evidence and renewal without extending MFA
+freshness. Legacy sessions keep normal Portal access but cannot provide a made-up
+authentication time to Docs. No schema, application credential or MFA key changes.
+
+## Temporary backup-client cleanup
+
+The Oracle regression command below includes
+`scripts/test_oracle_backup_cleanup.py`. It exercises both PostgreSQL backup
+helpers with disposable state and synthetic connection settings. Failed container
+startup, failed psql startup, a Docker cleanup timeout and an interrupted pipe wait
+must still remove the private connection file and attempt scoped helper cleanup.
+The helpers use automatic removal on exit and explicitly remove their anonymous
+image volumes during cleanup. Named application volumes are outside this scope.
+
+Before installing these helper changes, qualify the exact source with the existing
+CI path and network-isolated containers using the already pinned PostgreSQL image.
+Verify forced removal and natural expiry without running a database executable,
+then confirm existing application containers and volumes are preserved. Update
+only these operations files through the existing component installation; preserve
+configuration, keys, receipts and timers, and never rerun the bootstrap installer.
+Observe the next normal scheduled backup rather than triggering a production backup
+to test cleanup.
+
+## Operations notification regression
+
+### Bounded process recovery
+
+`python3 -m unittest discover -s scripts -p 'test_oracle*.py'` also exercises the
+opt-in host recovery controller and shared owner lifecycle interlock. Disposable
+state tests cover separated failure samples, missing/rapid/backward-clock samples,
+startup, stopped/paused/restarting processes, dependency outages, changed image or
+configuration, pre-action recovery, one-action cycle limits, restart delays and
+the persistent three-attempt budget. Intent is fsynced before signaling; storage
+failure and interrupted actions cannot create an automatic replay. Unknown Docker
+or probe output supplies no restart evidence. Only approved full identities can
+be enrolled; the example configuration is disabled and contains placeholders.
+
+The controller uses the fixed local Docker socket to inspect and run process
+checks. API checks use `/api/v1/health` inside the container. Worker checks use
+`dist/src/jobs/liveness-check.js` and no database or scanner connection. The existing
+worker success marker and scanner health remain dependency/readiness evidence.
+Recovery does not change mail claims, ambiguous-delivery reconciliation or leases;
+the full backend mail/retry tests remain mandatory. SMTP is not claimed to provide
+exactly-once delivery after an ambiguous process crash.
+
+Real-child shutdown regressions synchronize actual work entry and SIGTERM handling
+through fixture IPC. A startup heartbeat alone does not prove a job is in flight.
+Shutdown checks use the production pulse period and retain the three-second clean
+drain bound; a separate fast-pulse fixture still checks actual suspension and crash.
+Deterministic startup and atomic-replacement cases retain the strict file-custody
+checks instead of treating every transient read refusal as a stopped worker.
+
+The Python signal tests exercise the full 150-second API and 180-second worker
+grace periods with a deterministic clock, including replacement-process and
+maintenance races. On the disposable native image runner, the mandatory
+`Release requirement: bounded recovery with actual Docker process faults` step
+executes `scripts/oracle_recovery_smoke.py` against the exact built backend image.
+It creates its own network-isolated, mount-free API and independent sentinel with
+synthetic configuration. It observes health with an unavailable database, actual
+process crash recovery, a suspended application, same-container/image recovery,
+and a Docker stop in the final pre-signal callback. Its one-second injected lab
+grace changes no installed target policy. The fixture refuses an installed Onesa
+host and removes only its own full container IDs. A local machine without a Docker
+daemon cannot replace this native gate with mocked process results.
+
+The fixture uses the same explicit `no-new-privileges:true` security option as the
+commissioned runtime profile. Docker preserves a bare `no-new-privileges` option
+in its metadata, so that shorthand fails the controller's strict profile check.
+The CLI regression captures the actual Docker create request through a disposable
+local Unix-socket Engine fixture; it needs the Docker CLI, but creates no container
+and contacts no daemon. Native failures expose only fixed refusal codes, never
+Docker configuration, environment values or arbitrary exception messages.
+
+The controller never calls Docker start/restart, pulls images or changes restart
+policies. It pins the live init process using a Linux PID descriptor, the container
+cgroup and process start identity before TERM and again before any delayed KILL.
+Docker's existing `unless-stopped` policy owns exit recovery. The controller budget
+does not cap Docker's independent native crash-restart policy. Three failed samples
+over at least 120 seconds are required; subsequent controller attempts wait at least
+300 then 900 seconds, with at most three in 24 hours. Exhaustion and ambiguous
+signals latch for owner review, including across controller restarts. Existing
+production/shared outage alerts retain their current bounded notification behavior;
+this feature introduces no staging email or extra database readiness polling.
+
+Installation remains default-off. The commissioned owner verifier and controller
+must share the lifecycle interlock before enrollment can be enabled. Holds survive
+failed deployments and maintenance; changing source alone does not install that
+interlock on the existing host. A replaced container, configuration or image needs
+fresh reviewed enrollment. Protected runtime instructions govern activation and
+reconciliation; never delete a pending journal to reset a budget or rerun the
+initial operations bootstrap on an established host. Scanner and other product
+containers remain outside this version's automatic recovery allowlist.
+
+The separate owner adapter `scripts/release/oracle_runtime_recovery.py` supplies
+source-matched installation, disabled enrollment, staging acceptance, activation
+and ordinary timer observation. It does not rerun the initial operations bootstrap.
+Its immutable closure binds the controller, lifecycle helper, owner verifier and
+both systemd units to the reviewed current-main source and CI. Existing owner SSH
+commissioning and root-only custody remain required. Enrollment consumes the
+identity release adapter's signed runtime observations, verifies unrevoked ancestry,
+and checks the actual full container/image/configuration binding and process probe.
+An image missing the worker liveness program cannot enroll.
+
+The owner acceptance path exercises only the two enrolled staging targets. Before
+each crash, suspension, deliberate stop or owner restoration it persists intent and
+acquires the shared lifecycle lock. It checks a real maintenance hold, confirms that
+the installed timer observes stopped containers without starting them, and preserves
+all unrelated container identities. A failed or interrupted test retains its journal;
+it cannot be replayed as a fresh test. Controller budgets and production grace periods
+are unchanged. The native Actions-only Docker fixture keeps its separate host guards.
+
+Production recovery activation requires both staging fault acceptance and at least
+six healthy ordinary timer executions spanning five minutes. The observer checks
+systemd invocation/trigger timestamps and fresh durable controller state; repeated
+readback or manual controller runs cannot manufacture this interval. Activation is
+reported as enabled but unverified until its own ordinary timer observation succeeds.
+Disabled reenrollment preserves each target's consumed attempt budget and refuses
+pending or latched actions. An interrupted two-file enrollment resumes only its exact
+private transaction; disabling remediation preserves holds and uncertainty.
+
+`python3 -m unittest discover -s scripts -p 'test_oracle_recovery_commissioning.py'`
+uses disposable filesystem, systemd/Docker fixtures and real Ed25519 owner signatures
+to test custody, source changes, revoked/stale acceptance, interrupted enrollment,
+held actuation, unchanged production workloads and timer evidence. These tests do
+not establish an installed host, process fault acceptance or production activation.
+The full native Docker gate and protected hosted procedure remain required.
+
+`scripts/test_oracle_metrics.py` runs the actual metrics JavaScript with disposable
+database and scanner modules using Node 24. It performs no provider request or real
+database query. Database import/query/cleanup failures must preserve an independent
+scanner result, scanner failures must preserve valid queue aggregates, and the
+scanner-only mode must never import the database module. Counts are nonnegative safe
+integers; queue/deletion ages are finite numbers and may be negative when a deletion
+is scheduled in the future. Unknown output fields and invalid metric types are refused.
+
+The normal client retains its existing image, credentials, permissions and read-only
+scanner marker mount. Only a failed, malformed or timed-out combined client permits
+one scanner-only fallback, bounded to four seconds. It calls the same consumer
+readiness function; it does not execute the scanner health script or substitute
+Docker health for marker access. An unavailable fallback remains a failed readiness
+observation. The exercised worst-case I/O path includes both client failures,
+retried public probes and notification delivery: 53 seconds against the unchanged
+60-second service deadline, leaving seven seconds of nominal overhead allowance.
+This budget test is not a hosted latency guarantee or a reason to extend the service
+deadline. The healthy path adds no container or database query.
+
+New worker metrics include typed running/health status. The stable `worker-stopped`
+rule also covers unhealthy workers, so new email payloads explain the observed state.
+Both fields must be present and valid in the stored pending metrics before adding
+that detail. Existing pending payloads without them follow the byte-identical legacy
+format; retries never replace their observation with a new sample. Regressions compare
+the complete serialized provider payload and idempotency key and retain all existing
+incident, cooldown, reconciliation and recovery behavior. No test email is sent.
+
+`scripts/test_oracle_notification_scope.py` exercises staging-only, production-only
+and mixed incidents with delivery and external commands mocked. All staging API
+initial alerts, updates, reminders, restarts and recoveries are excluded before
+notification decisions and incident bookkeeping. Health checks, raw failure/recovery
+records and restart baselines still include staging. The notification projection
+retains production and shared dependencies by actual consumers: the historically
+named staging scanner socket also serves the production worker; SQL/queue metrics
+use the production profile; backups and host resource rules remain eligible.
+
+The private observation has a separate versioned `notification_state` containing
+only eligible metrics, rules and recovery counters. Existing staging incidents retire
+silently; mixed history retains eligible rules/services and original notification
+timestamps. Migration requires fresh sustained health before any eligible recovery.
+Historical receipt files are not rewritten just to apply a new scope. A legacy
+pending payload containing excluded failures or recovered staging names is held for
+provider reconciliation with its original identity/body intact. Never edit its body
+under the old provider key or create a replacement identity. Existing reconciliation
+holds stay enforced even when their timestamps are recent. Sampling continues.
+
+Regressions also cover production recovery while staging still fails, original
+cooldown preservation, per-environment restart accounting, ambiguous delivery retries,
+unchanged receipts and observation persistence. These are offline controls; use the
+protected operations-component procedure for qualified source installation, source
+hash verification, singleton scheduling and normal timer samples. Never rerun the
+initial operations bootstrap or send a production test email for this change.
+
+Run `python3 -m unittest discover -s scripts -p 'test_oracle*.py'` for the
+complete Oracle-operation regression set, including
+`scripts/test_oracle_monitor_persistence.py`. Its eight disposable-state tests
+cover interrupted final writes, failed replacement, the next normal sample,
+pending delivery identity, restart counters, private file modes and simulation
+separation. Delivery is mocked; no production state or mail is used.
+
+The notification controls additionally cover
+synthetic incident transitions, immediate initial alerts, thirty-minute grouping of
+new failure rules/services and six-hour reminders for all unchanged incidents.
+The existing `notification_cooldown_seconds` controls the update window (default
+1800, integer range 60–21600). Partial improvement does not send another update;
+previously emailed rules/services remain grouped until that incident closes.
+Recovery requires at least five elapsed minutes and six consecutive healthy samples,
+with gaps of at most two minutes. Brief health, rapid repeated samples, missed samples
+and invalid/future timestamps cannot prematurely confirm recovery. A two-hour replay
+of changing failures and brief health produces one initial alert and one grouped update,
+followed by one recovery after sustained health. These counts describe that synthetic
+sequence, not a daily message cap or hosted reliability guarantee.
+Tests also cover stable
+notification identities after ambiguous delivery and bounded credential-free Robot
+readiness probes. These controls send no mail or application command and do not restart
+services. Installation is a separately qualified operations-component change; never
+rerun the initial operations bootstrap against existing production.
+
+Every observation still reaches the private metrics/failure records, independently of
+email suppression. `last-recovery.json` records the first clean observation; only the
+confirmed recovery notification closes the emailed incident. Keep the existing one-minute
+timer, probe timeouts, dependencies and scanner enforcement. Validate the installed source
+hash, singleton scheduling and normal samples through the protected operator procedure;
+local regression results alone do not establish that the notification policy is live.
+
+Pending delivery retries stop after23 hours and require provider reconciliation before
+the24-hour [Resend idempotency window](https://resend.com/changelog/idempotency-keys)
+expires. Metric sampling and failure records continue; no new key is created to
+re-send an ambiguously accepted event. Healthy legacy installations do not receive
+a retrospective recovery email when this policy is first installed.
+
+The final snapshot adds restart baselines before one call to the existing atomic
+record writer. A failed temporary write or replacement retains the previous complete
+record, including a pending notification identity. This does not establish fsync,
+power-loss durability or concurrent-writer safety. Before installation, read back
+the actual singleton systemd oneshot unit/timer and check for duplicate schedulers;
+do not start a second monitor to test concurrency. Preserve real pending delivery
+and reconciliation records. Qualify interruption cases only with disposable state
+and mocked delivery, then verify the installed file hash and normal scheduled samples.
+
+## Credential-verified administrator onboarding and resend feedback
+
+Transactional email rendering is covered by `tests/mail.test.ts` and
+`tests/mail-presentation.test.ts` in the backend: exact plain-body compatibility,
+escaping, trusted-origin buttons, malformed-link rejection, embedded owner artwork,
+secret-free preheaders, stable Resend retry bodies and actual text/HTML/inline-image
+SMTP MIME. They send no email. `tests/mail-claim.test.ts` uses the guarded disposable
+PostgreSQL database in the full backend suite to exercise real row locks, competing
+workers, commit/rollback, interrupted claims and legacy/versioned retries. A first
+claim persists the presentation before any provider request; existing attempted jobs
+stay plain. No schema migration, remote font, image tracker or external dependency
+is needed. Browser previews establish layout only; inbox/client acceptance and the
+independently released worker need genuine hosted evidence. Retain the deployed
+renderer for versioned retries during upgrades or rollback; never reset attempts or
+change provider keys to obtain a new design.
+
+The maintained `test:engineering-sign-in` renderer suite checks that no MFA field
+appears before credential proof, enrolled accounts receive the factor step and
+unenrolled accounts receive setup. Both methods retain MFA and remembered-session
+boundaries. It also checks plain Sent status, immediate duplicate-submit exclusion,
+disabled styling, a 30-second explicit resend, failure recovery and server-reported
+Engineering cooldown after refresh. All delivery is mocked on loopback.
+
+The isolated backend suite covers correct/incorrect/disabled accounts, no session
+before factor verification, bearer-link state discovery without consuming attempts,
+concurrent delivery coalescing and explicit resend after the server window. Unknown
+recipients retain the same acknowledgement/cooldown. These tests do not enroll a
+real owner, send real mail or prove production access. Deploy compatible API support
+before the frontend; old clients supplying a factor remain supported.
+
+The bootstrap onboarding regression runs the actual bootstrap process only on the
+isolated local test database, verifies no active/printed factor, completes the UI
+API enrollment protocol and confirms an occupied database cannot be overwritten.
+Existing production enrollments require explicit scoped recovery; a missing audit
+event alone does not establish that an existing factor can safely be removed.
+
+## Advisory patch candidate — 24 October 2026
+
+The current source lock includes Fast URI 3.1.9/4.2.3 and Nodemailer 10.1.4.
+The focused records were reviewed from security PRs #198 and #199; unrelated peer,
+optional and native lock entries were retained. Nodemailer retains MIT-0 licensing;
+Fast URI retains its existing license. Full dependency checks and the actual runtime
+image must pass before release. A source lock update does not update the serving API
+or worker. Private `records/` owner inputs are excluded from the Docker build context.
+
+The current source candidate pins official Node 24.22.1 runtime images (21 October security patch), plus explicit musl and scanner Brotli package minima so cached older layers cannot satisfy the new runtime requirement. The scanner engine remains the reviewed ClamAV 1.4.6. Qualify the API, mail worker and scanner independently; a source lock patch does not update their serving containers. [Node maintainer advisory](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) and [Brotli release](https://github.com/google/brotli/releases/tag/v1.2.1) provide provenance.
+
+## Owner-run frontend boundary regressions
+
+`python3 -m unittest discover -s scripts/release -p 'test_*.py'` includes disposable
+installer provenance, source/artifact identity, frontend scope, provider configuration,
+secret custody, interrupted requests and read-only reconciliation cases. Run
+`node --test scripts/release/oracle_vercel_transport_guard.test.cjs` with loopback
+socket access for atomic request-budget and real transport failure cases.
+The separate pinned CLI protocol fixture requires the credential-free disposable
+CLI image and synthetic custody/workspaces; the protected guide specifies that
+fixture arrangement. It never accepts provider credentials or authorizes a release.
+
+The anonymous Portal browser probe checks EN/DE presentation, mobile and desktop,
+system appearance, reduced motion, accessibility, existing contact navigation and
+private anonymous denials in Chromium, Firefox and WebKit. Its explicit synthetic
+loopback entry emits `LOCAL_SYNTHETIC_NOT_HOSTED`, which cannot satisfy the hosted
+receipt gate. Real owner-run CLI invocation accepts only the approved HTTPS origins.
+It submits no contact form and makes no account, publication or data mutation.
+
+`node --test scripts/release/oracle_portal_browser_readiness.test.mjs` exercises the
+actual owner probe in all three installed browsers. The disposable test directory
+must resolve the frontend's locked browser dependencies, as in `verify.yml`. Open
+background requests cannot replace successful-document and visible-content checks;
+failed documents and missing expected content still fail. Navigation waits for the
+destination document and rendered product anchor. The probe retains all 18 views,
+accessibility, JavaScript-error, mutation, prefetch and anonymous-boundary checks.
+The disposable regression has a 60-second lifecycle budget for cold browser startup,
+assertions and cleanup; launch/navigation/background-request waits are separately
+bounded at 10/10/5 seconds. It releases held responses before closing the browser,
+including failed-launch cleanup, and records phase diagnostics. Rendered assertions
+remain at five seconds. Production probe timeouts and source-specific qualification
+allowances are unchanged. This follows
+[Playwright's readiness guidance](https://playwright.dev/docs/api/class-page#page-wait-for-load-state).
+
+Shared responsive links now default to `prefetch={false}` while preserving explicit
+caller overrides and click navigation. This bounds anonymous background work and
+avoids the reproduced WebKit speculative-fetch failures during page transitions.
+The source-equivalence gate accepts only that exact navigation-byte transformation;
+a broader navigation edit requires broader qualification. The browser probe keeps
+its zero-error gate and also requires zero speculative prefetches.
+
+The Portal project's existing default region and prebuilt deployment regions are
+separate identities: the source-bound profile preserves project default `iad1`
+and actual function region `fra1`. The named provider readback and real pinned-CLI
+fixture verify both; qualification never changes a provider setting to make an
+assumption pass. A changed project default or deployment region is unqualified.
+
+Callback preservation uses the application's existing HTTPS Cloudflare Access team
+host and exact callback-path contract, with no userinfo, custom port, query or
+fragment. The runner validates that structure before credential use, then checks
+the exact named existing provider value; it never changes Access, accounts or MFA.
+
+## Drone product introduction
+
+EN/DE product copy distinguishes the implemented simulation development candidate
+from public hosted acceptance. Neither its concept media nor a Company publication
+qualifies the Drone service, physical flight or an operational delivery offering.
+
+After building the frontend, run `npm run test:drone-product` from
+`onesa-company-portal-frontend`. The production-renderer fixture refuses private frontend
+env files, uses a synthetic loopback content service and checks EN/DE, 390/1440px,
+light/dark, keyboard-operable concept rotation, axe and existing enquiry links.
+The drone media checks decode responsive images, require zero video requests before
+explicit playback (also under reduced motion), verify the real local 12-second MP4
+and native controls, exercise a failed video request and preserve no-JavaScript
+content. They also check the homepage and portfolio entry. The silent film animates
+AI-generated concept stills; it is not footage of aircraft, simulation or a working
+product. Prompts, image/video hashes and processing are in
+`onesa-company-portal-frontend/public/brand/sources.json`.
+It does not submit a live enquiry or establish hosted publication approval.
+
+Worker process regressions use `node --test scripts/release/oracle_portal_worker_fixture.test.mjs scripts/release/oracle_portal_worker_smtp.test.mjs scripts/release/oracle_portal_worker_probe.test.mjs`.
+The backend image-security job additionally runs `sudo -n python3 scripts/release/worker_fixture_smoke.py "$image" --worker-workflows --synthetic-scanner` on the disposable GitHub-hosted runner. It uses an internal Docker network, temporary PostgreSQL/TLS, loopback S3/SMTP protocol fixtures, and a synthetic scanner protocol fixture. The original seven-case database fixture test remains separate.
+
+The worker-process step carries the mandatory release prefix only for the backend
+matrix entry. Frontend and ClamAV images have an explicitly inapplicable label;
+their runtime build, complete security scan and digest recording remain required.
+Pipeline tests inspect the actual matrix label and command. Verifier regressions
+allow those inapplicable skips and still reject a failed, skipped, cancelled or
+incomplete backend worker step. A green workflow does not replace this check.
+
+The process suite starts the actual worker and verifies password/MFA login and replay denial, private-file quarantine and role denials, clean/rejected scan handling, TLS mail acceptance, once-only queue execution, actual object deletion, stale-lock recovery, retry exhaustion, staging idle backoff, graceful shutdown, and session persistence across worker restarts. SMTP acceptance does not establish inbox delivery; the protocol fixtures do not establish external storage or scanner acceptance. The synthetic source/CI inputs are parser-test data, never issued release records. Hosted staging still requires the commissioned external verifier, a reserved source-bound context, exact artifacts and real operational evidence. The new probe is not a production worker executor or an issuer.
+
+## Robot capability descriptions
+
+The EN/DE Home and Products copy distinguishes the currently published one-joint
+simulator from the implemented P-101 inspection development candidate. A Company
+frontend publication does not qualify or publish a Robot component. Check both
+locales in the normal public-page browser suite; retain the separate Robot release
+and hardware safety requirements. Source checks do not establish hosted publication.
+
+## Scanner qualification resource readback
+
+The isolated scanner qualification uses a bounded 2560 MiB memory budget. The
+observer compares actual memory, CPU and process limits, capabilities, ports and
+read-only isolation with the signed source profile before and after restart.
+Resource drift remains a failed check. Existing host-capacity, security, signature,
+authenticated-workflow and rollback gates are still required. The synthetic
+contract tests do not establish genuine hosted memory headroom or acceptance.
+
+## Owner frontend product-presentation coverage
+
+The frontend owner probe now exercises the source-reviewed Drone product routes and local media alongside every existing Robot copy, navigation, anonymous-denial, accessibility, preservation and recovery check. Both languages, all three browser engines, light/dark and narrow/desktop layouts must render decoded images without overflow; the concept film must remain unloaded until keyboard activation and then actually play. The legacy URL must redirect to the canonical product and the existing contact form must retain its topic without submitting. Runtime dependencies, build scripts, authentication and Home hero changes remain outside this presentation profile. Product media has explicit local size bounds. New source, pinned tool installation, commissioning and genuine hosted evidence are required; local tests cannot issue release authority.
+
+WebKit's media buffer requires a bounded writable `/var/tmp` in the read-only owner browser container. The probe adds only a 32 MiB memory-backed, non-executable temporary mount; all existing filesystem, memory, CPU, capability and credential boundaries remain. The three-engine production-build regression exercises real film playback, so an unavailable media buffer stays a failure. Image decoding waits for actual loaded image state before requesting decode, preserving a failed/missing image as an error.
+
+## Scanner image metadata variants
+
+`python3 -m unittest discover -s scripts/release -p 'test_oracle_scanner_image_metadata.py'` checks the observed Docker image metadata shape that omits an unset default command. Omitted and explicit-null `Cmd` both retain the prescribed scanner entrypoint without extra arguments. An actual command, an empty command array or altered required identity/user/entrypoint/environment fields remain refused. The complete source, shipped-file and image-security checks still run. This parser regression does not qualify a hosted scanner or transfer any prior approval.
+
+`python3 -m unittest discover -s scripts/release -p 'test_oracle_scanner_completed_revocation.py'`
+uses real disposable signatures to verify the disposition of a completed, explicitly
+revoked scanner request. Missing, failed, uncertain, forged or mismatched evidence
+remains blocking. The earlier release stays unaccepted; a different source still
+requires all normal qualification, authorization and production checks. These
+offline tests issue no hosted authority and make no deployment request. Operational
+instructions and actual outcomes remain in the protected canonical procedure.
+
+## Independent worker owner adapter checks
+
+Run `python3 -m unittest discover -s scripts/release -p 'test_oracle_portal_worker.py'` and `node --test scripts/release/oracle_portal_scanner_workflows.test.mjs scripts/release/oracle_portal_worker_production.test.mjs`. The complete release suite also checks the worker installer profile, component boundaries and real signature-chain rejection. These local synthetic tests establish no hosted qualification or deployment.
+
+The worker adapter keeps the retained production worker recipe and resource profile. Staging uses a fresh marked database and a read-only retained scanner socket. Its production canary owns a fresh conditional object and a reserved outbox entry; the entry stays unprocessable until object ownership and integrity are established. Interrupted inspection cannot create objects, enqueue work or repeat deployment. Neither the probe nor inspection imports the production worker loop. Source-specific installation, separate owner commissioning, mandatory native checks and genuine hosted evidence remain required.
+
+The same credential-free backend image job also selects `worker_fixture_smoke.py --worker-workflows --synthetic-scanner --worker-production`. This adds an actual production-adapter process test using a second hostname alias on the fresh internal PostgreSQL fixture, synthetic TLS/object storage and the least-privilege runtime role. It checks conditional object ownership, real outbox execution by the worker process, collision preservation, duplicate refusal and inspection without writes. The alias never selects the real production database; no published port, provider credential or hosted release record is used. This test is mandatory in the backend image job and must pass before owner commissioning.
+
+## Independent API runtime owner adapter
+
+The new API adapter retains the existing runtime recipe, loopback ingress, storage volume, resource limits and effective configuration. Its source comparison is anchored to an owner-commissioned baseline and rejects business/authentication/migration changes. Disposable staging exercises the existing password/MFA, authorization, quarantine/download, persistence and worker workflows plus a real interruption of an owned idle database connection; authenticated sessions and schema readiness must recover without a test-added error listener. The read-only production observer checks actual TLS, application role/schema and retained public/anonymous boundaries; it cannot create accounts, publish, mutate business records or repeat deployment.
+
+Run the complete release Python tests and `node --test scripts/release/oracle_portal_api_production.test.mjs scripts/release/oracle_portal_scanner_workflows.test.mjs`. The mandatory backend image fixture adds `worker_fixture_smoke.py --worker-workflows --synthetic-scanner --api-runtime` using an isolated internal PostgreSQL alias and synthetic TLS only. Local parser tests confer no hosted acceptance. Source-specific external installation, explicit commissioning and fresh source-bound qualification/authorization are still required.
+
+
+## Preview session and distinct product views
+
+The production-build product regression also runs the hosted Robot notice check
+against both actual homepage translations in every browser, theme and width.
+It checks synthetic P-101 inspection, its pending independent release and the
+separate hardware qualification statement. A changed synthetic claim must fail.
+The German check accepts the current grammatical phrase `synthetische Inspektion`;
+these credential-free fixtures grant no hosted acceptance or release authority.
+
+The follow-up to the public-product adapter exchanges the existing scoped preview
+credential for a provider cookie with redirects disabled and rebinds it to the
+exact host. Global credential-bearing browser headers are absent. Two real
+localhost/session regressions cover foreign redirects and cookie scope; they do
+not access a provider. All original Robot/Drone views and bounded media mounts
+remain required. Receipt validation checks each browser/language/width/theme
+identity once, so duplicated counts or skipped interactions fail. The hosted
+product observer additionally checks the actual simulation URL and keyboard
+concept rotation without leaving the Portal origin or submitting an enquiry.
+
+The simulation application at `https://drone.onesa.eu` passed its independent
+release verification from Drone source `ff493035`. The Portal CTA reflects that
+available simulation release while retaining development and no-flight-service
+statements. This documentation does not claim the Portal is published; fresh
+main checks and source-bound hosted release evidence remain mandatory.
+
+## Shared Onesa identity and account experience
+
+The backend `tests/onesa-identity.test.ts` uses the guarded disposable PostgreSQL
+database and the actual locked OIDC provider. It covers new and existing identity
+verification, all three product grants, explicit workspace assignment, owner-only
+global administration, MFA, exact callbacks, wrong PKCE, code replay, live role
+changes, native Portal session reuse, account switching and truthful global logout.
+Concurrent regressions hold a real account row lock, admit an HTTP operation,
+revoke its source session, and prove that a password change or sign-in completion
+cannot succeed afterward. Restored protocol records cannot revive a revoked source;
+restore quarantine preserves approvals while clearing sign-in capabilities.
+
+After the normal locked build, run `npm run test:onesa-account` from the frontend.
+The default suite uses the pinned Chromium, Firefox and WebKit installations with
+a production frontend and isolated loopback synthetic API. It covers EN/DE forms,
+320px and desktop layouts, system appearance changes without losing field values
+or focus, product status cards, MFA, verification/recovery fragments, continuation,
+access administration, workspace editing and sign-out. `npm run test:domains`
+includes exact protocol redirect and callback-header guards. CI runs these cases
+without credentials or provider mutations.
+
+An explicitly supplied `ONESA_TEST_CHROMIUM_EXECUTABLE` with
+`ONESA_TEST_BROWSERS=chromium` supports a supplemental local engine when the pinned
+browser download is unavailable. That run is labeled supplemental and never
+substitutes for native three-engine CI or hosted end-to-end acceptance.
+
+The feature remains off until complete owner-held issuer/client configuration,
+additive migrations, restricted grants, exact frontend callback allowlisting and
+independent component qualification are available. The UI uses `/account` for
+the shared product hub and access management. There is no new paid infrastructure
+and no automatic deployment or physical Robot action in these tests.
+
+### Deployment profiles and hosted identity observations
+
+The explicit `frontend-identity-v1` profile covers the reviewed account interface,
+identity routing and the existing public product renderer. It binds the actual
+retained provider deployment and verified baseline archive to the installed current
+main source. A literal file/hash map permits the reviewed frontend changes only;
+unrelated hero, layout, dependency or routing changes require a new review. The
+original presentation/NVIDIA profiles keep their existing restrictions. The new
+profile retains every three-engine public-renderer observation, and its anonymous
+receipt does not claim authenticated account or cross-product acceptance.
+
+Run `python3 -m unittest discover -s scripts/release -p
+'test_oracle_portal_identity_scope.py'` and
+`node --test scripts/release/oracle_portal_identity_browser.test.mjs` along with the
+existing release suite. The observer boundary suite checks origin and source
+bindings, operation-owned synthetic addresses, standard MFA vectors, preview
+cookie scope, bounded IMAP literal parsing, MIME transfer encoding, exact delivered
+recipient/time/link checks and redacted refusal output. These are local regression
+tests, not evidence that a provider or hosted interface accepted the release.
+
+The separately installed hosted helper consumes private stdin only. Its account
+scope observes real registration, verification delivery, member/administrator UI
+and API access, fresh MFA, password-reset delivery and sign-out. Its integrated
+scope additionally follows each product's actual browser authorization flow,
+checks AI's empty synthetic workspace, an explicitly assigned existing Drone
+simulation workspace and Robot's read-only simulator, then observes permission
+and global-session revocation. Each product's own complete workflow qualification
+remains required; this combined check neither starts physical operations nor
+substitutes read-only identity results for simulation or AI workflow tests.
+
+The owner-held fixtures contain an existing owner credential, two operation-unique
+synthetic email aliases/passwords, an approved Drone workspace and a TLS IMAP inbox
+credential. The alias templates bind to the reserved operation ID. The helper
+uses the retained owner password/MFA API to authorize fixture setup; it does not
+invent an email-verification record for the existing owner. The new account UI and
+actual verification delivery are exercised by both synthetic principals. Cleanup
+atomically disables each proven fixture UUID with the existing `viewer` role and
+preserves its MFA material and audit history. The helper requires the synthetic
+accounts to be absent before registration; it never resets
+an existing person's password or MFA. Each generated account is disabled on
+completion, with audit history retained. A partially acknowledged operation is
+inspected and cleaned up without replaying its registration or grant. Uncertain
+cleanup blocks a successful receipt and retains an explicit inspection requirement.
+
+Inbox observations use verified TLS, read-only `EXAMINE` and `BODY.PEEK`, bounded
+messages, exact recipients and both message/delivery timestamps. Only same-origin
+account confirmation/reset links are used. Queue completion or SMTP acceptance
+does not establish delivery. Preview credentials are exchanged in isolated cookie
+jars and scoped to their exact origin; no global credential-bearing headers,
+screenshots, storage-state files or message contents enter the receipt. Actual
+execution requires the existing protected owner procedure and private fixtures.
+### Shared identity release adapters
+
+`portal-shared-identity-v1` is a separate owner-verifier profile for the existing
+Portal API and worker. Installation compares the complete backend source closure,
+including authentication, migrations, dependency locks and build inputs, with the
+reviewed current-main tree. The existing narrow API and worker profiles retain
+their original rejection of authentication and migration changes. The new profile
+admits only the checksummed 012-to-014 additive migration, grants the existing
+restricted runtime role without creating or rotating credentials, and keeps schema
+014 during the staged compatible fallback and candidate reapplication. The fallback
+uses the exact candidate image with identity disabled; historical images are not
+qualified merely because they start or can read the additive schema.
+
+Its restore observation reads the actual encrypted off-instance backup and escrow,
+compares every restored table with the original snapshot manifest, rehearses the
+additive migration, and replays the reviewed erasure ledger with capability
+lockdown inside an isolated PostgreSQL container. Before the staging migration,
+the candidate image shares that container's networkless namespace, creates only
+synthetic accounts, and checks native owner authentication, member serialization
+and denial, API readiness, retained entitlement data and an actual worker cycle.
+The runner verifies removal of the operation-owned candidate and database containers.
+The disposable target has no network, published port or persistent host mount. A successful rehearsal cannot
+activate a restored service or establish that a future erasure ledger is complete.
+Interrupted migration or provider commands retain their intent and require
+inspection; neither a retry nor an automatic production rollback is inferred.
+
+Backend qualification runs the hosted account scope. The separate
+`portal-shared-identity-acceptance-v1` profile runs full product acceptance after
+the independently qualified Portal, AI, Drone and Robot components are available.
+It checks genuine Ed25519-signed component records, their commissioning and
+revocation chains, and the actual served Docker/Vercel revisions before and after
+the browser journeys. Container identity and the complete configuration fingerprint
+must match the independently signed backend observation. A future production
+deployment ID is resolved only from the exact signed frontend acceptance, then
+checked against the provider and served alias; staging IDs remain explicit.
+Production inspection reads the completed browser receipt
+and current revisions; it cannot repeat registration, mail, login or deployment.
+Operation-specific synthetic mailbox aliases, actual TLS inbox delivery and
+cleanup are required. A provider receipt or successful mail enqueue cannot stand
+in for these observations. Protected custody, provider configuration and execution
+remain in the canonical engineering source; these are source capabilities, not
+claims of completed hosted qualification.
+
+The credential-free regressions are included in native verification:
+
+```sh
+python3 -m unittest discover -s scripts/release -p 'test_oracle_portal_identity.py'
+python3 -m unittest discover -s scripts/release -p 'test_oracle_install.py'
+node --test scripts/release/oracle_portal_identity_migrate.test.mjs
+```
+
+They exercise exact source closure, foreign environment and credential rejection,
+real signature verification and revocation, interruption without retry, atomic
+migration failure, checksum drift, idempotence, credential preservation, recovered
+archive integrity and read-only production inspection. These tests use disposable
+fixtures and do not issue live release records.

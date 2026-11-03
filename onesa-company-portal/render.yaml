@@ -1,0 +1,46 @@
+# Reference for the existing Free Render API; do not create duplicate resources.
+# Neon supplies the existing database/storage; Oracle supplies the private worker/scanner.
+# Provider changes remain subject to the qualified dev -> staging -> main release path.
+services:
+  - type: web
+    name: onesa-company-portal-backend
+    runtime: docker
+    region: frankfurt
+    plan: free
+    branch: main
+    rootDir: onesa-company-portal-backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/ready
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_ORIGIN
+        sync: false
+      - key: COMPANY_ORIGIN
+        sync: false
+      - key: NOTIFY_EMAIL
+        sync: false
+      - key: SESSION_KEY
+        # Render generates 44 characters, below the application's 48-character minimum.
+        # Supply a persistent key; never replace an existing key that encrypts stored data.
+        sync: false
+      - key: PROXY_SHARED_KEY
+        sync: false
+      - key: PUBLISH_ENABLED
+        value: 'false'
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+    buildFilter:
+      paths: [onesa-company-portal-backend/**, render.yaml]
