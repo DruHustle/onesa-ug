@@ -1,0 +1,78 @@
+name: Free release authorization
+'on':
+  workflow_dispatch:
+    inputs:
+      qualification_run:
+        description: Exact free-qualification run ID
+        type: string
+        required: true
+      evidence_digest:
+        description: SHA256 printed by the reviewed qualification run
+        type: string
+        required: true
+      review_issue:
+        description: Optional existing owner review issue; owner dispatch records a single release decision
+        type: string
+        required: false
+      decision:
+        description: Approve scoped owner handoff or revoke; conditional Docs requires external live validation
+        type: choice
+        options:
+        - revoke
+        - approve
+        default: revoke
+        required: true
+      delivery_scope:
+        description: Match qualification; native public and internal custody remain conditional; Docs never grants Chat or API
+        type: choice
+        options:
+        - full
+        - docs-public
+        - docs-internal
+        default: full
+        required: true
+      metadata_producer_sha256:
+        description: Public native conditional channel only; independently reviewed producer hash
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+concurrency:
+  group: free-production-authorization
+  cancel-in-progress: false
+jobs:
+  authorization:
+    if: (github.event.repository.private == false || vars.ONESA_PRIVATE_HOSTED_VALIDATION_ENABLED == 'true') && (github.repository == 'DruHustle/onesa-ai-platform' && github.actor == 'DruHustle' && github.triggering_actor == 'DruHustle' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ github.sha }}
+    - name: Derive and verify exact-commit evidence; no production credentials
+      env:
+        GH_TOKEN: ${{ github.token }}
+        QUALIFICATION_RUN: ${{ inputs.qualification_run }}
+        EVIDENCE_DIGEST: ${{ inputs.evidence_digest }}
+        REVIEW_ISSUE: ${{ inputs.review_issue }}
+        REVIEW_DECISION: ${{ inputs.decision }}
+        DELIVERY_SCOPE: ${{ inputs.delivery_scope || 'full' }}
+        METADATA_PRODUCER_SHA256: ${{ inputs.metadata_producer_sha256 }}
+      run: |
+        if [ "$DELIVERY_SCOPE" = docs-public ] && [ -n "$METADATA_PRODUCER_SHA256" ]; then
+          python3 scripts/release/free_gate.py authorize --delivery-scope "$DELIVERY_SCOPE" \
+            --metadata-producer-sha256 "$METADATA_PRODUCER_SHA256" --output "$RUNNER_TEMP/free-release/record.json"
+        else
+          test -z "$METADATA_PRODUCER_SHA256"
+          python3 scripts/release/free_gate.py authorize --delivery-scope "$DELIVERY_SCOPE" --output "$RUNNER_TEMP/free-release/record.json"
+        fi
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: free-production-authorization
+        path: ${{ runner.temp }}/free-release/record.json
+        retention-days: 7
+        if-no-files-found: error
