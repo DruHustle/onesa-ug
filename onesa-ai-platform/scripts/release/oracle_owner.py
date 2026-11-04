@@ -139,36 +139,55 @@ CONSOLIDATED_ARTIFACTS = {
 CONSOLIDATED_JOB_STEPS = {
     "prepare": ["Check generated verification and regression boundaries"],
     "pipeline-security": ["Check active root workflows and repository secrets"],
-    "publication-hygiene": ["Scan every product and root path through preserved source history"],
-    "Onesa required verification": ["Reject failed, missing, cancelled or unexpectedly skipped gates"],
+    "publication-hygiene": [
+        "Scan every product and root path through preserved source history"
+    ],
+    "Onesa required verification": [
+        "Reject failed, missing, cancelled or unexpectedly skipped gates"
+    ],
     "drone / verification": [
-        "Verify built frontend package", "Publish backend provenance", "Publish frontend provenance",
+        "Verify built frontend package",
+        "Publish backend provenance",
+        "Publish frontend provenance",
     ],
     "portal / changes": [],
     "portal / verify": [
-        "qualification failure-path tests", "shared identity hosted observer boundaries",
-        "owned worker fixture and TLS mail guards", "shared identity migration boundaries",
-        "locked development dependency compatibility", "NVIDIA asset integrity and parser safety",
-        "NVIDIA reference gallery browser journeys", "owner probe readiness and NVIDIA observations",
+        "qualification failure-path tests",
+        "shared identity hosted observer boundaries",
+        "owned worker fixture and TLS mail guards",
+        "shared identity migration boundaries",
+        "locked development dependency compatibility",
+        "NVIDIA asset integrity and parser safety",
+        "NVIDIA reference gallery browser journeys",
+        "owner probe readiness and NVIDIA observations",
     ],
     "portal / image-security (onesa-company-portal-backend)": [
-        "default backend startup and database readiness", "owned worker fixture PostgreSQL and TLS",
+        "default backend startup and database readiness",
+        "owned worker fixture PostgreSQL and TLS",
         "actual worker process with disposable protocol fixtures",
-        "bounded recovery with actual Docker process faults", "record tested runtime digest",
+        "bounded recovery with actual Docker process faults",
+        "record tested runtime digest",
     ],
-    "portal / image-security (onesa-company-portal-frontend)": ["record tested runtime digest"],
+    "portal / image-security (onesa-company-portal-frontend)": [
+        "record tested runtime digest"
+    ],
     "portal / image-security (clamav)": ["record tested runtime digest"],
     "platform / changes": [],
     "platform / backend": ["qualification failure-path tests"],
     "platform / frontend": [
-        "private Docs publisher dependency lock", "private Docs Linux single-dispatch protocol",
+        "private Docs publisher dependency lock",
+        "private Docs Linux single-dispatch protocol",
     ],
     "platform / browser": [],
     "platform / documentation": ["private Docs native asset refusals"],
     "platform / containers": [],
     "platform / tls-acceptance": [],
-    "platform / image-security (onesa-ai-platform-backend)": ["record tested runtime digest"],
-    "platform / image-security (onesa-ai-platform-frontend)": ["record tested runtime digest"],
+    "platform / image-security (onesa-ai-platform-backend)": [
+        "record tested runtime digest"
+    ],
+    "platform / image-security (onesa-ai-platform-frontend)": [
+        "record tested runtime digest"
+    ],
     "robot / changes": [],
     "robot / backend": ["qualification failure-path tests"],
     "robot / frontend": [],
@@ -178,7 +197,8 @@ CONSOLIDATED_JOB_STEPS = {
 }
 for _product in ("portal", "platform", "robot"):
     CONSOLIDATED_JOB_STEPS[_product + " / pipeline-security / workflow-security"] = [
-        "workflow and secret security", "pipeline negative tests",
+        "workflow and secret security",
+        "pipeline negative tests",
     ]
     CONSOLIDATED_JOB_STEPS[_product + " / ci-summary"] = ["required checks summary"]
 CONSOLIDATED_JOB_STEPS = {
@@ -286,38 +306,70 @@ def signed_bytes(key, public, payload=None, signature=None):
 def consolidated_source_profile(source, policy):
     """Require a separately pinned product policy; never infer a legacy scope."""
     fields = {
-        "schema_version", "repository", "repository_id", "product", "source_path",
-        "candidate_commit", "source_tree", "product_source_tree", "branch",
+        "schema_version",
+        "repository",
+        "repository_id",
+        "product",
+        "source_path",
+        "candidate_commit",
+        "source_tree",
+        "product_source_tree",
+        "branch",
     }
-    require(isinstance(source, dict) and set(source) == fields, "Complete source-only binding required")
+    require(
+        isinstance(source, dict) and set(source) == fields,
+        "Complete source-only binding required",
+    )
     product = source["product"]
-    require(isinstance(product, str) and product in CONSOLIDATED_PRODUCTS, "Unknown consolidated product")
-    require(type(source["schema_version"]) is int and source["schema_version"] == 2
-            and source["repository"] == CONSOLIDATED_REPOSITORY
-            and type(source["repository_id"]) is int
-            and source["repository_id"] == CONSOLIDATED_REPOSITORY_ID
-            and source["source_path"] == CONSOLIDATED_PRODUCTS[product]
-            and isinstance(source["branch"], str)
-            and source["branch"] in {"staging", "main"},
-            "Consolidated source identity refused")
-    require(all(isinstance(source[key], str) and re.fullmatch(r"[a-f0-9]{40}", source[key])
-                for key in ("candidate_commit", "source_tree", "product_source_tree")),
-            "Exact consolidated Git objects required")
+    require(
+        isinstance(product, str) and product in CONSOLIDATED_PRODUCTS,
+        "Unknown consolidated product",
+    )
+    require(
+        type(source["schema_version"]) is int
+        and source["schema_version"] == 2
+        and source["repository"] == CONSOLIDATED_REPOSITORY
+        and type(source["repository_id"]) is int
+        and source["repository_id"] == CONSOLIDATED_REPOSITORY_ID
+        and source["source_path"] == CONSOLIDATED_PRODUCTS[product]
+        and isinstance(source["branch"], str)
+        and source["branch"] in {"staging", "main"},
+        "Consolidated source identity refused",
+    )
+    require(
+        all(
+            isinstance(source[key], str) and re.fullmatch(r"[a-f0-9]{40}", source[key])
+            for key in ("candidate_commit", "source_tree", "product_source_tree")
+        ),
+        "Exact consolidated Git objects required",
+    )
     profiles = policy.get("consolidated_sources")
-    require(isinstance(profiles, dict) and product in profiles, "Consolidated product is not commissioned")
+    require(
+        isinstance(profiles, dict) and product in profiles,
+        "Consolidated product is not commissioned",
+    )
     profile = profiles[product]
-    require(isinstance(profile, dict)
-            and set(profile) == {"repository", "repository_id", "source_path", "branches"}
-            and profile["repository"] == source["repository"]
-            and type(profile["repository_id"]) is int
-            and profile["repository_id"] == source["repository_id"]
-            and profile["source_path"] == source["source_path"],
-            "Commissioned source scope differs")
+    require(
+        isinstance(profile, dict)
+        and set(profile) == {"repository", "repository_id", "source_path", "branches"}
+        and profile["repository"] == source["repository"]
+        and type(profile["repository_id"]) is int
+        and profile["repository_id"] == source["repository_id"]
+        and profile["source_path"] == source["source_path"],
+        "Commissioned source scope differs",
+    )
     branches = profile["branches"]
-    require(isinstance(branches, list) and 1 <= len(branches) <= 2
-            and all(isinstance(branch, str) and branch in {"staging", "main"} for branch in branches)
-            and len(set(branches)) == len(branches) and source["branch"] in branches,
-            "Source branch is not commissioned")
+    require(
+        isinstance(branches, list)
+        and 1 <= len(branches) <= 2
+        and all(
+            isinstance(branch, str) and branch in {"staging", "main"}
+            for branch in branches
+        )
+        and len(set(branches)) == len(branches)
+        and source["branch"] in branches,
+        "Source branch is not commissioned",
+    )
     return profile
 
 
@@ -338,51 +390,85 @@ def source_json(raw):
 def source_manifest(raw, source, member):
     """Inspect bounded JSON only. Never extract or execute Actions artifacts."""
     record = source_json(raw)
-    require(isinstance(record, dict)
-            and record.get("repository") == source["repository"]
-            and record.get("source_path") == source["source_path"]
-            and record.get("product_source_tree") == source["product_source_tree"]
-            and record.get("verification_only") is True
-            and record.get("release_authorized") is False,
-            "Source manifest scope or authority differs")
+    require(
+        isinstance(record, dict)
+        and record.get("repository") == source["repository"]
+        and record.get("source_path") == source["source_path"]
+        and record.get("product_source_tree") == source["product_source_tree"]
+        and record.get("verification_only") is True
+        and record.get("release_authorized") is False,
+        "Source manifest scope or authority differs",
+    )
     common = {
-        "repository", "source_path", "product_source_tree", "verification_only", "release_authorized",
+        "repository",
+        "source_path",
+        "product_source_tree",
+        "verification_only",
+        "release_authorized",
     }
     image = None
     if source["product"] != "drone":
-        require(set(record) == common | {"schema_version", "candidate_commit", "image_digest", "security"}
-                and type(record["schema_version"]) is int and record["schema_version"] == 2
-                and record["candidate_commit"] == source["candidate_commit"]
-                and record["security"] == "PASS", "Tested image source manifest differs")
+        require(
+            set(record)
+            == common
+            | {"schema_version", "candidate_commit", "image_digest", "security"}
+            and type(record["schema_version"]) is int
+            and record["schema_version"] == 2
+            and record["candidate_commit"] == source["candidate_commit"]
+            and record["security"] == "PASS",
+            "Tested image source manifest differs",
+        )
         image = record["image_digest"]
     else:
         common |= {"source_commit", "source_tree", "component", "mode"}
         component = member.removesuffix(".json")
-        extra = {"image_id", "runtime_image_id", "architecture"} if component == "backend" else {"files"}
-        require(set(record) == common | extra
-                and record["source_commit"] == source["candidate_commit"]
-                and record["source_tree"] == source["source_tree"]
-                and record["component"] == component and record["mode"] == "simulation",
-                "Drone source manifest differs")
+        extra = (
+            {"image_id", "runtime_image_id", "architecture"}
+            if component == "backend"
+            else {"files"}
+        )
+        require(
+            set(record) == common | extra
+            and record["source_commit"] == source["candidate_commit"]
+            and record["source_tree"] == source["source_tree"]
+            and record["component"] == component
+            and record["mode"] == "simulation",
+            "Drone source manifest differs",
+        )
         if component == "backend":
             image = record["image_id"]
-            require(record["architecture"] in {"amd64", "arm64"}
-                    and isinstance(record["runtime_image_id"], str)
-                    and re.fullmatch(r"sha256:[a-f0-9]{64}", record["runtime_image_id"]),
-                    "Drone runtime image identity differs")
+            require(
+                record["architecture"] in {"amd64", "arm64"}
+                and isinstance(record["runtime_image_id"], str)
+                and re.fullmatch(r"sha256:[a-f0-9]{64}", record["runtime_image_id"]),
+                "Drone runtime image identity differs",
+            )
         else:
             files = record["files"]
-            require(isinstance(files, dict) and 1 <= len(files) <= 2048 and "index.html" in files,
-                    "Drone frontend manifest incomplete")
+            require(
+                isinstance(files, dict)
+                and 1 <= len(files) <= 2048
+                and "index.html" in files,
+                "Drone frontend manifest incomplete",
+            )
             for path, value in files.items():
-                require(isinstance(path, str) and 0 < len(path) <= 512
-                        and all(32 <= ord(character) < 127 for character in path)
-                        and "\\" not in path and ":" not in path
-                        and all(part not in {"", ".", ".."} for part in path.split("/"))
-                        and isinstance(value, str) and HEX.fullmatch(value),
-                        "Drone frontend file identity refused")
-    require(image is None or isinstance(image, str) and re.fullmatch(r"sha256:[a-f0-9]{64}", image),
-            "Tested image digest missing")
+                require(
+                    isinstance(path, str)
+                    and 0 < len(path) <= 512
+                    and all(32 <= ord(character) < 127 for character in path)
+                    and "\\" not in path
+                    and ":" not in path
+                    and all(part not in {"", ".", ".."} for part in path.split("/"))
+                    and isinstance(value, str)
+                    and HEX.fullmatch(value),
+                    "Drone frontend file identity refused",
+                )
+    require(
+        image is None
+        or isinstance(image, str)
+        and re.fullmatch(r"sha256:[a-f0-9]{64}", image),
+        "Tested image digest missing",
+    )
     result = {"manifest_sha256": hashlib.sha256(raw).hexdigest()}
     if image is not None:
         result["image_digest"] = image
@@ -391,42 +477,66 @@ def source_manifest(raw, source, member):
 
 def source_artifact(encoded_archive, metadata, source, member):
     """Bind supplied archive bytes to fresh GitHub metadata before parsing them."""
-    require(isinstance(encoded_archive, str) and 0 < len(encoded_archive) <= SOURCE_ARCHIVE_LIMIT * 4 // 3,
-            "Bounded source artifact bytes required")
+    require(
+        isinstance(encoded_archive, str)
+        and 0 < len(encoded_archive) <= SOURCE_ARCHIVE_LIMIT * 4 // 3,
+        "Bounded source artifact bytes required",
+    )
     try:
         raw = base64.b64decode(encoded_archive, validate=True)
-        require(0 < len(raw) <= SOURCE_ARCHIVE_LIMIT
-                and len(raw) == metadata["size_in_bytes"]
-                and "sha256:" + hashlib.sha256(raw).hexdigest() == metadata["digest"],
-                "Source artifact bytes differ from GitHub")
+        require(
+            0 < len(raw) <= SOURCE_ARCHIVE_LIMIT
+            and len(raw) == metadata["size_in_bytes"]
+            and "sha256:" + hashlib.sha256(raw).hexdigest() == metadata["digest"],
+            "Source artifact bytes differ from GitHub",
+        )
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             entries = archive.infolist()
             require(len(entries) == 1, "Exactly one source manifest member required")
             item = entries[0]
-            require(item.filename == member and not item.flag_bits & 1
-                    and item.compress_type in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
-                    and stat.S_IFMT(item.external_attr >> 16) in {0, stat.S_IFREG}
-                    and 0 < item.file_size <= SOURCE_MANIFEST_LIMIT,
-                    "Source artifact member refused")
+            require(
+                item.filename == member
+                and not item.flag_bits & 1
+                and item.compress_type in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
+                and stat.S_IFMT(item.external_attr >> 16) in {0, stat.S_IFREG}
+                and 0 < item.file_size <= SOURCE_MANIFEST_LIMIT,
+                "Source artifact member refused",
+            )
             with archive.open(item) as stream:
                 manifest = stream.read(SOURCE_MANIFEST_LIMIT + 1)
             require(len(manifest) == item.file_size, "Source manifest size differs")
         result = source_manifest(manifest, source, member)
-    except (ValueError, TypeError, KeyError, OSError, UnicodeError, zipfile.BadZipFile, RuntimeError):
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        OSError,
+        UnicodeError,
+        zipfile.BadZipFile,
+        RuntimeError,
+    ):
         raise Rejected("Source artifact verification failed") from None
     return {
-        "artifact_id": metadata["id"], "name": metadata["name"],
-        "artifact_digest": metadata["digest"], **result,
+        "artifact_id": metadata["id"],
+        "name": metadata["name"],
+        "artifact_digest": metadata["digest"],
+        **result,
     }
 
 
 def complete_source_listing(value, key):
     rows = value.get(key)
-    require(isinstance(rows, list) and type(value.get("total_count")) is int
-            and value["total_count"] == len(rows) <= 100
-            and all(isinstance(row, dict) and type(row.get("id")) is int and row["id"] > 0 for row in rows)
-            and len({row["id"] for row in rows}) == len(rows),
-            "Complete unambiguous source evidence listing required")
+    require(
+        isinstance(rows, list)
+        and type(value.get("total_count")) is int
+        and value["total_count"] == len(rows) <= 100
+        and all(
+            isinstance(row, dict) and type(row.get("id")) is int and row["id"] > 0
+            for row in rows
+        )
+        and len({row["id"] for row in rows}) == len(rows),
+        "Complete unambiguous source evidence listing required",
+    )
     return rows
 
 
@@ -473,53 +583,100 @@ class GitHub:
 
     def verify_source(self, source, archives):
         """Read source/CI evidence only; this cannot create an operational receipt."""
-        repo, sha, branch = source["repository"], source["candidate_commit"], source["branch"]
+        repo, sha, branch = (
+            source["repository"],
+            source["candidate_commit"],
+            source["branch"],
+        )
         prefix = "repos/" + repo + "/"
 
         def same_repo(value):
-            return (isinstance(value, dict) and type(value.get("id")) is int
-                    and value["id"] == source["repository_id"] and value.get("full_name") == repo)
+            return (
+                isinstance(value, dict)
+                and type(value.get("id")) is int
+                and value["id"] == source["repository_id"]
+                and value.get("full_name") == repo
+            )
 
-        require(same_repo(self.api(prefix.rstrip("/"))), "Consolidated repository identity changed")
-        require(self.api(prefix + "branches/" + branch)["commit"]["sha"] == sha,
-                "Current exact source branch required")
+        require(
+            same_repo(self.api(prefix.rstrip("/"))),
+            "Consolidated repository identity changed",
+        )
+        require(
+            self.api(prefix + "branches/" + branch)["commit"]["sha"] == sha,
+            "Current exact source branch required",
+        )
         commit = self.api(prefix + "git/commits/" + sha)
-        require(commit["sha"] == sha and commit["tree"]["sha"] == source["source_tree"],
-                "Consolidated root tree differs")
+        require(
+            commit["sha"] == sha and commit["tree"]["sha"] == source["source_tree"],
+            "Consolidated root tree differs",
+        )
         tree = self.api(prefix + "git/trees/" + source["source_tree"])
-        entries = [row for row in tree["tree"] if row.get("path") == source["source_path"]]
-        require(tree.get("truncated") is False and tree.get("sha") == source["source_tree"]
-                and len(entries) == 1 and entries[0].get("mode") == "040000"
-                and entries[0].get("type") == "tree"
-                and entries[0].get("sha") == source["product_source_tree"],
-                "Consolidated product subtree differs")
+        entries = [
+            row for row in tree["tree"] if row.get("path") == source["source_path"]
+        ]
+        require(
+            tree.get("truncated") is False
+            and tree.get("sha") == source["source_tree"]
+            and len(entries) == 1
+            and entries[0].get("mode") == "040000"
+            and entries[0].get("type") == "tree"
+            and entries[0].get("sha") == source["product_source_tree"],
+            "Consolidated product subtree differs",
+        )
         candidates = self.api(prefix + "commits/" + sha + "/pulls?per_page=100")
-        require(isinstance(candidates, list) and len(candidates) < 100,
-                "Complete source review listing required")
+        require(
+            isinstance(candidates, list) and len(candidates) < 100,
+            "Complete source review listing required",
+        )
         reviewed = []
         for candidate in candidates:
-            if candidate.get("merge_commit_sha") != sha or candidate.get("base", {}).get("ref") != branch:
+            if (
+                candidate.get("merge_commit_sha") != sha
+                or candidate.get("base", {}).get("ref") != branch
+            ):
                 continue
             number = candidate.get("number")
-            require(type(number) is int and number > 0, "Source review identity invalid")
+            require(
+                type(number) is int and number > 0, "Source review identity invalid"
+            )
             review = self.api(prefix + "pulls/" + str(number))
-            if (review.get("number") == number and review.get("merged") is True
-                    and review.get("state") == "closed" and review.get("draft") is False
-                    and review.get("merged_at") and review.get("merge_commit_sha") == sha
-                    and review.get("merged_by", {}).get("login") == OWNER
-                    and review.get("base", {}).get("ref") == branch
-                    and review.get("head", {}).get("ref") == ("dev" if branch == "staging" else "staging")
-                    and same_repo(review.get("base", {}).get("repo"))
-                    and same_repo(review.get("head", {}).get("repo"))):
+            if (
+                review.get("number") == number
+                and review.get("merged") is True
+                and review.get("state") == "closed"
+                and review.get("draft") is False
+                and review.get("merged_at")
+                and review.get("merge_commit_sha") == sha
+                and review.get("merged_by", {}).get("login") == OWNER
+                and review.get("base", {}).get("ref") == branch
+                and review.get("head", {}).get("ref")
+                == ("dev" if branch == "staging" else "staging")
+                and same_repo(review.get("base", {}).get("repo"))
+                and same_repo(review.get("head", {}).get("repo"))
+            ):
                 reviewed.append(number)
-        require(len(reviewed) == 1, "Exact owner-merged normal source promotion required")
+        require(
+            len(reviewed) == 1, "Exact owner-merged normal source promotion required"
+        )
+
         def latest_source_run():
             rows = complete_source_listing(
-                self.api(prefix + "actions/workflows/verify.yml/runs?head_sha=" + sha + "&per_page=100"),
+                self.api(
+                    prefix
+                    + "actions/workflows/verify.yml/runs?head_sha="
+                    + sha
+                    + "&per_page=100"
+                ),
                 "workflow_runs",
             )
-            eligible = [row for row in rows if row.get("event") in {"push", "workflow_dispatch"}
-                        and row.get("head_branch") == branch and row.get("head_sha") == sha]
+            eligible = [
+                row
+                for row in rows
+                if row.get("event") in {"push", "workflow_dispatch"}
+                and row.get("head_branch") == branch
+                and row.get("head_sha") == sha
+            ]
             require(eligible, "Exact consolidated branch CI missing")
             observed = timestamp()
             times = {}
@@ -527,116 +684,228 @@ class GitHub:
                 try:
                     created = datetime.fromisoformat(row["created_at"])
                     updated = datetime.fromisoformat(row["updated_at"])
-                    require(created.utcoffset() is not None and updated.utcoffset() is not None
-                            and created <= updated <= observed
-                            and type(row.get("run_attempt")) is int and row["run_attempt"] >= 1,
-                            "Consolidated CI attempt chronology invalid")
+                    require(
+                        created.utcoffset() is not None
+                        and updated.utcoffset() is not None
+                        and created <= updated <= observed
+                        and type(row.get("run_attempt")) is int
+                        and row["run_attempt"] >= 1,
+                        "Consolidated CI attempt chronology invalid",
+                    )
                 except (TypeError, ValueError, KeyError):
-                    raise Rejected("Consolidated CI attempt chronology invalid") from None
+                    raise Rejected(
+                        "Consolidated CI attempt chronology invalid"
+                    ) from None
                 times[row["id"]] = (created, updated)
             selected = max(eligible, key=lambda row: row["id"])
             # GitHub retains a run ID when rerunning it. Older IDs with later
             # activity must not hide behind a newer first-attempt success.
-            require(all(row["id"] == selected["id"] or row.get("status") == "completed"
-                        and times[row["id"]][1] < times[selected["id"]][0] for row in eligible),
-                    "Overlapping or repeated CI activity requires a fresh first-attempt run")
+            require(
+                all(
+                    row["id"] == selected["id"]
+                    or row.get("status") == "completed"
+                    and times[row["id"]][1] < times[selected["id"]][0]
+                    for row in eligible
+                ),
+                "Overlapping or repeated CI activity requires a fresh first-attempt run",
+            )
             return selected
 
         latest = latest_source_run()
         run = self.api(prefix + "actions/runs/" + str(latest["id"]))
-        run_state = ("id", "event", "head_sha", "head_branch", "run_attempt", "status",
-                     "conclusion", "created_at", "updated_at")
-        require(all(run.get(key) == latest.get(key) for key in run_state)
-                and same_repo(run.get("repository"))
-                and same_repo(run.get("head_repository"))
-                and run.get("head_sha") == sha and run.get("head_branch") == branch
-                and run.get("event") == latest["event"]
-                and run.get("created_at") == latest["created_at"]
-                and run.get("actor", {}).get("login") == OWNER
-                and run.get("triggering_actor", {}).get("login") == OWNER
-                and run.get("path") == ".github/workflows/verify.yml"
-                and type(run.get("run_attempt")) is int and run["run_attempt"] == 1
-                and run.get("status") == "completed" and run.get("conclusion") == "success",
-                "Latest consolidated first-attempt owner CI failed or incomplete")
+        run_state = (
+            "id",
+            "event",
+            "head_sha",
+            "head_branch",
+            "run_attempt",
+            "status",
+            "conclusion",
+            "created_at",
+            "updated_at",
+        )
+        require(
+            all(run.get(key) == latest.get(key) for key in run_state)
+            and same_repo(run.get("repository"))
+            and same_repo(run.get("head_repository"))
+            and run.get("head_sha") == sha
+            and run.get("head_branch") == branch
+            and run.get("event") == latest["event"]
+            and run.get("created_at") == latest["created_at"]
+            and run.get("actor", {}).get("login") == OWNER
+            and run.get("triggering_actor", {}).get("login") == OWNER
+            and run.get("path") == ".github/workflows/verify.yml"
+            and type(run.get("run_attempt")) is int
+            and run["run_attempt"] == 1
+            and run.get("status") == "completed"
+            and run.get("conclusion") == "success",
+            "Latest consolidated first-attempt owner CI failed or incomplete",
+        )
         try:
-            require(timedelta(0) <= timestamp() - datetime.fromisoformat(run["updated_at"]) < timedelta(hours=24),
-                    "Consolidated source evidence expired")
+            require(
+                timedelta(0)
+                <= timestamp() - datetime.fromisoformat(run["updated_at"])
+                < timedelta(hours=24),
+                "Consolidated source evidence expired",
+            )
         except (TypeError, ValueError):
             raise Rejected("Consolidated source evidence expired") from None
         expected_workflows = {
-            (repo + "/.github/workflows/" + name + "@" + sha, sha, "refs/heads/" + branch)
+            (
+                repo + "/.github/workflows/" + name + "@" + sha,
+                sha,
+                "refs/heads/" + branch,
+            )
             for name in CONSOLIDATED_WORKFLOWS
         }
         referenced = run.get("referenced_workflows")
-        require(isinstance(referenced, list) and len(referenced) == len(expected_workflows)
-                and {(row.get("path"), row.get("sha"), row.get("ref")) for row in referenced} == expected_workflows,
-                "Reusable workflow source identities differ")
-        jobs = complete_source_listing(
-            self.api(prefix + "actions/runs/" + str(run["id"]) + "/jobs?filter=latest&per_page=100"), "jobs",
+        require(
+            isinstance(referenced, list)
+            and len(referenced) == len(expected_workflows)
+            and {
+                (row.get("path"), row.get("sha"), row.get("ref")) for row in referenced
+            }
+            == expected_workflows,
+            "Reusable workflow source identities differ",
         )
-        require(len(jobs) == len(CONSOLIDATED_JOB_STEPS)
-                and {job.get("name") for job in jobs} == set(CONSOLIDATED_JOB_STEPS),
-                "Mandatory consolidated CI jobs differ")
+        jobs = complete_source_listing(
+            self.api(
+                prefix
+                + "actions/runs/"
+                + str(run["id"])
+                + "/jobs?filter=latest&per_page=100"
+            ),
+            "jobs",
+        )
+        require(
+            len(jobs) == len(CONSOLIDATED_JOB_STEPS)
+            and {job.get("name") for job in jobs} == set(CONSOLIDATED_JOB_STEPS),
+            "Mandatory consolidated CI jobs differ",
+        )
         for job in jobs:
-            require(job.get("run_id") == run["id"] and job.get("head_sha") == sha
-                    and job.get("head_branch") == branch and job.get("run_attempt") == 1
-                    and job.get("status") == "completed" and job.get("conclusion") == "success",
-                    "Mandatory consolidated CI job failed/skipped")
+            require(
+                job.get("run_id") == run["id"]
+                and job.get("head_sha") == sha
+                and job.get("head_branch") == branch
+                and job.get("run_attempt") == 1
+                and job.get("status") == "completed"
+                and job.get("conclusion") == "success",
+                "Mandatory consolidated CI job failed/skipped",
+            )
             steps = job.get("steps")
-            require(isinstance(steps, list) and steps
-                    and all(isinstance(step, dict) and isinstance(step.get("name"), str) for step in steps),
-                    "Consolidated CI step evidence missing")
+            require(
+                isinstance(steps, list)
+                and steps
+                and all(
+                    isinstance(step, dict) and isinstance(step.get("name"), str)
+                    for step in steps
+                ),
+                "Consolidated CI step evidence missing",
+            )
             for name in CONSOLIDATED_JOB_STEPS[job["name"]]:
                 matched = [step for step in steps if step["name"] == name]
-                require(len(matched) == 1 and matched[0].get("status") == "completed"
-                        and matched[0].get("conclusion") == "success",
-                        "Mandatory consolidated CI step failed/skipped/missing")
-            require(all(step.get("status") == "completed"
-                        and step.get("conclusion") in {"success", "skipped"}
-                        and (not step["name"].startswith("Release requirement:")
-                             or step["conclusion"] == "success") for step in steps),
-                    "Consolidated CI contains a failed or incomplete step")
+                require(
+                    len(matched) == 1
+                    and matched[0].get("status") == "completed"
+                    and matched[0].get("conclusion") == "success",
+                    "Mandatory consolidated CI step failed/skipped/missing",
+                )
+            require(
+                all(
+                    step.get("status") == "completed"
+                    and step.get("conclusion") in {"success", "skipped"}
+                    and (
+                        not step["name"].startswith("Release requirement:")
+                        or step["conclusion"] == "success"
+                    )
+                    for step in steps
+                ),
+                "Consolidated CI contains a failed or incomplete step",
+            )
         artifacts = complete_source_listing(
-            self.api(prefix + "actions/runs/" + str(run["id"]) + "/artifacts?per_page=100"), "artifacts",
+            self.api(
+                prefix + "actions/runs/" + str(run["id"]) + "/artifacts?per_page=100"
+            ),
+            "artifacts",
         )
         expected = CONSOLIDATED_ARTIFACTS[source["product"]]
-        require(isinstance(archives, dict) and set(archives) == set(expected),
-                "Exact product artifact archives required")
+        require(
+            isinstance(archives, dict) and set(archives) == set(expected),
+            "Exact product artifact archives required",
+        )
         evidence = []
         for name, member in expected.items():
             matching = [item for item in artifacts if item.get("name") == name]
             require(len(matching) == 1, "Source artifact missing or duplicated")
             item = matching[0]
-            require(item.get("expired") is False and type(item.get("size_in_bytes")) is int
-                    and 0 < item["size_in_bytes"] <= SOURCE_ARCHIVE_LIMIT
-                    and isinstance(item.get("digest"), str) and re.fullmatch(r"sha256:[a-f0-9]{64}", item["digest"])
-                    and item.get("workflow_run") == {
-                        "id": run["id"], "repository_id": source["repository_id"],
-                        "head_repository_id": source["repository_id"], "head_branch": branch, "head_sha": sha,
-                    }, "Source artifact metadata differs or expired")
+            require(
+                item.get("expired") is False
+                and type(item.get("size_in_bytes")) is int
+                and 0 < item["size_in_bytes"] <= SOURCE_ARCHIVE_LIMIT
+                and isinstance(item.get("digest"), str)
+                and re.fullmatch(r"sha256:[a-f0-9]{64}", item["digest"])
+                and item.get("workflow_run")
+                == {
+                    "id": run["id"],
+                    "repository_id": source["repository_id"],
+                    "head_repository_id": source["repository_id"],
+                    "head_branch": branch,
+                    "head_sha": sha,
+                },
+                "Source artifact metadata differs or expired",
+            )
             evidence.append(source_artifact(archives[name], item, source, member))
         # Observations span several API reads. A branch advance, newer run or
         # rerun during artifact verification must invalidate this snapshot.
         current_latest = latest_source_run()
-        require(all(current_latest.get(key) == run.get(key) for key in run_state),
-                "Newer or changed consolidated CI requires fresh evidence")
+        require(
+            all(current_latest.get(key) == run.get(key) for key in run_state),
+            "Newer or changed consolidated CI requires fresh evidence",
+        )
         current_run = self.api(prefix + "actions/runs/" + str(run["id"]))
-        require(same_repo(current_run.get("repository")) and same_repo(current_run.get("head_repository"))
-                and current_run.get("actor", {}).get("login") == OWNER
-                and current_run.get("triggering_actor", {}).get("login") == OWNER
-                and type(current_run.get("run_attempt")) is int
-                and all(current_run.get(key) == run.get(key) for key in (
-            "id", "head_sha", "head_branch", "event", "path", "run_attempt", "status", "conclusion",
-            "created_at", "updated_at", "referenced_workflows",
-        )), "Consolidated CI changed during source verification")
-        require(timedelta(0) <= timestamp() - datetime.fromisoformat(run["updated_at"]) < timedelta(hours=24),
-                "Consolidated source evidence expired during verification")
-        require(self.api(prefix + "branches/" + branch)["commit"]["sha"] == sha,
-                "Source branch changed during verification")
+        require(
+            same_repo(current_run.get("repository"))
+            and same_repo(current_run.get("head_repository"))
+            and current_run.get("actor", {}).get("login") == OWNER
+            and current_run.get("triggering_actor", {}).get("login") == OWNER
+            and type(current_run.get("run_attempt")) is int
+            and all(
+                current_run.get(key) == run.get(key)
+                for key in (
+                    "id",
+                    "head_sha",
+                    "head_branch",
+                    "event",
+                    "path",
+                    "run_attempt",
+                    "status",
+                    "conclusion",
+                    "created_at",
+                    "updated_at",
+                    "referenced_workflows",
+                )
+            ),
+            "Consolidated CI changed during source verification",
+        )
+        require(
+            timedelta(0)
+            <= timestamp() - datetime.fromisoformat(run["updated_at"])
+            < timedelta(hours=24),
+            "Consolidated source evidence expired during verification",
+        )
+        require(
+            self.api(prefix + "branches/" + branch)["commit"]["sha"] == sha,
+            "Source branch changed during verification",
+        )
         return {
-            "source": source, "review_number": reviewed[0], "run_id": run["id"], "run_attempt": 1,
-            "workflow": ".github/workflows/verify.yml", "artifacts": evidence,
-            "verification_only": True, "release_authorized": False,
+            "source": source,
+            "review_number": reviewed[0],
+            "run_id": run["id"],
+            "run_attempt": 1,
+            "workflow": ".github/workflows/verify.yml",
+            "artifacts": evidence,
+            "verification_only": True,
+            "release_authorized": False,
         }
 
     def qualify(self, binding):
@@ -903,7 +1172,8 @@ class Store:
         consolidated_source_profile(source, self.policy)
         result = self.github.verify_source(source, archives)
         return {
-            **result, "checked_at": self.clock().isoformat(),
+            **result,
+            "checked_at": self.clock().isoformat(),
             "installation_id": self.trust["installation_id"],
             "verifier_sha256": self.trust["verifier_sha256"],
             "policy_sha256": self.trust["policy_sha256"],
@@ -1556,13 +1826,20 @@ def main():
     else:
         raw = __import__("sys").stdin.buffer.read(128 * 1024 + 1)
         require(len(raw) <= 128 * 1024, "Private request size bound")
-        request = source_json(raw) if args.action == "verify-source" else json.loads(raw)
+        request = (
+            source_json(raw) if args.action == "verify-source" else json.loads(raw)
+        )
         if args.action == "verify-source":
-            require(isinstance(request, dict), "Source verification request must be an object")
+            require(
+                isinstance(request, dict),
+                "Source verification request must be an object",
+            )
         store = Store(args.store, GitHub(request.pop("owner_token", None)))
         if args.action == "verify-source":
-            require(set(request) == {"source", "artifact_archives"} and args.record is None,
-                    "Exact source verification input required; operational record refused")
+            require(
+                set(request) == {"source", "artifact_archives"} and args.record is None,
+                "Exact source verification input required; operational record refused",
+            )
             value = store.verify_source(request["source"], request["artifact_archives"])
         elif args.action == "issue-context":
             require(set(request) == {"binding"}, "Unexpected context input")
