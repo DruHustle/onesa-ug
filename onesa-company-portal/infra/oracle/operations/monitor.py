@@ -4,11 +4,13 @@ import argparse
 import datetime
 import hashlib
 import hmac
+import importlib.util
 import json
 import math
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -76,6 +78,118 @@ BACKENDS = {
     ]
     for environment in ["staging", "production"]
 }
+# Recognition does not enable sampling. The original six commissioned slots are
+# unchanged; Drone requires its separate private, signed acceptance profile.
+OPTIONAL_BACKENDS = {
+    "drone-production": {
+        "container": "onesa-drone-oracle-production-api-1",
+        "product": "drone", "environment": "production",
+        "url": "https://drone-api.onesa.eu/api/v1/health",
+        "status": "ok", "probe": "liveness",
+    },
+}
+KNOWN_BACKENDS = {**BACKENDS, **OPTIONAL_BACKENDS}
+
+
+def drone_reader():
+    specification = importlib.util.spec_from_file_location(
+        "onesa_optional_drone_monitoring", Path(__file__).with_name("drone_monitoring.py")
+    )
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+def accepted_drone_profile():
+    return drone_reader().accepted_profile()
+
+
+def sample_drone(config, previous):
+    """Default-off; an invalid operator selection cannot cause a Drone request."""
+    if "drone_monitoring_enabled" not in config:
+        return {}
+    if config["drone_monitoring_enabled"] is False:
+        return {"drone_monitoring": {"status": "disabled"}}
+    try:
+        if config["drone_monitoring_enabled"] is not True:
+            raise ValueError("Invalid optional monitor selection")
+        reader = drone_reader()
+        profile = reader.accepted_profile()
+        name = reader.NAME
+        if OPTIONAL_BACKENDS != {name: reader.TARGET}:
+            raise ValueError("Optional target identity changed")
+        row, matched = {}, False
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", "--type=container", reader.TARGET["container"]],
+                capture_output=True, timeout=3, check=False,
+            )
+            rows = json.loads(result.stdout or b"[]") if len(result.stdout) <= 1024 * 1024 else []
+            row = rows[0] if isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict) else {}
+            matched = result.returncode == 0 and reader.runtime_matches(row, profile)
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            pass
+        state = row.get("State", {})
+        if not isinstance(state, dict):
+            state, matched = {}, False
+        health = state.get("Health", {})
+        if not isinstance(health, dict):
+            health, matched = {}, False
+        count = row.get("RestartCount", 0)
+        if type(count) is not int or count < 0:
+            count, matched = 0, False
+        probe = probe_backend(name) if matched else {
+            "http_healthy": False, "http_status": 0, "http_error": "runtime_identity_changed",
+        }
+        if reader.accepted_profile() != profile:
+            raise ValueError("Optional acceptance changed during observation")
+        healthy = matched and state.get("Running") is True and state.get("OOMKilled") is False and (
+            health.get("Status") == "healthy"
+        )
+        return {
+            "drone_monitoring": {"status": "accepted-profile", "acceptance_sha256": profile["acceptance_sha256"]},
+            "backends": {name: {
+                **probe, "container_healthy": healthy, "loopback_only": matched,
+                "restart_count": count, "restarted": count > previous.get(name, count),
+            }},
+            "backend_restart_counts": {name: count},
+        }
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, subprocess.SubprocessError):
+        return {"drone_monitoring": {"status": "activation-held"}}
+
+
+def drone_profile_token(metrics):
+    selected = (metrics or {}).get("drone_monitoring", {})
+    if not isinstance(selected, dict):
+        return None
+    value = selected.get("acceptance_sha256")
+    return value if selected.get("status") == "accepted-profile" and isinstance(value, str) and (
+        re.fullmatch(r"[a-f0-9]{64}", value)
+    ) else None
+
+
+def drone_event(pending, prior=None):
+    details = pending.get("metrics", {}).get("backends", {}).get("drone-production", {})
+    return bool(
+        pending.get("drone_acceptance_required") is True
+        or pending.get("drone_acceptance_sha256")
+        or "drone-production" in pending.get("recovered_backends", [])
+        or details and (details.get("container_healthy") is not True or
+                        details.get("http_healthy") is not True or details.get("restarted") is True)
+        or prior and "drone-production" in prior.get("incident_backends", prior.get("affected_backends", {}))
+    )
+
+
+def drone_pending_hold(pending, metrics):
+    if not drone_event(pending):
+        return False
+    expected = pending.get("drone_acceptance_sha256")
+    if not expected or expected != drone_profile_token(metrics):
+        return True
+    try:
+        return accepted_drone_profile()["acceptance_sha256"] != expected
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, subprocess.SubprocessError):
+        return True
 
 
 def evaluate(metrics):
@@ -141,7 +255,7 @@ def database_backup_health(products, state, now):
 
 
 def probe_backend_attempt(name):
-    target = BACKENDS[name]
+    target = KNOWN_BACKENDS[name]
     result = {"http_healthy": False, "http_status": 0}
     try:
         response = subprocess.run(
@@ -195,6 +309,8 @@ def probe_backend_attempt(name):
                     value.get("mode") == "simulation"
                     and value.get("physical_actuation") is False
                 )
+            if target["product"] == "drone":
+                result["http_healthy"] = result["http_healthy"] and value.get("mode") == "simulation"
     except subprocess.TimeoutExpired:
         result["http_error"] = "timeout"
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
@@ -411,6 +527,19 @@ def sample(config):
         metrics.update(sample_dependencies(config))
         if backends is not None:
             metrics.update(backends.result())
+    optional = sample_drone(config, previous.get("backend_restart_counts", {}))
+    if "drone_monitoring" in optional:
+        metrics["drone_monitoring"] = optional["drone_monitoring"]
+    if "backends" in optional:
+        metrics.setdefault("backends", {}).update(optional["backends"])
+        metrics.setdefault("backend_restart_counts", {}).update(optional["backend_restart_counts"])
+        values = optional["backends"].values()
+        metrics["backend_api_healthy"] = metrics.get("backend_api_healthy", True) and all(
+            value["container_healthy"] and value["http_healthy"] for value in values
+        )
+        metrics["backend_api_restarted"] = metrics.get("backend_api_restarted", False) or any(
+            value["restarted"] for value in optional["backends"].values()
+        )
     return metrics
 
 
@@ -418,7 +547,7 @@ def failed_backends(metrics):
     """Only fixed service identities and bounded health fields leave private metrics."""
     details = metrics.get("backends", {})
     result = {}
-    for name in BACKENDS:
+    for name in KNOWN_BACKENDS:
         value = details.get(name)
         if not isinstance(value, dict):
             continue
@@ -429,7 +558,7 @@ def failed_backends(metrics):
             "container_healthy": value.get("container_healthy") is True,
             "http_healthy": value.get("http_healthy") is True,
             "http_status": status if type(status) is int and 0 <= status <= 599 else 0,
-            "probe": BACKENDS[name]["probe"],
+            "probe": KNOWN_BACKENDS[name]["probe"],
         }
     return result
 
@@ -471,10 +600,10 @@ def notification_metrics(metrics):
         eligible = {
             name: value
             for name, value in details.items()
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         }
         result["backends"] = eligible
-        if details and set(details) <= set(BACKENDS):
+        if details and set(details) <= set(KNOWN_BACKENDS):
             result["backend_api_healthy"] = all(
                 value.get("container_healthy") is True
                 and value.get("http_healthy") is True
@@ -489,7 +618,7 @@ def notification_metrics(metrics):
         result["backend_restart_counts"] = {
             name: count
             for name, count in counts.items()
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         }
     return result
 
@@ -534,12 +663,12 @@ def notification_history(last):
         "affected_backends": {
             name: value
             for name, value in last.get("affected_backends", {}).items()
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         },
         "incident_backends": sorted(
             name
             for name in names
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         ),
     }
 
@@ -572,7 +701,7 @@ def pending_scope_hold(pending):
         or set(failed_backends(metrics))
         != set(failed_backends(notification_metrics(metrics)))
         or any(
-            BACKENDS.get(name, {}).get("environment") == "staging"
+            KNOWN_BACKENDS.get(name, {}).get("environment") == "staging"
             for name in pending.get("recovered_backends", [])
         )
     )
@@ -758,7 +887,7 @@ def sender_mailbox(value):
     return address
 
 
-def configured_product_senders(values):
+def configured_product_senders(values, *, allow_drone=False):
     raw = values.get("OPERATIONS_MAIL_FROM_BY_PRODUCT", "")
     if raw == "":
         return {}
@@ -766,7 +895,8 @@ def configured_product_senders(values):
         raise ValueError("Invalid operations product sender mapping")
     try:
         mapping = json.loads(raw, object_pairs_hook=unique_mail_object)
-        if not isinstance(mapping, dict) or not set(mapping) <= MAIL_PRODUCTS:
+        allowed = MAIL_PRODUCTS | ({"drone"} if allow_drone else set())
+        if not isinstance(mapping, dict) or not set(mapping) <= allowed:
             raise ValueError
         for product, sender in mapping.items():
             if sender_mailbox(sender) not in {
@@ -785,7 +915,7 @@ def notification_product(alerts, metrics, kind, recovered_backends, prior_incide
     details = (metrics or {}).get("backends", {})
     if (
         not isinstance(details, dict)
-        or not set(details) <= set(BACKENDS)
+        or not set(details) <= set(KNOWN_BACKENDS)
         or any(not isinstance(value, dict) for value in details.values())
     ):
         return None
@@ -808,7 +938,7 @@ def notification_product(alerts, metrics, kind, recovered_backends, prior_incide
             return None
         if "notification_product" in prior_incident:
             previous_product = prior_incident["notification_product"]
-            if previous_product not in MAIL_PRODUCTS:
+            if previous_product not in MAIL_PRODUCTS | {"drone"}:
                 return None
             products.add(previous_product)
         else:
@@ -826,11 +956,13 @@ def notification_product(alerts, metrics, kind, recovered_backends, prior_incide
                 return None
             names.update(previous_names)
     if any(
-        name not in BACKENDS or BACKENDS[name]["environment"] != "production"
+        name not in KNOWN_BACKENDS or KNOWN_BACKENDS[name]["environment"] != "production"
         for name in names
     ):
         return None
-    products.update(BACKENDS[name]["product"] for name in names)
+    products.update(KNOWN_BACKENDS[name]["product"] for name in names)
+    if "drone" in products and not drone_profile_token(metrics):
+        return None
     return next(iter(products)) if len(products) == 1 else None
 
 
@@ -866,7 +998,7 @@ def validated_mail_envelope(envelope, reference, kind, simulation=False):
         or envelope["kind"] != kind
         or type(envelope["simulation"]) is not bool
         or envelope["simulation"] != simulation
-        or envelope["notification_product"] not in MAIL_PRODUCTS | {None}
+        or envelope["notification_product"] not in MAIL_PRODUCTS | {"drone", None}
         or not isinstance(body, str)
         or not 0 < len(body.encode("utf-8")) <= MAIL_BODY_MAX_BYTES
         or not isinstance(envelope["body_sha256"], str)
@@ -932,7 +1064,9 @@ def prepare_notification_request(
     if values.get("NOTIFY_EMAIL") not in MAIL_RECIPIENTS:
         raise ValueError("Existing approved notification destination required")
     sender_mailbox(values.get("MAIL_FROM"))
-    mapping = configured_product_senders(values)
+    # A valid optional sender name does not activate the target or suppress mail
+    # for existing products when Drone enrollment is disabled/held.
+    mapping = configured_product_senders(values, allow_drone=True)
     reference = reference or str(uuid.uuid4())
     if str(uuid.UUID(reference)) != reference or kind not in NOTIFICATION_KINDS:
         raise ValueError("Invalid notification event")
@@ -979,7 +1113,7 @@ def prepare_notification_request(
         )
         + "".join(
             "\nRecovered API: " + name
-            for name in BACKENDS
+            for name in KNOWN_BACKENDS
             if name in recovered_backends
         )
         + "\nReference: "
@@ -1183,6 +1317,18 @@ def main():
             if kind == "recovery"
             else [],
         }
+        if not args.simulate and drone_event(pending, last_notification):
+            pending["drone_acceptance_required"] = True
+            pending["drone_acceptance_sha256"] = (
+                last_notification.get("drone_acceptance_sha256")
+                if pending["kind"] in {"update", "reminder", "recovery"} and
+                "drone-production" in last_notification.get(
+                    "incident_backends", last_notification.get("affected_backends", {})
+                ) else drone_profile_token(metrics)
+            )
+    if pending and not args.simulate and drone_pending_hold(pending, metrics):
+        scope_hold = True
+        reconciliation_required = True
     should_send = pending is not None and not reconciliation_required
     if pending and not args.simulate:
         record["notification_pending"] = pending
@@ -1246,6 +1392,8 @@ def main():
         # Retain the observation time/type even with a minimal provider receipt.
         record["notification"].setdefault("checked_at", pending["checked_at"])
         record["notification"].setdefault("kind", pending["kind"])
+        if pending.get("drone_acceptance_required") is True:
+            record["notification"]["drone_acceptance_sha256"] = pending["drone_acceptance_sha256"]
         # Remember previously emailed failures within this incident. A rule that
         # clears then returns is not a new update on every cooldown boundary.
         prior = last_notification if pending["kind"] in {"update", "reminder"} else {}

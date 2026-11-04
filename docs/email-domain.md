@@ -102,13 +102,15 @@ Its existing private Portal environment accepts this JSON mapping:
 OPERATIONS_MAIL_FROM_BY_PRODUCT={"portal":"Onesa Portal <notifications-portal@onesa.eu>","ai":"Onesa AI <notifications-ai@onesa.eu>","robot":"Onesa Robot <notifications-robot@onesa.eu>"}
 ```
 
-The mapping is optional and may contain any subset of those three products.
+The mapping is optional and may contain any subset of those three products. It
+also recognizes `drone` for the separately accepted optional route below; that
+sender entry alone does not activate a target.
 An absent or empty value preserves the configured `MAIL_FROM`. Each entry must
 contain one valid sender using `notifications-<product>@onesa.eu` or
 `alerts-<product>@onesa.eu`; duplicate keys, unknown products, malformed JSON,
 address lists and control characters are refused before sending. This contract
 does not add monitoring targets, create a product mail worker or enable an
-existing disabled monitor. Drone, Farmer and Factory are not monitor targets.
+existing disabled monitor. Farmer and Factory are not monitor targets.
 
 Mixed-product incidents, shared worker/scanner/database/backup failures, uncertain
 product attribution and synthetic qualifications use the configured Portal
@@ -137,6 +139,42 @@ Offline tests exercise request persistence and routing with a fake provider.
 Actual installation, effective private configuration and delivery qualification
 remain separate release steps; no mapping or feature is enabled by these source
 changes.
+
+### Optional Drone operations sender
+
+The optional Drone production route uses `Onesa Drone <notifications-drone@onesa.eu>`
+for an unambiguous Drone API incident. It is disabled by default and preserves the
+original six Portal, AI and Robot slots. It uses the existing bounded, database-free
+Drone liveness endpoint and requires the response to retain simulation mode.
+It adds no customer mail feature, application account, flight capability or new
+notification recipient. Mixed/shared events retain the Portal sender and existing
+incident timing and durable request behavior.
+
+Operator configuration is a selection, not acceptance. The private profile must
+match an active commissioned Drone issuer and an existing signed accepted production
+operation. A read-only consumer validates the required unrevoked record chain,
+successful staging and operations observations, runner/source/policy pins, provider
+receipt and accepted runtime snapshot. It then
+checks the exact container, immutable image, source, full configuration fingerprint,
+loopback port and simulation mode. Unsupported records, source-only CI artifacts,
+missing runtime snapshots and invalid custody leave an explicit activation hold;
+an invalid profile causes no Drone Docker observation or HTTPS probe. The consumer
+does not read the signing key, invoke a release runner or issue acceptance.
+
+Only the existing `shared-identity-v1` Drone backend record format is supported.
+Older password-profile records and the new consolidated verification-only records
+cannot activate this route. An existing accepted legacy source remains labelled
+with its actual repository; it does not become a consolidated release by being read.
+Installation, separate owner commissioning and real runtime qualification remain
+required through the protected operations procedure. These source changes establish
+no current Drone deployment or enabled route.
+
+Pending Drone requests retain their exact bytes and acceptance binding. Revocation,
+disabled enrollment, changed source/profile or ambiguous legacy state prevents
+automatic retry without clearing the event or its receipts. A new accepted runtime
+cannot silently recover an incident bound to a different accepted runtime. Valid
+optional sender configuration does not change delivery for the original targets
+when Drone is disabled. No production test email is part of the offline checks.
 
 ## Runtime migration and verification
 

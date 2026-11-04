@@ -300,7 +300,7 @@ class DurableMailTests(unittest.TestCase):
                 self.assertTrue(self.read()["notification_pending_envelope_hold"])
 
     def test_invalid_mapping_holds_new_event_without_sending(self):
-        self.values["OPERATIONS_MAIL_FROM_BY_PRODUCT"] = '{"drone":"alerts-drone@onesa.eu"}'
+        self.values["OPERATIONS_MAIL_FROM_BY_PRODUCT"] = '{"farmer":"alerts-farmer@onesa.eu"}'
         with self.assertRaises(ValueError):
             self.tick()
         pending = self.read()["notification_pending"]
@@ -317,7 +317,7 @@ class DurableMailTests(unittest.TestCase):
         for raw in [
             "{", "null", "[]", "true",
             '{"ai":"alerts-ai@onesa.eu","ai":"notifications-ai@onesa.eu"}',
-            '{"drone":"notifications-drone@onesa.eu"}',
+            '{"farmer":"notifications-farmer@onesa.eu"}',
             '{"farmer":"notifications-farmer@onesa.eu"}',
             '{"factory":"notifications-factory@onesa.eu"}',
             '{"ai":"notifications-robot@onesa.eu"}',

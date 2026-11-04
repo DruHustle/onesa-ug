@@ -2,6 +2,14 @@
 
 ## Unreleased — Shared sending domain
 
+- Add a default-off Drone operations sender route gated by the existing commissioned
+  signed production acceptance chain and exact simulation runtime identity. Keep the
+  original six Portal/AI/Robot slots and approved recipients; reuse durable request
+  bytes, incident timing and mixed/shared sender policy. Invalid or unsupported
+  acceptance performs no Drone observation, and changed/revoked enrollment holds
+  pending delivery for reconciliation. Synthetic signature/runtime tests do not
+  establish installation, commissioning, a deployed Drone service or delivered mail.
+
 - Persist each operations email's exact request body and sending-credential
   fingerprint before contacting the provider; flush and sync the private file
   and its atomic replacement before delivery. Retry the same bytes and event
