@@ -34,7 +34,11 @@ PENDING_RETRY_SECONDS = 23 * 60 * 60
 MAIL_ENVELOPE_VERSION = 1
 MAIL_BODY_MAX_BYTES = 32768
 MAIL_PRODUCTS = frozenset({"portal", "ai", "robot"})
-MAIL_RECIPIENTS = frozenset({"info@onesa.eu", "andrew@onesa.eu"})
+# Historical recipients remain valid so retained immutable attempts can be
+# reconciled. Runtime NOTIFY_EMAIL selects the owner's infrastructure mailbox.
+MAIL_RECIPIENTS = frozenset({
+    "info@onesa.eu", "andrew@onesa.eu", "it-infrastructure@onesa.eu",
+})
 API_ALERT_RULES = frozenset({"backend-api-unavailable", "backend-api-restarted"})
 NOTIFICATION_KINDS = frozenset({"alert", "update", "reminder", "recovery", "simulation"})
 RULES = (

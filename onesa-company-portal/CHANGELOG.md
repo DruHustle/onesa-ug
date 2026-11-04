@@ -2,6 +2,11 @@
 
 ## Unreleased — Shared sending domain
 
+- Authorize `it-infrastructure@onesa.eu` for infrastructure notifications. Keep
+  historical recipients valid for immutable pending-request reconciliation and
+  preserve recipient binding, deduplication and staging suppression. Runtime and
+  provider notification settings require separate readback and delivery checks.
+
 - Add a default-off Drone operations sender route gated by the existing commissioned
   signed production acceptance chain and exact simulation runtime identity. Keep the
   original six Portal/AI/Robot slots and approved recipients; reuse durable request
