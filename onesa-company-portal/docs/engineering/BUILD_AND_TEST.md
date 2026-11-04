@@ -141,7 +141,14 @@ and accessibility checks to retain their scrolling and theme-transition regressi
 The mandatory CI run uses a 1920×1080, 24-bit Xvfb display and
 `NVIDIA_FIREFOX_HEADED=true` to exercise
 Firefox's real WebGL renderer on the Linux runner; Chromium and WebKit stay
-headless. All three engines retain every rendering and recovery assertion.
+headless. The synthetic Linux verification job selects Mesa software rendering
+with `LIBGL_ALWAYS_SOFTWARE=true` and `GALLIUM_DRIVER=llvmpipe`, using the
+[documented Mesa renderer selection](https://docs.mesa3d.org/envvars.html).
+Before gallery acceptance, each browser must create a real WebGL2 context,
+clear and read back a known pixel without a GL error or lost context. A missing
+renderer fails this prerequisite; it cannot pass as the expected model-download
+failure. All three engines retain every rendering and recovery assertion,
+including the separate deliberately unavailable-WebGL fallback scenario.
 A `LOCAL_NVIDIA_CHROMIUM_EXECUTABLE` run is explicitly reported
 as supplemental local evidence and does not satisfy the pinned-engine or hosted
 release requirements. No provider request or production data is used by these tests.
@@ -967,9 +974,10 @@ deadline. The healthy path adds no container or database query.
 
 New worker metrics include typed running/health status. The stable `worker-stopped`
 rule also covers unhealthy workers, so new email payloads explain the observed state.
-Both fields must be present and valid in the stored pending metrics before adding
-that detail. Existing pending payloads without them follow the byte-identical legacy
-format; retries never replace their observation with a new sample. Regressions compare
+Both fields must be present and valid in the event's metrics before adding that
+detail. New pending events retain the complete serialized request, so retries never
+rebuild their body or replace their observation with a new sample. Legacy pending
+events without a saved request remain held for reconciliation. Regressions compare
 the complete serialized provider payload and idempotency key and retain all existing
 incident, cooldown, reconciliation and recovery behavior. No test email is sent.
 
@@ -1006,6 +1014,13 @@ cover interrupted final writes, failed replacement, the next normal sample,
 pending delivery identity, restart counters, private file modes and simulation
 separation. Delivery is mocked; no production state or mail is used.
 
+`scripts/test_oracle_monitor_envelope.py` exercises exact body/idempotency reuse
+after sender, recipient and template changes, credential binding without saved
+keys, legacy/malformed request holds and conservative product sender routing.
+It also checks file-sync/rename/directory-sync ordering before the fake provider
+and refuses delivery when durable persistence fails. All recipients and credentials
+are existing approved names or synthetic fixtures; no test message is sent.
+
 The notification controls additionally cover
 synthetic incident transitions, immediate initial alerts, thirty-minute grouping of
 new failure rules/services and six-hour reminders for all unchanged incidents.
@@ -1037,10 +1052,13 @@ expires. Metric sampling and failure records continue; no new key is created to
 re-send an ambiguously accepted event. Healthy legacy installations do not receive
 a retrospective recovery email when this policy is first installed.
 
-The final snapshot adds restart baselines before one call to the existing atomic
-record writer. A failed temporary write or replacement retains the previous complete
-record, including a pending notification identity. This does not establish fsync,
-power-loss durability or concurrent-writer safety. Before installation, read back
+The final snapshot adds restart baselines before one call to the atomic record
+writer. A private unique temporary file is flushed and synced before replacement;
+the containing directory is then synced before any provider call. A failed temporary
+write or replacement retains the previous complete record. A directory-sync failure
+prevents sending even if the renamed record is already visible. These regressions
+do not simulate a physical power loss or establish concurrent-writer safety.
+Before installation, read back
 the actual singleton systemd oneshot unit/timer and check for duplicate schedulers;
 do not start a second monitor to test concurrency. Preserve real pending delivery
 and reconciliation records. Qualify interruption cases only with disposable state

@@ -92,6 +92,52 @@ lists before transport use. Valid explicit values are preserved byte for byte.
 An existing verified `mail.onesa.eu` sender remains accepted during migration;
 the application never silently rewrites it to `onesa.eu`.
 
+### Existing operations monitor
+
+The Portal operations monitor can optionally choose a product sender for an
+unambiguous production API incident in its existing Portal, AI or Robot targets.
+Its existing private Portal environment accepts this JSON mapping:
+
+```dotenv
+OPERATIONS_MAIL_FROM_BY_PRODUCT={"portal":"Onesa Portal <notifications-portal@onesa.eu>","ai":"Onesa AI <notifications-ai@onesa.eu>","robot":"Onesa Robot <notifications-robot@onesa.eu>"}
+```
+
+The mapping is optional and may contain any subset of those three products.
+An absent or empty value preserves the configured `MAIL_FROM`. Each entry must
+contain one valid sender using `notifications-<product>@onesa.eu` or
+`alerts-<product>@onesa.eu`; duplicate keys, unknown products, malformed JSON,
+address lists and control characters are refused before sending. This contract
+does not add monitoring targets, create a product mail worker or enable an
+existing disabled monitor. Drone, Farmer and Factory are not monitor targets.
+
+Mixed-product incidents, shared worker/scanner/database/backup failures, uncertain
+product attribution and synthetic qualifications use the configured Portal
+`MAIL_FROM`. Shared incidents retain that classification through their updates,
+reminders and recovery. The existing staging exclusions, incident grouping,
+cooldowns, recovery observations and approved notification recipients remain.
+
+Before a real provider request, the monitor saves the exact serialized email body,
+its SHA-256 digest, the event identity and a versioned fingerprint of the current
+Resend credential in its private state. It does not store the credential or an
+Authorization header. The state writer uses a private unique temporary file,
+flushes and syncs it, atomically replaces the record and syncs its directory before
+allowing delivery. A failed persistence step prevents the provider request.
+A retry uses those saved bytes and the same idempotency key;
+later sender, recipient, mapping or message-template changes cannot alter it.
+
+Changing the sending credential, even within the same account, holds the pending
+event for reconciliation. Missing or invalid envelopes, old pending events that
+never recorded an envelope, an expired retry window and existing policy holds
+also remain blocked. Current configuration must not be used to guess their old
+request. Restoring an earlier credential does not clear a recorded reconciliation
+hold. Preserve the pending event, original receipts and cooldown history while
+reconciling provider acceptance; do not delete or recreate it to force a send.
+
+Offline tests exercise request persistence and routing with a fake provider.
+Actual installation, effective private configuration and delivery qualification
+remain separate release steps; no mapping or feature is enabled by these source
+changes.
+
 ## Runtime migration and verification
 
 ### Observed setup on 2026-11-04
@@ -126,9 +172,9 @@ DNS verification or external delivery. No automatic email test sends are include
 in these changes.
 
 Render Free blocks the usual SMTP ports; its applications should use Resend's
-HTTPS API. All Render services observed during this review are suspended staging
-services, so changing them would not update the active Oracle workloads. The
-sender configuration must be applied to the worker that actually sends mail.
+HTTPS API. Configuring a staging host does not update an active Oracle worker.
+Apply and verify the sender configuration in the environment of the worker that
+actually sends mail.
 
 ## References
 

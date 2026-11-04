@@ -129,3 +129,61 @@ The API and worker adapters explicitly select each retained service's existing
 Compose profile for rendering and deployment. Identity-file pins and independent
 service targeting remain mandatory. New source still requires its own checks,
 commissioned installation and hosted qualification.
+
+## Private Kubernetes first-install source
+
+`infra/oracle/kubernetes_preflight.py` and `portainer_private.py` preserve the
+read-only host assessment and manifest observer. The separate
+`infra/oracle/k3s_first_install.py` implements an owner-run first installation;
+its `check` action remains read-only. Source tests and a merged change do not
+establish installation, owner commissioning or acceptance on a real host. The
+existing protected release and maintenance procedures still govern execution.
+
+The installer requires an explicit private plan and verifies selected OCI
+IMDSv2 instance identity, the approved destination name and the host fingerprint.
+It requires an already enrolled shared-host lifecycle interlock before mutation,
+retains its durable maintenance hold after interruption, and does not enable or
+replace the existing recovery controller. An existing cluster, partial installation,
+unrelated hold, systemd override, missing capacity or overlapping network blocks
+the first-install path. Repeating a completed install performs verification only.
+
+`k3s_release_lock.json` binds the stable K3s release binary and packaged images
+for the observed architecture, and the compatible Portainer CE image by digest.
+The exact copied artifact bytes are checked through one protected file descriptor.
+K3s uses its own containerd, an explicit private node/API address, single-node
+host-gw networking and private kubeconfig. Traefik, ServiceLB and the default local
+storage provisioner are disabled before startup. Its own narrow firewall chains
+retain the existing overlay and Docker user policy; no Docker-generated chain is
+flushed, no application container is restarted, and no public control-plane or
+management UI endpoint is provisioned.
+
+Portainer has HTTPS-only ClusterIP access, denied pod ingress, one observed node,
+and an explicit local PV/PVC and storage class with `Retain`. Its data directory
+is separate from the K3s datastore. The declared PV size is not a filesystem quota
+or a backup. Portainer initially manages Kubernetes only: existing Docker Compose
+applications need a separately registered, authenticated private Docker environment
+and actual readback before their visualization can be claimed. This installer
+does not mount the Docker socket or expose an agent port.
+
+Failure handling stops only the installer-owned service when its file and effective
+systemd identity still match. A receipt-write failure does not suppress that stop
+attempt. Data, private firewall rules and recovery evidence are retained; remaining
+containerd workloads or uncertain ownership require the protected recovery review.
+It never invokes the upstream broad uninstall or kill-all scripts. An interrupted
+receipt cannot silently restart or authorize reinstallation.
+
+Real host acceptance still requires measured capacity and tenancy-wide cost/quota
+headroom, the existing applications' health and preservation checks, actual
+CNI/Docker traffic and firewall-order observations, private owner sign-in, external
+negative reachability checks, an independently verified datastore/token and
+Portainer-data restore, and a controlled reboot/recovery exercise. The existing
+2 GiB K3s, 512 MiB UI, 1 GiB host-headroom and 10 GiB disk preparation reserves
+exclude additional application workloads. The installer does not resize OCI,
+reduce the existing host memory/storage, migrate databases or qualify hardware.
+
+Primary references: [K3s configuration](https://docs.k3s.io/installation/configuration),
+[network services](https://docs.k3s.io/networking/networking-services),
+[datastore backup](https://docs.k3s.io/datastore/backup-restore),
+[Portainer compatibility](https://docs.portainer.io/start/requirements-and-prerequisites),
+[Docker firewall policy](https://docs.docker.com/engine/network/firewall-iptables/),
+and [OCI IMDSv2](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/gettingmetadata.htm).

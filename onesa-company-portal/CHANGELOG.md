@@ -2,6 +2,15 @@
 
 ## Unreleased — Shared sending domain
 
+- Persist each operations email's exact request body and sending-credential
+  fingerprint before contacting the provider; flush and sync the private file
+  and its atomic replacement before delivery. Retry the same bytes and event
+  identity; hold legacy, altered or credential-mismatched pending requests for
+  reconciliation without resetting receipts or cooldowns. Never store the key.
+  Add optional validated sender mapping for existing single-product Portal, AI
+  and Robot API incidents; shared/mixed incidents and simulations retain the
+  configured Portal sender. Offline regressions do not activate a monitor,
+  change deployed mail configuration or establish inbox delivery.
 - Preserve the reviewed private PostgreSQL CA integration from the pending
   standalone change. The API, worker and isolated migration helper accept one
   bounded certificate through existing private configuration, require

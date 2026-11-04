@@ -98,10 +98,47 @@ They require the expected Git origin, the exact workflow revision, and clean
 product source. Drone's manifest producer independently validates its checkout
 identity and records both the root tree and product tree. Consolidated records
 explicitly set `verification_only: true` and `release_authorized: false`.
-Existing release consumers retain their original repository and evidence
-validation. Migration of those consumers requires a separately reviewed schema
-and authority transition; a passing consolidated record cannot stand in for an
-old repository's release approval.
+The existing Portal, AI Platform, and Robot owner bridges now expose a
+`verify-source` entrypoint for these consolidated records. It uses the existing
+private, source-pinned, explicitly commissioned `Store` and authenticated owner.
+An additional pinned `consolidated_sources` policy must name each permitted
+product, the exact repository name and numeric ID, its fixed product path, and
+the allowed `staging` or `main` branches. A legacy component policy does not
+implicitly grant this source scope.
+
+The source request uses schema version 2 and binds the repository, numeric ID,
+product, product path, candidate commit, root tree, product subtree, and branch.
+The verifier independently reads the current branch and Git objects, requires
+the owner's merged `dev → staging` or `staging → main` PR, and checks the latest
+eligible exact-branch CI run. A later failed, incomplete, or repeated run cannot
+fall back to an earlier success. Overlapping or equal-time activity on an older
+run, including a rerun that retains its original run ID, requires a fresh
+first-attempt run after that activity settles. Final source/run readbacks reject
+changes during artifact verification. All 31 root/product jobs, their mandatory steps,
+the seven exact-source reusable workflows, and the original publication-history
+gate must pass.
+
+Artifact metadata alone is insufficient. The private request supplies the
+bounded ZIP bytes for exactly that product's prefixed runtime artifacts. Each
+archive must match the current GitHub artifact ID, run, source, size and SHA256.
+The verifier reads a single bounded JSON member in memory and checks its source
+fields and verification-only flags; it never extracts or executes artifact
+contents. Drone records retain their explicit simulation scope.
+
+This entrypoint returns an unsigned source-verification result with
+`verification_only: true` and `release_authorized: false`. It creates no
+qualification context, signed record, deployment intent, runner invocation or
+deployment-provider mutation. The existing custody pins and separate owner commissioning
+still apply. Changing source or policy files in an older installation cannot
+activate it.
+
+Operational consumers retain their original repository binding and receipt
+schemas. Their immutable installers, component builders, provider mappings,
+qualification runners and recovery readers still require a separately reviewed
+transition to the consolidated root/product identity. Existing accepted receipts
+remain unchanged and cannot be relabelled as consolidated approvals. Source
+verification alone does not establish hosted staging acceptance, deployment,
+recovery readiness, hardware qualification or completed repository retirement.
 
 ## Publication boundaries
 
@@ -155,10 +192,14 @@ Deletion is the last migration operation. For each repository:
 
 The migration audit on 2026-11-04 found non-main source work and open reviews in
 the Portal, AI Platform, and Robot repositories; open Drone safeguard work; and
-draft AI Platform release attachments requiring private preservation. Render
-staging service definitions still referenced three old Onesa repositories and
-were suspended. Those facts require rechecking at retirement time. They are not
-resolved merely by importing main or enabling this verification workflow.
+draft AI Platform release attachments requiring private preservation. In that
+earlier snapshot, three suspended Render staging definitions still referenced
+the old repositories. A later inventory listed no Onesa services, and individual
+lookups of those three old service IDs returned not found. These readbacks do not
+establish a replacement runtime or completed provider retirement. Current
+provider source bindings, private release evidence and rollback consumers still
+require verification before repository retirement. Importing main or enabling
+verification does not resolve those dependencies.
 
 Smart Factory and IMSOP are separate consolidated products. Their private source,
 release evidence, and retirement decisions remain outside this public Onesa

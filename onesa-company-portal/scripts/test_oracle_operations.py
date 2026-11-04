@@ -30,6 +30,12 @@ DEPENDENCY_SUCCESS = {
 
 class OperationsGuards(unittest.TestCase):
     def setUp(self):
+        mail = patch.dict("sys.modules", {"backup": SimpleNamespace(checked_env=lambda: ({
+            "MAIL_PROVIDER": "resend", "NOTIFY_EMAIL": "andrew@onesa.eu",
+            "MAIL_FROM": "synthetic@example.invalid", "RESEND_API_KEY": "synthetic-only",
+        }, None))})
+        mail.start()
+        self.addCleanup(mail.stop)
         self.metrics = {
             "worker_required": True,
             "worker_healthy": True,

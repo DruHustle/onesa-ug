@@ -2,11 +2,15 @@
 
 import argparse
 import datetime
+import hashlib
+import hmac
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
+import tempfile
 import time
 import urllib.request
 import uuid
@@ -25,6 +29,12 @@ SCANNER_FALLBACK_SECONDS = 4
 NOTIFICATION_SCOPE = "production-and-shared-v1"
 # Provider keys last 24 hours; leave an hour before manual reconciliation is needed.
 PENDING_RETRY_SECONDS = 23 * 60 * 60
+MAIL_ENVELOPE_VERSION = 1
+MAIL_BODY_MAX_BYTES = 32768
+MAIL_PRODUCTS = frozenset({"portal", "ai", "robot"})
+MAIL_RECIPIENTS = frozenset({"info@onesa.eu", "andrew@onesa.eu"})
+API_ALERT_RULES = frozenset({"backend-api-unavailable", "backend-api-restarted"})
+NOTIFICATION_KINDS = frozenset({"alert", "update", "reminder", "recovery", "simulation"})
 RULES = (
     "worker-stopped",
     "job-retry-exhausted",
@@ -425,10 +435,26 @@ def failed_backends(metrics):
 
 
 def write_record(path, value):
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(value, indent=2) + "\n")
-    temporary.chmod(0o600)
-    temporary.replace(path)
+    """Persist private bytes and their atomic rename before any provider side effect."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=path.name + ".", suffix=".tmp", delete=False,
+        ) as output:
+            temporary = Path(output.name)
+            output.write(json.dumps(value, indent=2) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.replace(path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def notification_metrics(metrics):
@@ -681,7 +707,7 @@ def notification_decision(
 
 
 def worker_notification_detail(alerts, metrics):
-    """Old pending payloads lack these fields and keep their exact original body."""
+    """Describe only worker details captured in this event's observation."""
     if "worker-stopped" not in alerts or not isinstance(metrics, dict):
         return ""
     running, health = metrics.get("worker_running"), metrics.get("worker_health_status")
@@ -695,7 +721,200 @@ def worker_notification_detail(alerts, metrics):
     ) + health + "."
 
 
-def notify(
+def unique_mail_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate mail configuration field")
+        result[key] = value
+    return result
+
+
+def sender_mailbox(value):
+    """Accept one mailbox, preserving a valid configured header byte for byte."""
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 320
+        or value != value.strip()
+        or not all(character.isprintable() for character in value)
+    ):
+        raise ValueError("Invalid operations mail sender")
+    address = value
+    if "<" in value or ">" in value:
+        match = re.fullmatch(r'([^<>,;:@"\\]+) <([^<>]+)>', value)
+        if not match or match[1] != match[1].strip():
+            raise ValueError("Invalid operations mail sender")
+        address = match[2]
+    if len(address) > 254 or not re.fullmatch(
+        r"[A-Za-z0-9.!#$%&'*+/=?^_\x60{|}~-]{1,64}@"
+        r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+        r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+",
+        address,
+    ):
+        raise ValueError("Invalid operations mail sender")
+    local = address.split("@", 1)[0]
+    if local.startswith(".") or local.endswith(".") or ".." in local:
+        raise ValueError("Invalid operations mail sender")
+    return address
+
+
+def configured_product_senders(values):
+    raw = values.get("OPERATIONS_MAIL_FROM_BY_PRODUCT", "")
+    if raw == "":
+        return {}
+    if not isinstance(raw, str) or len(raw) > 4096:
+        raise ValueError("Invalid operations product sender mapping")
+    try:
+        mapping = json.loads(raw, object_pairs_hook=unique_mail_object)
+        if not isinstance(mapping, dict) or not set(mapping) <= MAIL_PRODUCTS:
+            raise ValueError
+        for product, sender in mapping.items():
+            if sender_mailbox(sender) not in {
+                f"notifications-{product}@onesa.eu", f"alerts-{product}@onesa.eu"
+            }:
+                raise ValueError
+    except (ValueError, TypeError):
+        raise ValueError("Invalid operations product sender mapping") from None
+    return mapping
+
+
+def notification_product(alerts, metrics, kind, recovered_backends, prior_incident):
+    """Only a fully known, single-product API incident can select another sender."""
+    if kind == "simulation" or set(alerts) - API_ALERT_RULES:
+        return None
+    details = (metrics or {}).get("backends", {})
+    if (
+        not isinstance(details, dict)
+        or not set(details) <= set(BACKENDS)
+        or any(not isinstance(value, dict) for value in details.values())
+    ):
+        return None
+    names = set(failed_backends(metrics or {}))
+    if "backend-api-unavailable" in alerts and not names:
+        return None
+    if "backend-api-restarted" in alerts:
+        restarted = {
+            name for name, value in details.items()
+            if isinstance(value, dict) and value.get("restarted") is True
+        }
+        if not restarted:
+            return None
+        names.update(restarted)
+    if kind == "recovery":
+        names.update(recovered_backends)
+    products = set()
+    if kind in {"update", "reminder", "recovery"}:
+        if not prior_incident:
+            return None
+        if "notification_product" in prior_incident:
+            previous_product = prior_incident["notification_product"]
+            if previous_product not in MAIL_PRODUCTS:
+                return None
+            products.add(previous_product)
+        else:
+            previous_rules = prior_incident.get(
+                "incident_rules", prior_incident.get("rules", [])
+            )
+            previous_names = prior_incident.get(
+                "incident_backends", prior_incident.get("affected_backends", {})
+            )
+            if (
+                not previous_rules
+                or set(previous_rules) - API_ALERT_RULES
+                or not previous_names
+            ):
+                return None
+            names.update(previous_names)
+    if any(
+        name not in BACKENDS or BACKENDS[name]["environment"] != "production"
+        for name in names
+    ):
+        return None
+    products.update(BACKENDS[name]["product"] for name in names)
+    return next(iter(products)) if len(products) == 1 else None
+
+
+def mail_credential_fingerprint(values):
+    key = values.get("RESEND_API_KEY")
+    if (
+        values.get("MAIL_PROVIDER") != "resend"
+        or not isinstance(key, str)
+        or not 1 <= len(key) <= 4096
+        or key != key.strip()
+        or not all(33 <= ord(character) <= 126 for character in key)
+    ):
+        raise ValueError("Existing approved Resend configuration required")
+    return hashlib.sha256(
+        b"onesa-operations-resend-credential-v1\0" + key.encode("utf-8")
+    ).hexdigest()
+
+
+def validated_mail_envelope(envelope, reference, kind, simulation=False):
+    """Validate stored bytes without rebuilding them from current code or settings."""
+    if not isinstance(envelope, dict) or set(envelope) != {
+        "version", "reference", "kind", "simulation", "body", "body_sha256",
+        "credential_fingerprint", "notification_product",
+    }:
+        raise ValueError("Unbound operations mail envelope")
+    body = envelope["body"]
+    if (
+        type(envelope["version"]) is not int
+        or envelope["version"] != MAIL_ENVELOPE_VERSION
+        or envelope["reference"] != reference
+        or str(uuid.UUID(reference)) != reference
+        or kind not in NOTIFICATION_KINDS
+        or envelope["kind"] != kind
+        or type(envelope["simulation"]) is not bool
+        or envelope["simulation"] != simulation
+        or envelope["notification_product"] not in MAIL_PRODUCTS | {None}
+        or not isinstance(body, str)
+        or not 0 < len(body.encode("utf-8")) <= MAIL_BODY_MAX_BYTES
+        or not isinstance(envelope["body_sha256"], str)
+        or not hmac.compare_digest(
+            envelope["body_sha256"], hashlib.sha256(body.encode("utf-8")).hexdigest()
+        )
+        or not isinstance(envelope["credential_fingerprint"], str)
+        or not re.fullmatch(r"[a-f0-9]{64}", envelope["credential_fingerprint"])
+    ):
+        raise ValueError("Invalid operations mail envelope")
+    data = json.loads(body, object_pairs_hook=unique_mail_object)
+    if (
+        not isinstance(data, dict)
+        or set(data) != {"from", "to", "reply_to", "subject", "text"}
+        or not isinstance(data["to"], list)
+        or len(data["to"]) != 1
+        or not isinstance(data["to"][0], str)
+        or data["to"][0] not in MAIL_RECIPIENTS
+        or data["reply_to"] != "info@onesa.eu"
+        or not isinstance(data["subject"], str)
+        or not 1 <= len(data["subject"]) <= 200
+        or not all(character.isprintable() for character in data["subject"])
+        or not isinstance(data["text"], str)
+        or not data["text"].endswith("\nReference: " + reference)
+    ):
+        raise ValueError("Invalid operations mail envelope")
+    sender_mailbox(data["from"])
+    return data
+
+
+def pending_envelope_hold(pending):
+    try:
+        validated_mail_envelope(
+            pending.get("mail_envelope"), pending["reference"], pending["kind"]
+        )
+        from backup import checked_env
+
+        values, _ = checked_env()
+        return not hmac.compare_digest(
+            pending["mail_envelope"]["credential_fingerprint"],
+            mail_credential_fingerprint(values),
+        )
+    except (ValueError, TypeError, KeyError):
+        # Unknown legacy sender/account cannot be inferred from today's settings.
+        return True
+
+
+def prepare_notification_request(
     alerts,
     simulation=False,
     *,
@@ -704,24 +923,22 @@ def notify(
     reference=None,
     kind="alert",
     recovered_backends=(),
+    prior_incident=None,
 ):
     from backup import checked_env
 
     values, _ = checked_env()
-    if values.get("MAIL_PROVIDER") != "resend" or values.get("NOTIFY_EMAIL") not in [
-        "info@onesa.eu",
-        "andrew@onesa.eu",
-    ]:
+    fingerprint = mail_credential_fingerprint(values)
+    if values.get("NOTIFY_EMAIL") not in MAIL_RECIPIENTS:
         raise ValueError("Existing approved notification destination required")
+    sender_mailbox(values.get("MAIL_FROM"))
+    mapping = configured_product_senders(values)
     reference = reference or str(uuid.uuid4())
-    if str(uuid.UUID(reference)) != reference or kind not in {
-        "alert",
-        "update",
-        "reminder",
-        "recovery",
-        "simulation",
-    }:
+    if str(uuid.UUID(reference)) != reference or kind not in NOTIFICATION_KINDS:
         raise ValueError("Invalid notification event")
+    product = None if simulation else notification_product(
+        alerts, metrics, kind, recovered_backends, prior_incident
+    )
     subject = (
         "ONESA operations qualification — synthetic alert"
         if simulation
@@ -730,7 +947,7 @@ def notify(
         else "ONESA service operations alert"
     )
     data = {
-        "from": values["MAIL_FROM"],
+        "from": mapping.get(product, values["MAIL_FROM"]),
         "to": [values["NOTIFY_EMAIL"]],
         "reply_to": "info@onesa.eu",
         "subject": subject,
@@ -768,9 +985,49 @@ def notify(
         + "\nReference: "
         + reference,
     }
+    body = json.dumps(data)
+    envelope = {
+        "version": MAIL_ENVELOPE_VERSION,
+        "reference": reference,
+        "kind": kind,
+        "simulation": simulation,
+        "notification_product": product,
+        "body": body,
+        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "credential_fingerprint": fingerprint,
+    }
+    validated_mail_envelope(envelope, reference, kind, simulation)
+    return envelope
+
+
+def notify(
+    alerts,
+    simulation=False,
+    *,
+    metrics=None,
+    checked_at=None,
+    reference=None,
+    kind="alert",
+    recovered_backends=(),
+    mail_envelope=None,
+):
+    from backup import checked_env
+
+    if mail_envelope is None:
+        mail_envelope = prepare_notification_request(
+            alerts, simulation, metrics=metrics, checked_at=checked_at,
+            reference=reference, kind=kind, recovered_backends=recovered_backends,
+        )
+        reference = mail_envelope["reference"]
+    data = validated_mail_envelope(mail_envelope, reference, kind, simulation)
+    values, _ = checked_env()
+    if not hmac.compare_digest(
+        mail_envelope["credential_fingerprint"], mail_credential_fingerprint(values)
+    ):
+        raise ValueError("Pending mail credential changed; reconciliation required")
     request = urllib.request.Request(
         "https://api.resend.com/emails",
-        data=json.dumps(data).encode(),
+        data=mail_envelope["body"].encode("utf-8"),
         headers={
             "Authorization": "Bearer " + values["RESEND_API_KEY"],
             "User-Agent": "Onesa-Portal-Operations/1.0",
@@ -794,7 +1051,10 @@ def notify(
         "checked_at": checked_at,
         "affected_backends": failed_backends(metrics or {}),
         "provider_receipt_id": receipt["id"],
-        "recipient": values["NOTIFY_EMAIL"],
+        "recipient": data["to"][0],
+        "sender": data["from"],
+        "mail_body_sha256": mail_envelope["body_sha256"],
+        "notification_product": mail_envelope["notification_product"],
         "provider_accepted": True,
         "delivery_verified": False,
         "rules": alerts,
@@ -890,6 +1150,7 @@ def main():
         not args.simulate and previous.get("notification_reconciliation_required")
     )
     scope_hold = False
+    envelope_hold = False
     if pending:
         # A prior ambiguous provider result must reuse the same idempotency key.
         if str(uuid.UUID(pending["reference"])) != pending["reference"]:
@@ -900,8 +1161,11 @@ def main():
         scope_hold = bool(
             previous.get("notification_pending_policy_hold")
         ) or pending_scope_hold(pending)
+        envelope_hold = bool(
+            previous.get("notification_pending_envelope_hold")
+        ) or pending_envelope_hold(pending)
         reconciliation_required |= (
-            scope_hold or not 0 <= pending_age < PENDING_RETRY_SECONDS
+            scope_hold or envelope_hold or not 0 <= pending_age < PENDING_RETRY_SECONDS
         )
     elif (args.simulate or kind) and not reconciliation_required:
         pending = {
@@ -923,6 +1187,7 @@ def main():
     if pending and not args.simulate:
         record["notification_pending"] = pending
     record["notification_pending_policy_hold"] = scope_hold
+    record["notification_pending_envelope_hold"] = envelope_hold
     record["notification_reconciliation_required"] = reconciliation_required
     # Preserve the latest observed failure even if notification delivery fails.
     # A cleared sample is recorded separately; it never converts a failed sample to PASS.
@@ -943,8 +1208,25 @@ def main():
                 },
             )
     if should_send:
+        if "mail_envelope" not in pending:
+            try:
+                pending["mail_envelope"] = prepare_notification_request(
+                    pending["alerts"], args.simulate,
+                    metrics=pending["metrics"], checked_at=pending["checked_at"],
+                    reference=pending["reference"], kind=pending["kind"],
+                    recovered_backends=pending["recovered_backends"],
+                    prior_incident=last_notification,
+                )
+            except (ValueError, TypeError, KeyError, OSError):
+                # Keep the observed failure and event identity even when preparation
+                # fails. An interrupted/unbound event is never guessed safe to retry.
+                record["notification_pending_envelope_hold"] = True
+                record["notification_reconciliation_required"] = True
+                if not args.simulate:
+                    write_record(path, record)
+                raise
         if not args.simulate:
-            # Persist identity before sending: timeouts/crashes must not create new mail.
+            # Persist exact bytes/account binding before sending, not just the UUID.
             record["notification_pending"] = pending
             write_record(path, record)
         record["notification"] = notify(
@@ -955,6 +1237,7 @@ def main():
             reference=pending["reference"],
             kind=pending["kind"],
             recovered_backends=pending["recovered_backends"],
+            mail_envelope=pending["mail_envelope"],
         )
         record.pop("notification_pending", None)
         if pending["kind"] == "recovery":
@@ -1001,6 +1284,7 @@ def main():
                 "notification_accepted": bool(should_send),
                 "notification_reconciliation_required": reconciliation_required,
                 "notification_pending_policy_hold": scope_hold,
+                "notification_pending_envelope_hold": envelope_hold,
                 "notification_scope": NOTIFICATION_SCOPE,
                 "notification_alerts": scoped_alerts,
                 "notification_kind": pending["kind"] if should_send else None,
