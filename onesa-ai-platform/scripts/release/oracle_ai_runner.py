@@ -52,6 +52,8 @@ IDENTITY_KEYS = frozenset(
     }
 )
 IDENTITY_SCHEMA = "20261102_shared_identity"
+MAIL_PRESENTATION_SCHEMA = "20261104_email_presentation"
+IDENTITY_SCHEMAS = frozenset({IDENTITY_SCHEMA, MAIL_PRESENTATION_SCHEMA})
 IDENTITY_CHECKS = frozenset(
     {
         "shared_identity_pkce",
@@ -294,7 +296,7 @@ def identity_runtime(binding, plan, environment, values, current):
     require(
         plan.get("migration_revision")
         == plan.get("expected_schema_revision")
-        == IDENTITY_SCHEMA
+        and plan.get("migration_revision") in IDENTITY_SCHEMAS
         and values.get("ONESA_IDENTITY_ENABLED") == "true"
         and values.get("ONESA_IDENTITY_ISSUER") == expected["issuer"]
         and values.get("ONESA_IDENTITY_CLIENT_ID") == expected["client_id"]
@@ -1731,7 +1733,7 @@ def migration_prerequisites(plan):
     require(
         plan["migration_revision"]
         in (
-            [IDENTITY_SCHEMA]
+            IDENTITY_SCHEMAS
             if plan["mode"] == "identity"
             else ["20261025_twins", "20261026_cybersecurity"]
         )
@@ -1832,7 +1834,8 @@ def accepted_rollback_proof(plan):
             and proof.get("rollback_image") == old["image"]
             and proof.get("retained_source") == binding["candidate_commit"]
             and proof.get("status") == "PASS"
-            and proof.get("schema_revision") == IDENTITY_SCHEMA
+            and proof.get("schema_revision") == plan["expected_schema_revision"]
+            and plan["expected_schema_revision"] in IDENTITY_SCHEMAS
             and proof.get("synthetic_database_restore") == "PASS"
             and type(proof.get("production_writes")) is int
             and proof["production_writes"] == 0
@@ -2184,7 +2187,8 @@ def identity_operational_observations(binding, plan, metrics, backup):
         restored.get("binding") == binding
         and restored.get("operation_id") == plan["qualification_context_id"]
         and restored.get("status") == "PASS"
-        and restored.get("schema_revision") == IDENTITY_SCHEMA
+        and restored.get("schema_revision") == plan["expected_schema_revision"]
+        and plan["expected_schema_revision"] in IDENTITY_SCHEMAS
         and type(restored.get("production_writes")) is int
         and restored["production_writes"] == 0,
         "IDENTITY_NATIVE_RESTORE_BINDING_REQUIRED",
@@ -2230,7 +2234,7 @@ def identity_operational_observations(binding, plan, metrics, backup):
         .get("Labels", {})
         .get("org.opencontainers.image.revision")
         == old["binding"]["candidate_commit"]
-        and old["compatible_schema_revision"] == IDENTITY_SCHEMA
+        and old["compatible_schema_revision"] == plan["expected_schema_revision"]
         and old["retain_additive_schema_and_files"] is True,
         "RETAINED_IDENTITY_ROLLBACK_IMAGE_REQUIRED",
     )
@@ -2376,21 +2380,22 @@ from alembic import command
 from urllib.parse import urlsplit
 request=json.load(sys.stdin)
 target=request.get('target_revision','20261025_twins')
-assert target in ['20261025_twins','20261026_cybersecurity','20261102_shared_identity']
+identity_targets=['20261102_shared_identity','20261104_email_presentation']
+assert target in ['20261025_twins','20261026_cybersecurity']+identity_targets
 role=urlsplit(request['runtime']).username
 assert re.fullmatch('[a-z_][a-z0-9_]{0,62}',role)
 owner=make_url(request['owner']).set(drivername='postgresql+psycopg')
 runtime=make_url(request['runtime'])
-if target=='20261102_shared_identity':
+if target in identity_targets:
  assert owner.username != runtime.username
  assert (owner.host.replace('-pooler.','.'),owner.port or 5432,owner.database)==(runtime.host.replace('-pooler.','.'),runtime.port or 5432,runtime.database)
 engine=create_engine(owner,connect_args={'connect_timeout':10,'sslmode':'verify-full','sslrootcert':'/etc/ssl/cert.pem','channel_binding':'require'})
 with engine.begin() as connection:
- if target=='20261102_shared_identity':
+ if target in identity_targets:
   connection.execute(text('SELECT pg_advisory_xact_lock(896075103)'))
   assert connection.scalar(text('SELECT NOT (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname=:role'),{'role':role}) is True
  revision=connection.scalar(text('SELECT version_num FROM alembic_version'))
- revisions=['20261010_capacity','20261021_industrial','20261025_twins','20261026_cybersecurity','20261102_shared_identity']
+ revisions=['20261010_capacity','20261021_industrial','20261025_twins','20261026_cybersecurity']+identity_targets
  assert revision in revisions and revisions.index(target)>=revisions.index(revision)
  assert connection.scalar(text("SELECT has_schema_privilege(current_user,'public','CREATE') AND pg_has_role(current_user,c.relowner,'USAGE') FROM pg_class c WHERE c.oid='alembic_version'::regclass"))
  config=Config('alembic.ini');config.attributes['connection']=connection
@@ -2399,8 +2404,8 @@ with engine.begin() as connection:
  os.environ['ONESA_DATABASE_URL']=owner.render_as_string(hide_password=False)
  command.upgrade(config,target)
  tables=['industrial_investigations','twin_files','twin_templates','twin_assets','twin_models','twin_notes','twin_sources','twin_readings','twin_events']
- if target in ['20261026_cybersecurity','20261102_shared_identity']:tables+=['cyber_assets','cyber_sources','cyber_mappings','cyber_policies','cyber_baselines','cyber_events','cyber_findings','cyber_results','cyber_investigations','cyber_actions','cyber_reports','cyber_summaries']
- if target=='20261102_shared_identity':tables+=['identity_sessions','identity_transactions','shared_identities']
+ if target in ['20261026_cybersecurity']+identity_targets:tables+=['cyber_assets','cyber_sources','cyber_mappings','cyber_policies','cyber_baselines','cyber_events','cyber_findings','cyber_results','cyber_investigations','cyber_actions','cyber_reports','cyber_summaries']
+ if target in identity_targets:tables+=['identity_sessions','identity_transactions','shared_identities']
  connection.execute(text('GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE '+','.join('public.'+table for table in tables)+' TO "'+role+'"'))
  assert not connection.scalar(text("SELECT has_schema_privilege(:role,'public','CREATE') OR has_table_privilege(:role,'alembic_version','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')"),{'role':role})
  assert connection.scalar(text('SELECT version_num FROM alembic_version'))==target
@@ -2447,7 +2452,7 @@ def migrate(binding, env, operation, plan):
             "runtime_DDL_granted": False,
             "runtime_new_tables_DML_granted": (
                 24
-                if plan["migration_revision"] == IDENTITY_SCHEMA
+                if plan["migration_revision"] in IDENTITY_SCHEMAS
                 else 21
                 if plan["migration_revision"] == "20261026_cybersecurity"
                 else 9

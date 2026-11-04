@@ -19,4 +19,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Retain versioned delivery states; use a reviewed forward rollback")
+    raise RuntimeError("Retain versioned delivery states; use an explicit forward rollback plan")

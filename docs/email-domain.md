@@ -243,7 +243,10 @@ jobs remain plain. Delivery stays disabled where it is already disabled.
 
 The new AI source accepts the previous shared-identity schema for API observation,
 but its mail worker requires the new constraint before processing fresh HTML jobs.
-Qualify the migration and drain or hold pending versioned mail before an older
+The source migration and backup tools explicitly recognize both schema versions;
+rollback and restore receipts must match the exact selected schema. Commission the
+new tool hashes through owner policy before rollout; installed tools and existing
+receipts are not edited. Qualify the migration and drain or hold pending versioned mail before an older
 binary is used for rollback; never rewrite an attempted request to another template.
 Source and preview checks do not establish deployment or inbox delivery. Oracle and
 Cloudflare provider-generated messages retain their provider-controlled appearance.
