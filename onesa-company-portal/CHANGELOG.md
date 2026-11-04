@@ -3,6 +3,7 @@
 ## Unreleased — Shared sending domain
 
 - Authorize `it-infrastructure@onesa.eu` for infrastructure notifications. Keep
+  its `OPERATIONS_NOTIFY_EMAIL` setting separate from application mail. Keep
   historical recipients valid for immutable pending-request reconciliation and
   preserve recipient binding, deduplication and staging suppression. Runtime and
   provider notification settings require separate readback and delivery checks.

@@ -228,21 +228,24 @@ class DurableMailTests(unittest.TestCase):
 
     def test_infrastructure_recipient_transition_preserves_attempted_request(self):
         self.assert_frozen_retry(lambda: self.values.update(
-            NOTIFY_EMAIL="it-infrastructure@onesa.eu"
+            OPERATIONS_NOTIFY_EMAIL="it-infrastructure@onesa.eu"
         ))
 
     def test_fresh_infrastructure_alert_uses_approved_mailbox(self):
-        self.values["NOTIFY_EMAIL"] = "it-infrastructure@onesa.eu"
+        self.values["OPERATIONS_NOTIFY_EMAIL"] = "it-infrastructure@onesa.eu"
         self.tick()
         self.assertEqual(self.body()["to"], ["it-infrastructure@onesa.eu"])
         self.assertEqual(self.read("notification.json")["recipient"],
                          "it-infrastructure@onesa.eu")
+        self.assertEqual(self.values["NOTIFY_EMAIL"], "andrew@onesa.eu")
 
     def test_infrastructure_recipient_does_not_allow_other_addresses(self):
-        self.values["NOTIFY_EMAIL"] = "unapproved@example.invalid"
-        with self.assertRaisesRegex(ValueError, "notification destination"):
-            self.tick()
-        self.assertEqual(self.requests, [])
+        for recipient in ["unapproved@example.invalid", "", "it-infrastructure@onesa.eu\nBcc: other@example.invalid"]:
+            with self.subTest(recipient=recipient):
+                self.values["OPERATIONS_NOTIFY_EMAIL"] = recipient
+                with self.assertRaisesRegex(ValueError, "notification destination"):
+                    monitor.prepare_notification_request(["backup-failed"])
+                self.assertEqual(self.requests, [])
 
     def test_message_template_drift_does_not_change_pending_request(self):
         with patch.object(monitor, "worker_notification_detail",
