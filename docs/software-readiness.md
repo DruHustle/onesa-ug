@@ -40,7 +40,7 @@ checks.
 | Portal backend | Full disposable-database run: 214 tests passed; the scanner test process could not create its required Unix socket in this environment. The added private-CA and mail checks passed separately. |
 | Frontends | Portal, AI, Robot and Drone lint/type/build checks passed. Robot had 92 passing unit tests; Drone had 13. |
 | Release/tooling | Product policy/security and substantial offline release suites passed. Some host/root-specific cases require their documented environment. These results do not qualify live recovery, identity, mail or deployment. |
-| Kubernetes preparation and first install | 51 focused tests pass, including artifact replacement, durable interruption handling, existing maintenance and revoked-hold rejection. Both systemd unit definitions passed configuration validation. No actual host installation is established. |
+| Kubernetes preparation and first install | 59 focused tests pass, including artifact replacement, durable interruption handling, existing maintenance and revoked-hold rejection. Both systemd unit definitions passed configuration validation. No actual host installation is established. |
 | Operations mail | 28 envelope/persistence and 30 notification-scope tests pass. The broader 237-test Oracle run passed 236 tests; one unchanged recovery fixture could not create its required Unix socket. No real email was sent by these tests. |
 
 The environment denies Unix-domain sockets. Portal's local scanner/recovery

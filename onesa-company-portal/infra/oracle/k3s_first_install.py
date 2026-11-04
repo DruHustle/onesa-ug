@@ -205,28 +205,52 @@ def lifecycle_module(lock):
     return module
 
 
+def require_contended_lock(fd, code):
+    """Probe an independently opened descriptor without retaining a lease."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    raise Refused(code)
+
+
 def check_service_lease(plan, receipt, lock):
-    """Service children cannot reacquire their installer's held global lock."""
+    """Initial service children require the matching live installer, not a stale hold."""
     module = lifecycle_module(lock)
     try:
         module.private_path(module.STATE, directory=True)
-        # Observe through the existing schema/custody validator. This descriptor
-        # is read-only and does not acquire or mutate the parent's held lease.
+        # Independent read-only descriptors probe the existing locks only. A
+        # successful probe is immediately released and refuses a stale owner.
         fd = os.open(module.LOCK, os.O_RDONLY | os.O_NOFOLLOW)
         observer = module.LifecycleGuard(fd)
         try:
             hold = observer.read_hold()
+            if hold is not None:
+                require(not hold.get("revocations"), "SHARED_HOST_REVOCATION_REQUIRES_REVIEW")
+                require(receipt["phase"] != "READY_OWNER_QUALIFICATION_REQUIRED",
+                        "SHARED_HOST_MAINTENANCE_RECONCILIATION_REQUIRED")
+                require(all(hold.get(key) == expected for key, expected in {
+                    "kind": LEASE_KIND, "scope": LEASE_SCOPE,
+                    "reference": digest(encoded(plan)), "token": receipt.get("maintenance_token"),
+                }.items()), "UNRELATED_SHARED_HOST_MAINTENANCE")
+                require_contended_lock(fd, "INSTALLATION_GLOBAL_LOCK_INACTIVE")
+                # An unrelated owner/recovery process can hold the global lock
+                # while a stale maintenance record remains. Only the live first
+                # installer also owns this existing component lock.
+                component_fd = os.open(LOCK, os.O_RDONLY | os.O_NOFOLLOW)
+                try:
+                    module._same_file(component_fd, LOCK)
+                    require_contended_lock(component_fd, "INSTALLATION_COMPONENT_LOCK_INACTIVE")
+                    module._same_file(component_fd, LOCK)
+                finally:
+                    os.close(component_fd)
+                require(observer.read_hold() == hold, "INSTALLATION_MAINTENANCE_HOLD_CHANGED")
+            else:
+                require(receipt["phase"] == "READY_OWNER_QUALIFICATION_REQUIRED", "INSTALLATION_MAINTENANCE_HOLD_MISSING")
         finally:
             observer._open = False
             os.close(fd)
-        if hold is not None:
-            require(not hold.get("revocations"), "SHARED_HOST_REVOCATION_REQUIRES_REVIEW")
-            require(all(hold.get(key) == expected for key, expected in {
-                "kind": LEASE_KIND, "scope": LEASE_SCOPE,
-                "reference": digest(encoded(plan)), "token": receipt.get("maintenance_token"),
-            }.items()), "UNRELATED_SHARED_HOST_MAINTENANCE")
-        else:
-            require(receipt["phase"] == "READY_OWNER_QUALIFICATION_REQUIRED", "INSTALLATION_MAINTENANCE_HOLD_MISSING")
     except module.LifecycleError as error:
         raise Refused(str(error)) from None
 
@@ -359,13 +383,13 @@ def firewall_rules(plan, docker_subnets):
     v4_input.append(["-j", "RETURN"])
     v6_input = [["-i", "lo", "-j", "RETURN"],
                 ["-p", "tcp", "-m", "multiport", "--dports", "6443,10250", "-j", "DROP"], ["-j", "RETURN"]]
-    # Preserve the existing overlay and Docker user policy before K3s forwarding.
-    # No CNI-to-Docker allow is introduced. Existing Docker rules are never edited.
-    v4_forward = [["-i", "tailscale0", "-j", "DROP"], ["-j", "DOCKER-USER"]]
+    # Refuse new pod-to-Docker traffic before an existing Docker user ACCEPT can
+    # terminate traversal. Other traffic retains the unmodified Docker policy.
+    v4_forward = [["-i", "tailscale0", "-j", "DROP"]]
     for subnet in sorted(docker_subnets):
         preflight.network(subnet)
         v4_forward.append(["-d", subnet, "-i", "cni0", "-j", "DROP"])
-    v4_forward.append(["-j", "RETURN"])
+    v4_forward.extend([["-j", "DOCKER-USER"], ["-j", "RETURN"]])
     return {"iptables": {INPUT_CHAIN: v4_input, FORWARD_CHAIN: v4_forward},
             "ip6tables": {INPUT_CHAIN: v6_input,
                            FORWARD_CHAIN: [["-i", "tailscale0", "-j", "DROP"], ["-j", "RETURN"]]}}
@@ -765,9 +789,9 @@ def install(plan, facts, lock, maintenance_token):
         wait_ready(lambda: verify_portainer(receipt, lock))
         apply_private_firewall(plan, receipt["docker_subnets"])
         result = verify_installation(plan, receipt, lock)
-        command(["systemctl", "enable", FIREWALL_UNIT, UNIT])
         receipt["phase"] = "READY_OWNER_QUALIFICATION_REQUIRED"
         save_receipt(receipt)
+        command(["systemctl", "enable", FIREWALL_UNIT, UNIT])
         return result
     except (Refused, OSError, ValueError, KeyError, TypeError, KeyboardInterrupt) as error:
         reason = str(error) if isinstance(error, Refused) else "INSTALLATION_INTERRUPTED"

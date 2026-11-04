@@ -146,6 +146,10 @@ retains its durable maintenance hold after interruption, and does not enable or
 replace the existing recovery controller. An existing cluster, partial installation,
 unrelated hold, systemd override, missing capacity or overlapping network blocks
 the first-install path. Repeating a completed install performs verification only.
+Before completion, service children require the matching maintenance hold and
+active ownership of both existing lifecycle and installer locks; a saved hold
+alone cannot authorize a restart. The readiness receipt is durable before service
+enablement, and normal ready-state restarts refuse any remaining maintenance hold.
 
 `k3s_release_lock.json` binds the stable K3s release binary and packaged images
 for the observed architecture, and the compatible Portainer CE image by digest.
@@ -153,8 +157,10 @@ The exact copied artifact bytes are checked through one protected file descripto
 K3s uses its own containerd, an explicit private node/API address, single-node
 host-gw networking and private kubeconfig. Traefik, ServiceLB and the default local
 storage provisioner are disabled before startup. Its own narrow firewall chains
-retain the existing overlay and Docker user policy; no Docker-generated chain is
-flushed, no application container is restarted, and no public control-plane or
+refuse pod traffic to Docker subnets before traversing the retained Docker user
+policy, so existing accepts cannot bypass that isolation. The existing overlay
+guard remains first; no Docker-generated chain is flushed, no application
+container is restarted, and no public control-plane or
 management UI endpoint is provisioned.
 
 Portainer has HTTPS-only ClusterIP access, denied pod ingress, one observed node,

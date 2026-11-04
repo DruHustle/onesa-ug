@@ -3,6 +3,7 @@
 import contextlib
 import copy
 import io
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -124,6 +125,36 @@ class PlanTests(unittest.TestCase):
 
 
 class FirewallTests(unittest.TestCase):
+    def test_pods_cannot_inherit_existing_docker_accepts(self):
+        docker_policy = [["-s", "10.0.0.0/8", "-j", "ACCEPT"], ["-j", "RETURN"]]
+        original_policy = copy.deepcopy(docker_policy)
+        chains = installer.firewall_rules(plan(), ["172.18.0.0/16", "192.168.40.0/24"])["iptables"]
+        chains["DOCKER-USER"] = docker_policy
+
+        def verdict(chain, interface, source, destination):
+            for rule in chains[chain]:
+                if "-i" in rule and rule[rule.index("-i") + 1] != interface:
+                    continue
+                if any(flag in rule and ipaddress.ip_address(address) not in
+                       ipaddress.ip_network(rule[rule.index(flag) + 1])
+                       for flag, address in (("-s", source), ("-d", destination))):
+                    continue
+                target = rule[rule.index("-j") + 1]
+                if target in {"ACCEPT", "DROP", "RETURN"}:
+                    return target
+                result = verdict(target, interface, source, destination)
+                if result != "RETURN":
+                    return result
+            return "RETURN"
+
+        for destination in ("172.18.0.2", "192.168.40.2"):
+            self.assertEqual(verdict(installer.FORWARD_CHAIN, "cni0", "10.120.0.2", destination), "DROP")
+        self.assertEqual(verdict(installer.FORWARD_CHAIN, "tailscale0", "10.120.0.2", "203.0.113.2"), "DROP")
+        self.assertEqual(verdict(installer.FORWARD_CHAIN, "br-existing", "10.12.0.2", "172.18.0.2"), "ACCEPT")
+        self.assertEqual(verdict(installer.FORWARD_CHAIN, "cni0", "10.120.0.2", "203.0.113.2"), "ACCEPT")
+        self.assertEqual(verdict(installer.FORWARD_CHAIN, "br-existing", "192.0.2.2", "172.18.0.2"), "RETURN")
+        self.assertEqual(docker_policy, original_policy)
+
     def test_existing_policy_survives_and_docker_edits_are_rejected(self):
         before, after = firewall(), installed_rules()
         installer.require_existing_firewall(before)
@@ -144,7 +175,8 @@ class FirewallTests(unittest.TestCase):
         self.assertEqual(len(accepts), 2)
         self.assertTrue(all(row[:6] == ["-s", plan()["pod_cidr"], "-d", plan()["private_ip"] + "/32", "-i", "cni0"] for row in accepts))
         forward = desired["iptables"][installer.FORWARD_CHAIN]
-        self.assertEqual(forward[:2], [["-i", "tailscale0", "-j", "DROP"], ["-j", "DOCKER-USER"]])
+        self.assertEqual(forward[0], ["-i", "tailscale0", "-j", "DROP"])
+        self.assertEqual(forward[-2:], [["-j", "DOCKER-USER"], ["-j", "RETURN"]])
         self.assertIn(["-d", "172.18.0.0/16", "-i", "cni0", "-j", "DROP"], forward)
         self.assertFalse(any(row[-1] == "ACCEPT" for row in forward))
         self.assertNotIn("51820", json.dumps(desired))
@@ -465,6 +497,121 @@ class FileAndLifecycleTests(unittest.TestCase):
         with patch.object(installer, "lifecycle_module", return_value=lifecycle), \
                 self.assertRaisesRegex(installer.Refused, "LIFECYCLE_HOLD_INVALID"):
             installer.check_service_lease(plan(), receipt, self.lock)
+
+    def test_stale_matching_service_hold_cannot_launch_or_change_firewall(self):
+        lifecycle = self.shared_lifecycle()
+        with lifecycle.lifecycle_lock() as guard:
+            token = guard.begin_hold(installer.LEASE_KIND, installer.LEASE_SCOPE, installer.digest(installer.encoded(plan())))
+        with self.mocked_host():
+            installer.install(plan(), self.facts, self.lock, token)
+        receipt = installer.load_receipt(plan())
+        for phase in ("FILES_PREPARED", "STARTING", "APPLYING_PORTAINER"):
+            receipt["phase"] = phase
+            installer.save_receipt(receipt)
+            for action in ("serve", "firewall"):
+                args = ["installer", action, "--plan", str(installer.STATE / "plan.json")]
+                with self.subTest(phase=phase, action=action), patch.object(sys, "argv", args), \
+                        patch.object(installer, "current_identity"), patch.object(installer, "releases", return_value=self.lock), \
+                        patch.object(installer, "lifecycle_module", return_value=lifecycle), \
+                        patch.object(installer, "effective_owned_unit"), \
+                        patch.object(installer, "clean_server_exec") as execute, \
+                        patch.object(installer, "apply_private_firewall") as firewall_apply, \
+                        patch.object(installer, "verify_firewall"), \
+                        contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(installer.main(), 2)
+                    self.assertEqual(json.loads(output.getvalue())["reason"], "INSTALLATION_GLOBAL_LOCK_INACTIVE")
+                execute.assert_not_called()
+                firewall_apply.assert_not_called()
+
+    def test_service_child_requires_both_active_installer_locks(self):
+        lifecycle = self.shared_lifecycle()
+        installer.write_new(installer.LOCK, b"")
+        with lifecycle.lifecycle_lock() as guard:
+            token = guard.begin_hold(installer.LEASE_KIND, installer.LEASE_SCOPE, installer.digest(installer.encoded(plan())))
+            receipt = {"phase": "STARTING", "maintenance_token": token}
+            with patch.object(installer, "lifecycle_module", return_value=lifecycle):
+                with self.assertRaisesRegex(installer.Refused, "INSTALLATION_COMPONENT_LOCK_INACTIVE"):
+                    installer.check_service_lease(plan(), receipt, self.lock)
+                with installer.LOCK.open("rb") as component:
+                    installer.fcntl.flock(component, installer.fcntl.LOCK_EX | installer.fcntl.LOCK_NB)
+                    for phase in ("FILES_PREPARED", "STARTING", "APPLYING_PORTAINER"):
+                        installer.check_service_lease(plan(), {**receipt, "phase": phase}, self.lock)
+                with self.assertRaisesRegex(installer.Refused, "INSTALLATION_COMPONENT_LOCK_INACTIVE"):
+                    installer.check_service_lease(plan(), receipt, self.lock)
+        with patch.object(installer, "lifecycle_module", return_value=lifecycle), \
+                self.assertRaisesRegex(installer.Refused, "INSTALLATION_GLOBAL_LOCK_INACTIVE"):
+            installer.check_service_lease(plan(), receipt, self.lock)
+
+    def test_ready_service_restart_requires_completed_hold(self):
+        lifecycle = self.shared_lifecycle()
+        installer.write_new(installer.LOCK, b"")
+        with lifecycle.lifecycle_lock() as guard:
+            token = guard.begin_hold(installer.LEASE_KIND, installer.LEASE_SCOPE, installer.digest(installer.encoded(plan())))
+            receipt = {"phase": "READY_OWNER_QUALIFICATION_REQUIRED", "maintenance_token": token}
+            with installer.LOCK.open("rb") as component:
+                installer.fcntl.flock(component, installer.fcntl.LOCK_EX | installer.fcntl.LOCK_NB)
+                with patch.object(installer, "lifecycle_module", return_value=lifecycle), \
+                        self.assertRaisesRegex(installer.Refused, "SHARED_HOST_MAINTENANCE_RECONCILIATION_REQUIRED"):
+                    installer.check_service_lease(plan(), receipt, self.lock)
+            guard.complete_hold(token)
+        with patch.object(installer, "lifecycle_module", return_value=lifecycle):
+            installer.check_service_lease(plan(), receipt, self.lock)
+            with lifecycle.LOCK.open("rb") as probe:
+                installer.fcntl.flock(probe, installer.fcntl.LOCK_EX | installer.fcntl.LOCK_NB)
+
+    def test_service_child_rejects_component_lock_custody_drift(self):
+        lifecycle = self.shared_lifecycle()
+        installer.write_new(installer.LOCK, b"")
+        with lifecycle.lifecycle_lock() as guard, installer.LOCK.open("rb") as component:
+            token = guard.begin_hold(installer.LEASE_KIND, installer.LEASE_SCOPE, installer.digest(installer.encoded(plan())))
+            receipt = {"phase": "STARTING", "maintenance_token": token}
+            installer.fcntl.flock(component, installer.fcntl.LOCK_EX | installer.fcntl.LOCK_NB)
+            installer.LOCK.chmod(0o644)
+            with patch.object(installer, "lifecycle_module", return_value=lifecycle), \
+                    self.assertRaisesRegex(installer.Refused, "LIFECYCLE_PRIVATE_CUSTODY"):
+                installer.check_service_lease(plan(), receipt, self.lock)
+
+    def test_service_child_rejects_component_lock_replacement_during_probe(self):
+        lifecycle = self.shared_lifecycle()
+        installer.write_new(installer.LOCK, b"")
+        real_probe = installer.require_contended_lock
+        def replace_after_probe(fd, code):
+            real_probe(fd, code)
+            if code == "INSTALLATION_COMPONENT_LOCK_INACTIVE":
+                replacement = self.root / "replacement.lock"
+                installer.write_new(replacement, b"")
+                replacement.replace(installer.LOCK)
+        with lifecycle.lifecycle_lock() as guard, installer.LOCK.open("rb") as component:
+            token = guard.begin_hold(installer.LEASE_KIND, installer.LEASE_SCOPE, installer.digest(installer.encoded(plan())))
+            receipt = {"phase": "STARTING", "maintenance_token": token}
+            installer.fcntl.flock(component, installer.fcntl.LOCK_EX | installer.fcntl.LOCK_NB)
+            with patch.object(installer, "lifecycle_module", return_value=lifecycle), \
+                    patch.object(installer, "require_contended_lock", side_effect=replace_after_probe), \
+                    self.assertRaisesRegex(installer.Refused, "LIFECYCLE_FILE_REPLACED"):
+                installer.check_service_lease(plan(), receipt, self.lock)
+
+    def test_ready_receipt_is_durable_before_units_are_enabled(self):
+        observed = []
+        def observe_enable(arguments):
+            if arguments[:2] == ["systemctl", "enable"]:
+                observed.append(installer.load_receipt(plan())["phase"])
+            return False
+        with self.mocked_host(failure=observe_enable):
+            result = installer.install(plan(), self.facts, self.lock, "synthetic-maintenance-token")
+        self.assertEqual(result["status"], "SYNTHETIC_PASS")
+        self.assertEqual(observed, ["READY_OWNER_QUALIFICATION_REQUIRED"])
+
+    def test_failed_ready_receipt_never_enables_units(self):
+        real_save = installer.save_receipt
+        def fail_ready(receipt):
+            if receipt["phase"] == "READY_OWNER_QUALIFICATION_REQUIRED":
+                raise OSError("synthetic ready receipt failure")
+            real_save(receipt)
+        with self.mocked_host(), patch.object(installer, "save_receipt", side_effect=fail_ready):
+            result = installer.install(plan(), self.facts, self.lock, "synthetic-maintenance-token")
+        self.assertEqual(result["status"], "HELD_REVIEW_REQUIRED")
+        self.assertFalse(any(call[:2] == ["systemctl", "enable"] for call in self.commands))
+        self.assertIn(["systemctl", "disable", "--now", installer.UNIT], self.commands)
 
 
 if __name__ == "__main__":
