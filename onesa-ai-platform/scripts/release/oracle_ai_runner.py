@@ -294,8 +294,7 @@ def identity_runtime(binding, plan, environment, values, current):
     identity = identity_profile(binding, plan)
     expected = identity["environments"][environment]
     require(
-        plan.get("migration_revision")
-        == plan.get("expected_schema_revision")
+        plan.get("migration_revision") == plan.get("expected_schema_revision")
         and plan.get("migration_revision") in IDENTITY_SCHEMAS
         and values.get("ONESA_IDENTITY_ENABLED") == "true"
         and values.get("ONESA_IDENTITY_ISSUER") == expected["issuer"]

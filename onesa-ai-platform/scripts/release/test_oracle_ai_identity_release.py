@@ -167,15 +167,28 @@ class IdentityReleaseTests(unittest.TestCase):
         binding, plan, runtimes, _ = fixture()
         values = runtimes["staging"]
         for schema in [r.IDENTITY_SCHEMA, r.MAIL_PRESENTATION_SCHEMA]:
-            candidate = {**plan, "migration_revision": schema, "expected_schema_revision": schema}
-            self.assertTrue(r.identity_runtime(binding, candidate, "staging", values, values))
+            candidate = {
+                **plan,
+                "migration_revision": schema,
+                "expected_schema_revision": schema,
+            }
+            self.assertTrue(
+                r.identity_runtime(binding, candidate, "staging", values, values)
+            )
         for migration, expected in [
             (r.MAIL_PRESENTATION_SCHEMA, r.IDENTITY_SCHEMA),
             (r.IDENTITY_SCHEMA, r.MAIL_PRESENTATION_SCHEMA),
             ("unknown", "unknown"),
         ]:
-            candidate = {**plan, "migration_revision": migration, "expected_schema_revision": expected}
-            with self.subTest(migration=migration, expected=expected), self.assertRaises(r.Refused):
+            candidate = {
+                **plan,
+                "migration_revision": migration,
+                "expected_schema_revision": expected,
+            }
+            with (
+                self.subTest(migration=migration, expected=expected),
+                self.assertRaises(r.Refused),
+            ):
                 r.identity_runtime(binding, candidate, "staging", values, values)
 
     def test_enabled_identity_cannot_rotate_existing_credentials_or_issuer(self):
@@ -518,8 +531,11 @@ class IdentityReleaseTests(unittest.TestCase):
             ),
         ):
             self.assertEqual(r.accepted_rollback_proof(plan), "1" * 64)
-            mail_plan = {**plan, "migration_revision": r.MAIL_PRESENTATION_SCHEMA,
-                         "expected_schema_revision": r.MAIL_PRESENTATION_SCHEMA}
+            mail_plan = {
+                **plan,
+                "migration_revision": r.MAIL_PRESENTATION_SCHEMA,
+                "expected_schema_revision": r.MAIL_PRESENTATION_SCHEMA,
+            }
             with self.assertRaisesRegex(r.Refused, "FRESH_IDENTITY_SCHEMA"):
                 r.accepted_rollback_proof(mail_plan)
             read.return_value = {**proof, "schema_revision": r.MAIL_PRESENTATION_SCHEMA}
