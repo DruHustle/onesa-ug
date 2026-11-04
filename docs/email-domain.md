@@ -99,10 +99,10 @@ the application never silently rewrites it to `onesa.eu`.
 The root domain `onesa.eu` is now created in Resend's Ireland (`eu-west-1`)
 region. Its exact provider-issued DKIM TXT record and the `rsend.onesa.eu` and
 `send.onesa.eu` DNS-only CNAME records were saved and read back in Cloudflare.
-The Resend DNS event reports verification, but the domain's overall status still
-reads **Pending**: `send` is **Verified**, while DKIM and `rsend` remain pending.
-Treat the domain as awaiting completed verification until the domain status and
-all required record checks agree.
+Resend subsequently reported the domain as **Verified**, with DKIM and both
+`rsend` and `send` records also **Verified**. Its domain event recorded completed
+verification at 00:53 UTC. Sending is enabled; receiving through Resend remains
+disabled so the existing Zoho inbox routing stays authoritative.
 
 No test message was sent. No live runtime sender, sending credential or worker
 configuration was changed. Existing mail domains remain in place while migration
