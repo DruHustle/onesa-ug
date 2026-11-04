@@ -95,6 +95,7 @@ class RequiredSummaryTests(unittest.TestCase):
                 "outputs": {key: "true" for key in PRODUCTS},
             },
             "pipeline-security": {"result": "success"},
+            "publication-hygiene": {"result": "success"},
             **{key: {"result": "success"} for key in PRODUCTS},
         }
 

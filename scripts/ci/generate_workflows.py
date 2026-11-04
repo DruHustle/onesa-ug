@@ -200,7 +200,62 @@ def adapt(source, key, pipeline=False):
     }
 
 
-def orchestrator():
+def publication_hygiene(root=ROOT):
+    """Preserve independent source gates and coalesce their complete history scan."""
+    steps = []
+    policies = []
+    history_command = "python scripts/repository_hygiene.py --history"
+    for key in ("portal", "platform", "robot"):
+        source = load(root / PRODUCTS[key] / ".github/workflows/repository-hygiene.yml")
+        if source.get("permissions") != {"contents": "read"} or set(source["jobs"]) != {
+            "publication-hygiene"
+        }:
+            raise ValueError("Publication workflow authority requires migration review")
+        job = source["jobs"]["publication-hygiene"]
+        if set(job) != {"if", "runs-on", "steps", "timeout-minutes"}:
+            raise ValueError("Publication workflow structure requires migration review")
+        if job["steps"][-1].get("run") != history_command:
+            raise ValueError("The complete source-history gate must remain mandatory")
+        policies.append(
+            {name: job[name] for name in ("if", "runs-on", "timeout-minutes")}
+        )
+        adapted = adapt_steps(job["steps"], key)
+        for step in adapted[:-1]:
+            if "uses" in step:
+                if step["uses"] not in {CHECKOUT, SETUP_PYTHON}:
+                    raise ValueError(
+                        "New publication tool setup requires migration review"
+                    )
+                options = step.get("with", {})
+                if step["uses"] == SETUP_PYTHON and options != {
+                    "python-version": "3.11"
+                }:
+                    raise ValueError("Changed publication Python setup requires review")
+                if step["uses"] == CHECKOUT and (
+                    set(options) - {"persist-credentials", "fetch-depth", "ref"}
+                    or options.get("ref") not in {None, "${{ github.sha }}"}
+                ):
+                    raise ValueError("Changed publication checkout requires review")
+                if key != "portal":
+                    # The same pinned checkout and Python environment already
+                    # serve each product. Preserve all actual policy/test steps.
+                    continue
+            steps.append(step)
+    if any(policy != policies[0] for policy in policies[1:]):
+        raise ValueError(
+            "Distinct publication runner policies require migration review"
+        )
+    steps.append(
+        {
+            "name": "Scan every product and root path through preserved source history",
+            "run": "python3 scripts/repository_hygiene.py --history",
+            "working-directory": ".",
+        }
+    )
+    return {**policies[0], "permissions": {"contents": "read"}, "steps": steps}
+
+
+def orchestrator(root=ROOT):
     outputs = {key: "${{ steps.paths.outputs." + key + " }}" for key in PRODUCTS}
     jobs = {
         "prepare": {
@@ -283,6 +338,7 @@ def orchestrator():
             ],
         },
     }
+    jobs["publication-hygiene"] = publication_hygiene(root)
     for key in PRODUCTS:
         jobs[key] = {
             "needs": ["prepare"],
@@ -295,7 +351,7 @@ def orchestrator():
     jobs["ci-summary"] = {
         "name": "Onesa required verification",
         "if": "always()",
-        "needs": ["prepare", "pipeline-security", *PRODUCTS],
+        "needs": ["prepare", "pipeline-security", "publication-hygiene", *PRODUCTS],
         "runs-on": "ubuntu-24.04",
         "timeout-minutes": 5,
         "permissions": {"contents": "read"},
@@ -337,7 +393,7 @@ def rendered(root=ROOT):
                 adapt(load(root / pipeline_path), key, pipeline=True),
                 pipeline_path,
             )
-    files["verify.yml"] = (orchestrator(), None)
+    files["verify.yml"] = (orchestrator(root), None)
     result = {}
     for filename, (document, source_path) in files.items():
         text = yaml.dump(
@@ -363,6 +419,17 @@ def rendered(root=ROOT):
                 + hashlib.sha256((root / source_path).read_bytes()).hexdigest()
                 + "\n"
             )
+        else:
+            for key in ("portal", "platform", "robot"):
+                source = (
+                    Path(PRODUCTS[key]) / ".github/workflows/repository-hygiene.yml"
+                )
+                header += "# Publication source: " + source.as_posix() + "\n"
+                header += (
+                    "# Source SHA256: "
+                    + hashlib.sha256((root / source).read_bytes()).hexdigest()
+                    + "\n"
+                )
         result[filename] = header + text
     return result
 

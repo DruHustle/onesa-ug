@@ -30,7 +30,7 @@ checks.
 
 | Scope | Result and limits |
 | --- | --- |
-| Root verification | 27 regression tests pass; workflow drift, actionlint, formatting and publication/security checks pass. |
+| Root verification | 28 regression tests pass; workflow drift, actionlint, formatting and full-history publication/security checks pass. The original Portal/Robot repository documentation gates are retained. |
 | Robot backend | Final full suite: 338 passed, plus lint, types and generated-contract agreement. |
 | Drone backend | Full PostgreSQL suite: 251 passed before the later portable-client change; all 29 affected portability tests passed after that change. |
 | AI backend | 534 passed; 267 database-dependent tests skipped because local PostgreSQL with pgvector was unavailable. Required CI database tests remain enabled. |

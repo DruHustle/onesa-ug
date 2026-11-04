@@ -80,7 +80,8 @@ class WorkflowTests(unittest.TestCase):
         summary = root["jobs"]["ci-summary"]
         self.assertEqual(summary["if"], "always()")
         self.assertEqual(
-            set(summary["needs"]), {"prepare", "pipeline-security", *PRODUCTS}
+            set(summary["needs"]),
+            {"prepare", "pipeline-security", "publication-hygiene", *PRODUCTS},
         )
         self.assertEqual(summary["name"], "Onesa required verification")
         for text in workflows.rendered().values():
@@ -156,6 +157,40 @@ class WorkflowTests(unittest.TestCase):
             text = generated["_pipeline-" + key + ".yml"]
             self.assertIn("product_security.py --product " + key + " --output", text)
             self.assertIn("product_security.py --product " + key + " --tests", text)
+
+    def test_independent_history_and_documentation_gates_remain_required(self):
+        job = workflows.orchestrator()["jobs"]["publication-hygiene"]
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        self.assertEqual(job["timeout-minutes"], 45)
+        self.assertNotIn("needs", job)
+        scans = [
+            step
+            for step in job["steps"]
+            if "repository_hygiene.py" in step.get("run", "")
+        ]
+        self.assertEqual(len(scans), 1)
+        self.assertEqual(
+            scans[0]["run"], "python3 scripts/repository_hygiene.py --history"
+        )
+        self.assertEqual(scans[0]["working-directory"], ".")
+        for key in ("portal", "platform", "robot"):
+            source = workflows.load(
+                ROOT / PRODUCTS[key] / ".github/workflows/repository-hygiene.yml"
+            )
+            original = source["jobs"]["publication-hygiene"]
+            for field in ("if", "runs-on", "timeout-minutes"):
+                self.assertEqual(job[field], original[field])
+            for step in workflows.adapt_steps(original["steps"], key):
+                if "run" in step and "repository_hygiene.py" not in step["run"]:
+                    self.assertIn(
+                        step,
+                        job["steps"],
+                        "A source publication policy or documentation test was dropped",
+                    )
+        self.assertIn(
+            "publication-hygiene",
+            workflows.orchestrator()["jobs"]["ci-summary"]["needs"],
+        )
 
 
 if __name__ == "__main__":

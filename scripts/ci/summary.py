@@ -8,7 +8,7 @@ from config import PRODUCTS
 
 def check(results):
     failures = []
-    for name in ("prepare", "pipeline-security"):
+    for name in ("prepare", "pipeline-security", "publication-hygiene"):
         state = results.get(name, {}).get("result", "missing")
         if state != "success":
             failures.append(name + ": " + state)

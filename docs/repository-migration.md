@@ -32,7 +32,7 @@ checkout. `scripts/ci/generate_workflows.py` generates the following active file
 
 | Generated workflow | Source or responsibility |
 | --- | --- |
-| `verify.yml` | Conservative selection, root publication/security checks, required aggregate result |
+| `verify.yml` | Conservative selection, root checks, original Portal/AI/Robot publication-history and documentation gates, required aggregate result |
 | `_verify-portal.yml` | Portal `.github/workflows/verify.yml` |
 | `_verify-platform.yml` | AI Platform `.github/workflows/ci.yml` |
 | `_verify-robot.yml` | Robot `.github/workflows/scaffold.yml` |
@@ -48,6 +48,16 @@ directories, cache dependencies, artifact paths, workspace references, and local
 reusable workflows. Pre-checkout policy/database preparation runs at the root,
 where a product directory does not yet exist. Artifact names include the product
 to prevent collisions across reusable workflows.
+
+The root workflow also records the hashes of the three original
+`repository-hygiene.yml` workflows. Their hosted/visibility guards, read-only
+permissions, 45-minute limit, and original Portal/Robot documentation commands and
+tests remain required in the independent `publication-hygiene` job. The identical
+checkout/Python setup is shared; their history scans are combined into one full
+root scan using each product's original rules and including all root history.
+Generation refuses changed policy structures or a missing final history gate.
+Application path selection cannot skip this publication job, and the aggregate
+rejects its failure, cancellation, absence, or skip.
 
 Push, schedule, and dispatch events select all products. Pull requests use Git
 changes only when the base is a full resolvable commit and every path is

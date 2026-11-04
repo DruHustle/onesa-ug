@@ -21,6 +21,11 @@ and ambiguous Git evidence select all products. Every selected product runs its
 complete existing verification, including its browser, database, container,
 security, and release-contract tests.
 
+The independent publication gate also retains the original Portal/Robot
+documentation checks and scans all products' preserved source history plus root
+paths. This gate runs for every event, including pull requests that select only
+one product's application tests.
+
 The required aggregate result is **Onesa required verification**. It fails when
 any selected product or repository gate fails, is cancelled, is missing, or is
 unexpectedly skipped. Configure this check in branch protection after its first
