@@ -16,7 +16,10 @@ remains simulation-only, with real flight interfaces disabled.
 | Email configuration | Product examples used inconsistent sender subdomains. Portal and AI now default to their documented `@onesa.eu` notification addresses, validate one sender and preserve valid explicitly configured values. |
 | Inbox observation | A sixty-second freshness check during a ninety-second wait could reject valid late arrivals. Admission is checked once and polling retains its fixed deadline with provider-aware pacing. |
 | Inference interoperability | The existing portable client could accept unsupported Onesa model IDs or invalid transport credentials and discard actual backend/request provenance. Both the original client and Drone's vendored copy now validate these boundaries and retain optional provenance. |
-| Source provenance | Consolidated image and Drone manifest records could identify the legacy repository incorrectly. Verification records now bind the actual repository, revision and product tree and explicitly grant no release authority. |
+| Source provenance | Consolidated image and Drone manifest records could identify the legacy repository incorrectly. Verification records now bind the actual repository, revision and product tree. Commissioned owner bridges can separately verify consolidated source, exact CI and actual artifact bytes; the result grants no release authority. Final readbacks reject changed branches, newer reruns and inconsistent API snapshots. |
+| Browser qualification | The hosted Firefox gallery fixture failed before model requests when the runner could not create a real WebGL context. Linux CI now explicitly selects Mesa software rendering, and the fixture requires an actual WebGL2 pixel readback before the existing rendering assertions. |
+| Operations mail retries | A pending event could change its sender, recipients or body while reusing its provider idempotency key. The monitor now durably saves the exact request before sending, retries those bytes, and holds credential changes or uncertain historical requests for reconciliation. Optional product routing is restricted to its existing Portal, AI and Robot API targets. |
+| Kubernetes installation | Preserved read-only preparation helpers did not install a cluster. A separate first-install workflow now checks the intended OCI host, pinned artifacts, private networking and retained Portainer storage, while using the existing maintenance interlock and preserving application state on failure. |
 
 The reviewed pending Portal private-CA and scoped inbox-observer changes are
 preserved in this checkout. This does not imply that every old branch or review
@@ -30,13 +33,15 @@ checks.
 
 | Scope | Result and limits |
 | --- | --- |
-| Root verification | 28 regression tests pass; workflow drift, actionlint, formatting and full-history publication/security checks pass. The original Portal/Robot repository documentation gates are retained. |
+| Root verification | 43 regression tests pass; workflow drift, actionlint, formatting and full-history publication/security checks pass. The original Portal/Robot repository documentation gates are retained. |
 | Robot backend | Final full suite: 338 passed, plus lint, types and generated-contract agreement. |
 | Drone backend | Full PostgreSQL suite: 251 passed before the later portable-client change; all 29 affected portability tests passed after that change. |
 | AI backend | 534 passed; 267 database-dependent tests skipped because local PostgreSQL with pgvector was unavailable. Required CI database tests remain enabled. |
 | Portal backend | Full disposable-database run: 214 tests passed; the scanner test process could not create its required Unix socket in this environment. The added private-CA and mail checks passed separately. |
 | Frontends | Portal, AI, Robot and Drone lint/type/build checks passed. Robot had 92 passing unit tests; Drone had 13. |
 | Release/tooling | Product policy/security and substantial offline release suites passed. Some host/root-specific cases require their documented environment. These results do not qualify live recovery, identity, mail or deployment. |
+| Kubernetes preparation and first install | 59 focused tests pass, including artifact replacement, durable interruption handling, existing maintenance and revoked-hold rejection. Both systemd unit definitions passed configuration validation. No actual host installation is established. |
+| Operations mail | 28 envelope/persistence and 30 notification-scope tests pass. The broader 237-test Oracle run passed 236 tests; one unchanged recovery fixture could not create its required Unix socket. No real email was sent by these tests. |
 
 The environment denies Unix-domain sockets. Portal's local scanner/recovery
 fixtures and browser engines therefore cannot complete here. A separate pinned

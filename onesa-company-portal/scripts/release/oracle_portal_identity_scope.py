@@ -36,7 +36,7 @@ PINS = {
     "onesa-company-portal-frontend/public/models/nvidia/nvidia-transfer-conveyor/preview.png": "920b611de2d96aac5af92e80f2352eda64417abd4a940ac44314de8e8857489a",
     "onesa-company-portal-frontend/scripts/public-shell-ready.mjs": "bd84fdafa98f8f0e59c7955475c58b75d21ad2eef3378a7a80244fde4f12e4c5",
     "onesa-company-portal-frontend/scripts/test-drone-product.mjs": "3bea2bb2b51e6747df223101970218c080b10fcc3c4d1ac719a61cc164a40d3f",
-    "onesa-company-portal-frontend/scripts/test-nvidia-library.mjs": "fd9b0f8d669554036ba18460d412eb057b45fa4ce99537e9c1d94cbb717da60b",
+    "onesa-company-portal-frontend/scripts/test-nvidia-library.mjs": "ef7842475ddf585159da65c30d905c9f7e9970094ecdd07942a34c5afc8e72df",
     "onesa-company-portal-frontend/scripts/test-onesa-account.mjs": "1de0075eded92a1f7e7cd1e0c92155dc40d6a9b5de19b7a80210af70c3d4793e",
     "onesa-company-portal-frontend/scripts/test-public-loading.mjs": "4a6f3f0f4d0dbdb9f24661152d48a555f078907886cd936d8fc4d1fc8b48fbad",
     "onesa-company-portal-frontend/scripts/validate-nvidia-assets.mjs": "41cc44c7be6fc08e00e85e268742e1740bab1538d3e4d6b86674b4784dda0545",
