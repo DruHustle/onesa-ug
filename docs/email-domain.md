@@ -9,7 +9,7 @@ establish that the new domain has completed provider verification.
 
 | Product | Friendly sender and primary address | Operational alerts |
 | --- | --- | --- |
-| Onesa Logistics | `Onesa Logistics <notifications-logistics@onesa.eu>` | `alerts-logistics@onesa.eu` |
+| Smart Logistics | `Smart Logistics <notifications-logistics@onesa.eu>` | `alerts-logistics@onesa.eu` |
 | Smart Farmer | `Smart Farmer <notifications-farmer@onesa.eu>` | `alerts-farmer@onesa.eu` |
 | Smart Factory | `Smart Factory <notifications-factory@onesa.eu>` | `alerts-factory@onesa.eu` |
 | Onesa Robot | `Onesa Robot <notifications-robot@onesa.eu>` | `alerts-robot@onesa.eu` |

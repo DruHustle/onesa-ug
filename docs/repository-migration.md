@@ -201,6 +201,8 @@ provider source bindings, private release evidence and rollback consumers still
 require verification before repository retirement. Importing main or enabling
 verification does not resolve those dependencies.
 
-Smart Factory and IMSOP are separate consolidated products. Their private source,
+Smart Factory and Smart Logistics are separate consolidated products. Smart Logistics is maintained in
+`DruHustle/smart-logistics` (formerly `DruHustle/imsop-app`, the same repository
+ID); its public website is `https://logistics.onesa.eu`. Their private source,
 release evidence, and retirement decisions remain outside this public Onesa
 repository. Do not import them here to simplify repository cleanup.
