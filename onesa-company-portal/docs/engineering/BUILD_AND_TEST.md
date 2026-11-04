@@ -1021,6 +1021,16 @@ It also checks file-sync/rename/directory-sync ordering before the fake provider
 and refuses delivery when durable persistence fails. All recipients and credentials
 are existing approved names or synthetic fixtures; no test message is sent.
 
+The approved infrastructure destination is `it-infrastructure@onesa.eu`, selected
+with `OPERATIONS_NOTIFY_EMAIL` independently of application `NOTIFY_EMAIL`. An
+unset operations setting preserves the legacy fallback; an invalid or empty
+explicit value fails closed. The
+mail-envelope regressions check a fresh request to that mailbox, rejection of
+unapproved addresses, and exact-byte replay of a historical attempted request
+after the configured recipient changes. Runtime migration must first quiesce or
+reconcile pending attempts; source approval alone does not redirect deployed
+alerts or establish mailbox delivery. Staging operational mail remains disabled.
+
 `scripts/test_oracle_drone_monitoring.py` adds real Ed25519 signatures over a
 disposable synthetic issuer ledger and mocked operational observations. It checks
 the optional Drone route's default-off behavior, commissioned accepted source and
