@@ -1,10 +1,17 @@
 # Onesa Robot
 
-Canonical repository: [DruHustle/onesa-robot](https://github.com/DruHustle/onesa-robot).
-The repository was renamed from `onesa-ai-robot`. Existing component directories
+Canonical source: [DruHustle/onesa-ug — Robot](https://github.com/DruHustle/onesa-ug/tree/main/onesa-robot).
+Run the commands below from `onesa-robot/` within that checkout. Robot keeps its
+independent build, release, authentication and data boundaries. The retained nested
+workflow files describe product checks; execution comes from repository-root CI.
+Historical release links and accepted component identifiers below retain their original
+repository provenance. Source consolidation alone does not migrate live deployment
+settings or qualify the consolidated source for production.
+
+The earlier repository was renamed from `onesa-ai-robot`. Existing component directories
 (`onesa-ai-robot-frontend` and `onesa-ai-robot-backend`), hosting resource names,
 runtime installation paths and historical release evidence retain their identifiers
-so this repository rename does not require a service or data migration.
+so source naming changes do not require a service or data migration.
 
 The current source adds a supervised **Pump P-101 inspection**: versioned bounded
 planning and skills, exact-plan password approval, deterministic scenarios,
@@ -149,7 +156,7 @@ follow **dev → staging → main**, with exact-source CI, hosted staging,
 qualification and the current owner-authorized release process. See
 [engineering policies](AGENTS.md), [onboarding](docs/engineering/ENGINEERING_ONBOARDING.md)
 and [deployment](docs/engineering/DEPLOYMENT.md). GitHub Free conventions do not prove
-server-enforced branch protection. The repositories retain independent deployment,
+server-enforced branch protection. The products retain independent deployment,
 authentication and data boundaries. The existing release workflow supports an explicit,
 strictly verified frontend-only release that retains an unchanged qualified backend;
 it still requires fresh hosted staging and owner authorization. Temporary Dependabot security PRs and necessary

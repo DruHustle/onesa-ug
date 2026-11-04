@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Source correction: reject unsupported Onesa model IDs and invalid header/cookie
+  credentials before consumer transmission. Preserve supplied backend and request
+  provenance, and reject contradictory mock/real metadata. The independently
+  vendored Drone client retains the same bounded text contract; wider consumer and
+  external MCP qualification remain separate acceptance requirements.
+
+- Source correction: use `notifications-ai@onesa.eu` in mail configuration
+  examples and missing-default preparation, preserving explicit runtime settings.
+  Validate a single sender/reply address without control characters and exclude
+  mail credentials from configuration representations. Domain/key verification,
+  pending-delivery reconciliation and an actual worker rollout remain separate.
+
 - Source candidate: add separately scoped identity API/frontend release profiles
   and real owner-probe PKCE/MFA sign-in, retaining the native API, interface,
   feature, persistence and rollback checks. Preserve existing synthetic account

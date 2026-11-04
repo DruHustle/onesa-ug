@@ -9,8 +9,11 @@ reviewed paths. Free services only; paid resources require explicit budget appro
 
 ## Contribution rules
 
-Keep independent frontend/backend directories and release cycles. No workspace-level
-Git repository, sibling submodules or coupled releases.
+The authorized consolidated checkout is `onesa-ug/onesa-company-portal`.
+Commands and paths in this product policy are relative to that product directory.
+Root verification is generated from the product's reviewed workflow inputs.
+Keep independent frontend/backend directories and release cycles; no sibling
+submodules or coupled releases. Consolidation grants no deployment authority.
 
 Keep exactly three permanent branches: `dev`, `staging`, `main`. Normal integration
 follows `dev → staging → main`. Temporary branches are permitted for Dependabot
@@ -32,7 +35,7 @@ Describe the problem, behavior, validation and rollout/rollback impact; update
 contracts, migrations and docs with behavior changes.
 
 Run `docs/engineering/BUILD_AND_TEST.md` commands and
-`python3 scripts/repository_hygiene.py` before staging. Inspect `git diff --cached`
+`python3 scripts/repository_hygiene.py --monorepo-root ..` before staging. Inspect `git diff --cached`
 and `git status --short`. Never stage private records, uploads, dumps, models or secrets.
 Use synthetic fixtures; a private repository is not a secret store. Keep environment
 examples as placeholders. New dependencies need provenance and license review.
@@ -73,7 +76,7 @@ historical removal requires a separately approved, coordinated remediation plan.
 Never automatically rewrite history or force-push. Confidential documents already
 in history block publication until an owner approves an appropriate remediation.
 
-`python3 scripts/repository_hygiene.py --history` scans available reachable history,
+`python3 scripts/repository_hygiene.py --monorepo-root .. --history` scans available reachable history,
 staged content and publishable working files without printing matched values.
 This heuristic cannot prove absence of secrets or confidential prose. Enable GitHub
 secret scanning/push protection where the organization plan supports it, and conduct
@@ -148,7 +151,7 @@ Use Node 24, locked npm installs and the commands in
 `docs/engineering/BUILD_AND_TEST.md`; they distinguish local tests from provider actions.
 Local checks: `node scripts/test_system_appearance.mjs` (pins/contrast),
 `python3 scripts/validate-docs.py` (docs), and
-`python3 scripts/repository_hygiene.py --history` (paths, never matched values). Backend `npm test` truncates only a disposable database ending
+`python3 scripts/repository_hygiene.py --monorepo-root .. --history` (paths, never matched values). Backend `npm test` truncates only a disposable database ending
 `_test`; never use runtime data or require production credentials for local onboarding.
 Before contracts/migrations read `docs/api/API.md` and `docs/database/SCHEMA.md`;
 before workers/recovery read `docs/engineering/ORACLE_WORKER_RUNTIME.md`; before governance

@@ -1302,6 +1302,18 @@ cookie scope, bounded IMAP literal parsing, MIME transfer encoding, exact delive
 recipient/time/link checks and redacted refusal output. These are local regression
 tests, not evidence that a provider or hosted interface accepted the release.
 
+The optional Zoho EU observer uses only fixed `mail.zoho.eu` GET endpoints and a
+pre-provisioned dedicated acceptance account with read-only account/message
+scopes. It verifies the actual member account, folder, lossless message IDs and
+delivered MIME message, preserving the blocked-certificate trust policy. It does
+not create an account, grant OAuth scope, send mail or change message flags.
+The freshness check binds to observation admission, with one 90-second deadline;
+a legitimate delivery after the first minute remains observable. Live GET starts
+are paced at least 2.2 seconds apart, including sequential observations. Offline
+regressions simulate late delivery, stale admission, deadline exhaustion, request
+pacing, malformed/oversized responses, foreign identities and redirect/TLS refusal.
+Account entitlement, private credentials and hosted qualification remain separate.
+
 The separately installed hosted helper consumes private stdin only. Its account
 scope observes real registration, verification delivery, member/administrator UI
 and API access, fresh MFA, password-reset delivery and sign-out. Its integrated
