@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — Shared sending domain
+
+- Preserve the reviewed private PostgreSQL CA integration from the pending
+  standalone change. The API, worker and isolated migration helper accept one
+  bounded certificate through existing private configuration, require
+  `verify-full`, reject competing URL overrides and retain blocked-root checks.
+  An unset private CA preserves existing connection behavior. Local parsing and
+  custody regressions do not establish a live database handshake.
+- Preserve the pending scoped Zoho EU inbox observer and reject foreign/admin
+  accounts, malformed delivery records and unsafe TLS. Bind its 90-second wait
+  to the initial freshness admission and pace GET requests so later valid mail
+  does not fail at 60 seconds or overrun the provider's request limit. Offline
+  regressions use synthetic transport and time; no OAuth grant or inbox is used.
+- Use `notifications-portal@onesa.eu` in sender examples, preserving explicitly
+  configured runtime addresses. Validate sender and Reply-To before transport
+  creation, rejecting control characters and multiple addresses. Document the
+  common product naming policy, existing Zoho reply inbox and safe reconciliation
+  of pending messages before a deployed sender/domain change. No DNS change,
+  mailbox creation, external email or live rollout is implied by this source.
+
 ## Unreleased — Identity deployment and hosted observation integration
 
 - Keep database-readiness imports independent of application environment and pool

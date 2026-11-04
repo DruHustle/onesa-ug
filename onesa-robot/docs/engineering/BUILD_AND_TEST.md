@@ -1,5 +1,35 @@
 # Independent software builds and tests
 
+## Consolidated-source approval regression
+
+Run product commands from `onesa-robot/` in `DruHustle/onesa-ug`; component commands
+still run from their own frontend or backend directories. Consolidation preserves
+the existing independent build, identity, journal and hardware boundaries.
+
+`tests/test_shared_identity.py` now holds the final real identity validation in both
+joint and inspection approval requests, performs Stop followed by an explicit Reset,
+then releases the delayed response. The prior source incorrectly returned success
+and resumed the cancelled simulation. Approval now retains the existing Stop
+generation across all confirmation, journal and identity waits and rejects a changed
+generation with HTTP 409. The task stays cancelled and the simulator stops; Reset
+cannot authorize an earlier request. The tests use only synthetic local identities
+and exercise actual API routes. This is source regression evidence, not a physical
+controller test or hosted release acceptance.
+
+The 4 November 2026 local source review used Python 3.11.17 and Node 24.22.1.
+The final backend run passed all 338 cases; Ruff, formatting, mypy and generated
+API/client agreement passed. The frontend build, types and 92 unit cases passed.
+The release suite ran 349 cases: 341 passed, seven shared-product cases were explicitly
+inapplicable to Robot and one root-custody case required a root test process. The
+eight repository-script cases and eight appearance/TLS cases also passed, and both
+locked dependency audits reported no known vulnerabilities. An earlier complete
+run timed out while starting the owned restart fixture; the isolated case and final
+complete suite subsequently passed without changing deadlines or source startup.
+Pinned Chromium download returned invalid archives, and the installed alternative
+Chromium could not create a Unix socket in this execution environment. Browser,
+Docker/ROS and hosted release qualification therefore remain required in CI/the
+approved runtime; these local results do not substitute for them.
+
 The optional shared Onesa identity client is covered by
 `tests/test_onesa_identity.py` and `tests/test_shared_identity.py` in the backend,
 plus the frontend's real loopback `tests/identity-gateway.test.mjs`. All test accounts,

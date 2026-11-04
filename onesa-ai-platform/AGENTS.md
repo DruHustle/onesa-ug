@@ -10,8 +10,11 @@ credentials, history and working functionality; stage only inspected paths.
 Onesa AI Platform is European-based, general-purpose and international; regional
 languages/domains are optional specializations. Preserve Chat/Knowledge/Agents/Travel,
 Next.js/TypeScript, FastAPI/Python, PostgreSQL/pgvector and provider interchangeability.
-Portal/Robot remain independent. No fourth repository, coupled releases, new license,
-paid resource, training or download authority is granted here.
+The authorized consolidated checkout is `onesa-ug/onesa-ai-platform`; commands,
+paths and references to the root in this product policy mean that product directory.
+Root verification is generated from reviewed product workflow inputs. Portal/Robot
+keep independent runtimes and release authority. No coupled releases, new license,
+paid resource, training, download or deployment authority is granted here.
 
 ## Non-negotiable security, privacy and safety
 
@@ -70,7 +73,7 @@ verification lives in protected evidence, not permanent test counts.
 | Browser | `npm --prefix onesa-ai-platform-frontend/apps/chat run test:e2e` | Approved isolated loopback fixture/stack, installed browsers | Synthetic test mutations/screenshots; no hosted claim |
 | Appearance | `node scripts/test_system_appearance.mjs` / root | Pinned artifact manifest | Offline hash, policy, contrast and classification checks |
 | Docs | `make docs-assets docs-public docs-internal docs-validate` / root | Docs dependencies, Python and local browser renderer | Classified ignored diagrams/PDF/site builds |
-| Hygiene | `python3 scripts/repository_hygiene.py` / root | Source checkout | Read-only heuristic scan; no proof of confidentiality |
+| Hygiene | `python3 scripts/repository_hygiene.py --monorepo-root ..` / root | Source checkout | Read-only heuristic scan; no proof of confidentiality |
 
 Read `docs/engineering/BUILD_AND_TEST.md` and `docs/deployment/LOCAL_DEVELOPMENT.md`.
 Report DB/platform gaps. Optional hosted/GPU/media/training work is separate; onboarding

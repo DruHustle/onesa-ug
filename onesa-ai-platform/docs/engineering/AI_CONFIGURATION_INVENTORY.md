@@ -33,6 +33,11 @@ proxies, provider retries and cross-provider fallback are disabled. Each complet
 call has a 25-second budget and a 64-KiB uncompressed JSON response ceiling.
 Caller task cancellation closes the owned HTTP operation. Complete history remains
 an explicit list of role/content records; callers retain it and the returned provenance.
+The Onesa adapter rejects model IDs other than `default` before transmitting history.
+Credentials are bounded ASCII transport values; control characters and cookie
+delimiters are rejected without displaying the value. Returned provenance retains
+the Onesa inference backend and canonical request identifier when supplied, and
+rejects contradictory mock/real metadata. Missing provider facts remain unknown.
 Chat selection does not modify Knowledge embedding identity, normalization or index.
 
 The optional local command `python -m app.mcp_stdio` runs from the backend using
@@ -195,8 +200,8 @@ Secrets below are never included as values in this document.
 | `ONESA_MAIL_PROVIDER` | B/identity_worker.py | `disabled` or `resend` | Nonsecret; API + worker | Missing override; code default `disabled`. Keep disabled until AI-scoped mail settings, worker and approved recipient tested. |
 | `ONESA_AUTH_DELIVERY_KEY` | B/auth.py/identity_worker.py | >=48 chars when mail enabled; persistent HMAC key for invitation/recovery hashes | Secret; API + worker, same per environment | Missing; independently generate and inject privately. This is not a session signing key. |
 | `ONESA_RESEND_API_KEY` | B/identity_worker.py | Required when mail enabled | Secret; worker + validated API configuration | Missing; newly generated AI-scoped sending credential, do not reuse exposed chat value. |
-| `ONESA_MAIL_FROM` | B/identity_worker.py | Required nonempty sender when mail enabled | Nonsecret; both hosted | Missing; proposed `Onesa AI <noreply@mail.onesa.eu>`, separately verify authorized sender. Portal domain verification is not AI delivery acceptance. |
-| `ONESA_MAIL_REPLY_TO` | B/identity_worker.py | Optional sender reply address | Nonsecret; both hosted | Missing; owner mailbox direction `hello@onesa.eu`, delivery unverified. |
+| `ONESA_MAIL_FROM` | B/identity_worker.py | One address, optionally with a display name, at most 320 characters and no controls; required when mail enabled | Nonsecret; both hosted | Current source example: `Onesa AI <notifications-ai@onesa.eu>`. Verify the parent domain and key before a runtime cutover; keep an existing explicit sender until pending deliveries are reconciled. Domain verification is not AI delivery acceptance. |
+| `ONESA_MAIL_REPLY_TO` | B/identity_worker.py | Optional single email address or display-name/address pair; no controls | Nonsecret; both hosted | Current example reuses the existing approved `info@onesa.eu` contact. No mailbox or alias is created by setting this value. |
 | `ONESA_API_URL` | frontend `src/lib/backend.ts`, server-only BFF | Required hosted exact backend origin, no `/api` or `/v1` suffix | Nonsecret; Vercel production/isolated preview | Missing. **Actual production candidate `https://onesa-ai-platform-backend.onrender.com`**, read from Render serviceDetails.url. Prepared, not remotely saved. Preview must point to its isolated staging backend. |
 | `ONESA_PROXY_TIMEOUT_SECONDS` | frontend backend.ts | Optional finite 1..600 seconds, default135 | Nonsecret; Vercel | Missing override; proposed135, greater than backend generation timeout60. |
 | `NEXT_PUBLIC_ONESA_DOCUMENTATION_URL` | frontend `src/lib/documentation.ts` | Public docs URL | Nonsecret; Vercel build/runtime | Missing in Vercel; known `https://docs.onesa.eu`. Misplaced copy on Render preserved (not deleted). DNS availability remains separate. |
