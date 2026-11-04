@@ -135,6 +135,28 @@ class DurableMailTests(unittest.TestCase):
     def body(self, index=-1):
         return json.loads(self.requests[index].data)
 
+    def test_html_is_versioned_escaped_and_plain_legacy_bytes_still_retry(self):
+        pending = self.ambiguous()
+        envelope = pending["mail_envelope"]
+        self.assertEqual(envelope["version"], 2)
+        body = json.loads(envelope["body"])
+        self.assertIn("Service needs attention", body["html"])
+        self.assertIn("Reference: " + pending["reference"], body["html"])
+        self.assertNotIn("<script>", monitor.operations_email_html_v1(
+            "<script>bad</script>", "<img src=x onerror=bad>", "alert", False, None))
+        # Reconstruct a synthetic legacy envelope, not a real operational record.
+        # Its stored body remains plain on retry, despite the new renderer.
+        del body["html"]
+        envelope["version"] = 1
+        envelope["body"] = json.dumps(body)
+        envelope["body_sha256"] = hashlib.sha256(envelope["body"].encode()).hexdigest()
+        saved = self.read()
+        saved["notification_pending"] = pending
+        self.save(saved)
+        self.tick()
+        self.assertEqual(self.requests[-1].data, envelope["body"].encode())
+        self.assertNotIn("html", self.body())
+
     def test_request_is_durable_and_private_before_provider_call(self):
         def inspect(request):
             saved = self.read()

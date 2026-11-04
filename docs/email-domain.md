@@ -221,3 +221,29 @@ actually sends mail.
 - [Resend sending records and existing MX](https://resend.com/docs/knowledge-base/how-do-i-avoid-conflicting-with-my-mx-records)
 - [Render environment variables and deployment behavior](https://render.com/docs/configure-environment-variables)
 - [Render Free networking limits](https://render.com/docs/free)
+
+## Email presentation
+
+New Portal, AI and operations messages use the Onesa email design: navy product
+header, clear heading, readable content, blue action buttons, security-code panels,
+plain-text alternatives, mobile layout and system dark-mode styles. Inline styling
+and presentation tables provide a fallback when a mail client removes stylesheets.
+No tracking pixels, remote fonts, remote images or new delivery integrations are
+introduced. The Portal's existing owner artwork remains an inline CID attachment.
+Only trusted account routes become buttons. All supplied text is escaped.
+
+The immutable Portal `email-design-v1.ts` renderer is selected by `branded-v2` on
+the first claim. Already selected `branded-v1` and attempted plain jobs retain their
+original rendering. Operations envelopes version 2 contain both HTML and text;
+version 1 remains readable and is retried using its original stored bytes. AI's
+additive `20261104_email_presentation` migration admits distinct `queued_html_v1`
+and `leased_html_v1` states. They preserve presentation across retries and keep
+older plain-only workers from claiming new HTML attempts. Attempted legacy AI
+jobs remain plain. Delivery stays disabled where it is already disabled.
+
+The new AI source accepts the previous shared-identity schema for API observation,
+but its mail worker requires the new constraint before processing fresh HTML jobs.
+Qualify the migration and drain or hold pending versioned mail before an older
+binary is used for rollback; never rewrite an attempted request to another template.
+Source and preview checks do not establish deployment or inbox delivery. Oracle and
+Cloudflare provider-generated messages retain their provider-controlled appearance.

@@ -1,5 +1,9 @@
 # Changelog
 
+- Add branded invitation/recovery HTML behind versioned mail queue states and an
+  additive state-constraint migration. Existing attempted messages remain plain;
+  older workers cannot claim branded retries. This does not enable mail delivery.
+
 ## Unreleased
 
 - Source correction: reject unsupported Onesa model IDs and invalid header/cookie
