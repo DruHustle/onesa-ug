@@ -34,7 +34,12 @@ PENDING_RETRY_SECONDS = 23 * 60 * 60
 MAIL_ENVELOPE_VERSION = 1
 MAIL_BODY_MAX_BYTES = 32768
 MAIL_PRODUCTS = frozenset({"portal", "ai", "robot"})
-MAIL_RECIPIENTS = frozenset({"info@onesa.eu", "andrew@onesa.eu"})
+# Historical recipients remain valid so retained immutable attempts can be
+# reconciled. OPERATIONS_NOTIFY_EMAIL separates infrastructure from app mail;
+# legacy profiles retain their NOTIFY_EMAIL fallback until explicitly migrated.
+MAIL_RECIPIENTS = frozenset({
+    "info@onesa.eu", "andrew@onesa.eu", "it-infrastructure@onesa.eu",
+})
 API_ALERT_RULES = frozenset({"backend-api-unavailable", "backend-api-restarted"})
 NOTIFICATION_KINDS = frozenset({"alert", "update", "reminder", "recovery", "simulation"})
 RULES = (
@@ -1061,7 +1066,8 @@ def prepare_notification_request(
 
     values, _ = checked_env()
     fingerprint = mail_credential_fingerprint(values)
-    if values.get("NOTIFY_EMAIL") not in MAIL_RECIPIENTS:
+    recipient = values.get("OPERATIONS_NOTIFY_EMAIL", values.get("NOTIFY_EMAIL"))
+    if recipient not in MAIL_RECIPIENTS:
         raise ValueError("Existing approved notification destination required")
     sender_mailbox(values.get("MAIL_FROM"))
     # A valid optional sender name does not activate the target or suppress mail
@@ -1082,7 +1088,7 @@ def prepare_notification_request(
     )
     data = {
         "from": mapping.get(product, values["MAIL_FROM"]),
-        "to": [values["NOTIFY_EMAIL"]],
+        "to": [recipient],
         "reply_to": "info@onesa.eu",
         "subject": subject,
         "text": (
