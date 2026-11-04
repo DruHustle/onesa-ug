@@ -1021,6 +1021,20 @@ It also checks file-sync/rename/directory-sync ordering before the fake provider
 and refuses delivery when durable persistence fails. All recipients and credentials
 are existing approved names or synthetic fixtures; no test message is sent.
 
+`scripts/test_oracle_drone_monitoring.py` adds real Ed25519 signatures over a
+disposable synthetic issuer ledger and mocked operational observations. It checks
+the optional Drone route's default-off behavior, commissioned accepted source and
+runtime binding, actual staging/operations observations and their chronology,
+live revocation/supersession readback, custody rejection, simulation
+and loopback identity, unchanged six-slot monitoring, sender selection and retained
+pending-envelope holds. Real on-disk SQLite checks cover the owner's DELETE journal
+mode, committed WAL data and fresh snapshots, descriptor/path replacement refusal,
+record limits before materialization and deadline-interrupted queries. A private
+operator selection alone cannot pass acceptance.
+No real host, signing custody, Drone service, mailbox or provider is used. Existing
+records without the signed backend runtime snapshot remain held; these tests do not
+qualify or activate a deployment.
+
 The notification controls additionally cover
 synthetic incident transitions, immediate initial alerts, thirty-minute grouping of
 new failure rules/services and six-hour reminders for all unchanged incidents.
