@@ -27,5 +27,5 @@ The mobile app supports route draft/edit, scenario selection (security, conserva
 
 - Native route validation, replay and encrypted storage logic: `frontend/drone/mobile/tests/mission-core.test.mjs`.
 - Web console regression: retained acceptance and release packager checks under the new source path.
-- Mobile Expo JavaScript bundling: `.github/workflows/drone-mobile-verification.yml` at repository root.
+- Mobile Expo JavaScript bundling: `onesa-drone/.github/workflows/verify.yml` (generates root `_verify-drone.yml`) at repository root.
 - Hardware pairing, true GPS, live video, Android APK, signed iOS binary and physical safety supervisor are **not** accepted by any of these software tests.

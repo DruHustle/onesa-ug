@@ -91,3 +91,23 @@ jobs:
           path: ${{ runner.temp }}/drone-runtime-manifests/frontend.json
           retention-days: 1
           if-no-files-found: error
+  mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24.22.1'
+      - name: Bundle mobile app and test simulation-only mission contract
+        run: |
+          cd frontend/drone/mobile
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx --no-install expo install --check
+          npm test
+          npx --no-install expo export --platform all --output-dir "$RUNNER_TEMP/onesa-drone-mobile-bundles"
+          npx --no-install expo prebuild --platform android --no-install
+          node --input-type=module -e "import {readFileSync} from 'node:fs'; const c=JSON.parse(readFileSync('app.json')); if(c.expo.extra.hardwareFlightEnabled!==false||c.expo.extra.simulationOnly!==true)process.exit(1);"
