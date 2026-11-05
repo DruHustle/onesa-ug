@@ -50,7 +50,7 @@ Two workflows provide exact-source gates:
 - [Software, container and PostgreSQL qualification](../../.github/workflows/onesa-mobile-ci.yml): package checks, container build/start/restart, encrypted recovery and Portal identity tests against disposable PostgreSQL.
 - [Native compilation](../../.github/workflows/onesa-mobile-native-compile.yml): Android arm64 debug application and unsigned iPhone/iPad simulator build. No signing keys are uploaded and no app is published.
 
-At this checkpoint the newly extended jobs are **awaiting the exact-source hosted run**. Their existence is not a passing result. Consult the final commit's run links and outcomes before claiming container, PostgreSQL or native compiler acceptance.
+Initial source: [`f95059f4`](https://github.com/DruHustle/onesa-ug/commit/f95059f4e1bb711b00057acf7233b431686f8336). [Qualification run](https://github.com/DruHustle/onesa-ug/actions/runs/42076695029): web, API and native JavaScript passed; **35 Portal identity tests passed against actual PostgreSQL**, including the existing concurrent-flow cases. Container images built and became healthy, but the first smoke test found an unpublished gateway port caused by its internal-only network. The gateway now has a separate ingress bridge; the API remains internal-only. [Native run](https://github.com/DruHustle/onesa-ug/actions/runs/42076694933): Android found an SDK-manager PATH error before compilation, which is corrected to the exact installed tool path. Follow-up container/native runs must pass before these gates are closed.
 
 ## Physical and commercial acceptance
 

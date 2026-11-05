@@ -46,7 +46,7 @@ npm run prebuild
 
 `npm run verify` runs typecheck, tests and both platform JavaScript exports. `prebuild` regenerates native files from `app.json` and `plugins/`; review its diff. SecureStore, WebBrowser and Sharing plugins are included. iPhone and iPad share the generated iOS target.
 
-On macOS with compatible Xcode/CocoaPods, run `npm run ios`. With the pinned Android SDK/JDK and an emulator or authorized device, run `npm run android`. The root native workflow compiles Android debug and an unsigned iOS simulator target; consult the exact run for results. JavaScript export, compiler success, signed distribution and physical-device acceptance are separate evidence levels.
+On macOS with compatible Xcode/CocoaPods, run `npm run ios`. With the pinned Android SDK/JDK and an emulator or authorized device, run `npm run android`. The root native workflow compiles Android debug and an unsigned iOS simulator target; consult the exact run for results. Successful compiler jobs retain exact build artifacts for seven days: an Android arm64 debug APK and a compressed unsigned iOS simulator app. Both Debug builds require a Metro development server; the simulator archive is not an installable iPhone/iPad device package. Configure the approved API address when starting Metro. These artifacts contain no release signing material. JavaScript export, compiler success, signed distribution and physical-device acceptance are separate evidence levels.
 
 The Android signing plugin uses each development machine's normal private debug key and keeps release builds unsigned. No keystore, Apple signing identity or provisioning profile is committed. Production distribution needs the owner's signing/developer configuration.
 

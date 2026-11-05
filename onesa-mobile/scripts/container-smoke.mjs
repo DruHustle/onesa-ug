@@ -48,13 +48,31 @@ async function login(account, surface) {
   return session.token;
 }
 async function ready() {
+  let lastResult = 'not attempted';
   for (let attempt = 0; attempt < 50; attempt++) {
-    try { if ((await request('/healthz')).ok) return; } catch {}
+    try {
+      const response = await request('/healthz');
+      if (response.ok) return;
+      lastResult = `HTTP ${response.status}`;
+      await response.body?.cancel();
+    } catch (error) {
+      // Public health diagnostics only: no response body, credentials or URLs.
+      const code = error?.cause?.code ?? error?.code ?? error?.name;
+      lastResult = typeof code === 'string' && /^[A-Za-z0-9_]+$/.test(code) ? code : 'connection failure';
+    }
     await delay(300);
   }
-  throw new Error('The API did not recover behind the web gateway.');
+  throw new Error(`The API did not recover behind the web gateway (${lastResult}).`);
 }
 
+const apiId = docker(['ps', '-q', 'api'], 'locate the isolated API').trim();
+const webId = docker(['ps', '-q', 'web'], 'locate the web gateway').trim();
+const apiNetworks = JSON.parse(dockerRaw(['inspect', '--format', '{{json .NetworkSettings.Networks}}', apiId], 'check API network isolation'));
+assert.deepEqual(Object.keys(apiNetworks), [`${project}_private`], 'the API has no gateway/ingress network');
+assert.equal(dockerRaw(['network', 'inspect', '--format', '{{.Internal}}', `${project}_private`], 'check private network mode').trim(), 'true');
+const published = JSON.parse(dockerRaw(['inspect', '--format', '{{json .NetworkSettings.Ports}}', webId], 'check gateway publication'));
+assert.ok(published['8080/tcp']?.some(binding => binding.HostIp === '127.0.0.1' && binding.HostPort === (base.port || '80')), 'the gateway port is actually published on IPv4 loopback');
+assert.ok(Object.values(published).flat().filter(Boolean).every(binding => binding.HostIp === '127.0.0.1'), 'no gateway port is published to the public host interfaces');
 await ready();
 const status = await (await request('/v1/status')).json();
 assert.equal(status.mode, 'lab');

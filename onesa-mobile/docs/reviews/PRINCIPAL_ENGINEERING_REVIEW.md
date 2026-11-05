@@ -43,7 +43,7 @@ No fail-open authorization defect was identified in this reviewed implementation
 
 ## Runtime and recovery changes
 
-The lab Compose stack uses a same-origin unprivileged web gateway, an internal API, one persistent data volume, explicit health dependencies, loopback-only host publication, read-only root filesystems and dropped capabilities. It has no provider egress. The production overlay requires real identity configuration and external secrets, uses a separate volume and remains a configuration candidate pending approved HTTPS ingress and qualification.
+The lab Compose stack uses a same-origin unprivileged web gateway, an internal API, one persistent data volume, explicit health dependencies, loopback-only host publication, read-only root filesystems and dropped capabilities. The API has no provider egress. The web gateway alone also joins an ordinary ingress bridge so Docker can publish its loopback port. The production overlay requires real identity configuration and external secrets, uses a separate volume and remains a configuration candidate pending approved HTTPS ingress and qualification.
 
 Backups use SQLite's online-backup API to capture committed WAL state. They are streamed through AES-256-GCM with authenticated metadata and a database checksum. Temporary plaintext is confined to private directories; archives and keys use owner-only permissions. Restore authenticates before SQLite parsing, rejects unknown schemas or altered audit history, clears all sessions and login handoffs, and advances TOTP counters through the accepted skew window. Security peer review identified the additional rollback risk in historical lab passwords/roles; every restored lab identity is therefore disabled with a new revision until an operator reviews authority and reissues credentials. Restore installs only into a new destination. Lab and production archives are not interchangeable. Live volume encryption, off-host custody, retention and post-snapshot reconciliation are not supplied by the archive format.
 
@@ -71,3 +71,7 @@ The detailed commands and scope are in [the runtime/recovery guide](../../infra/
 - [Official NGINX unprivileged image](https://github.com/nginx/docker-nginx-unprivileged): non-root port/temp-path behavior and moving image tags.
 - [Docker Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/) and [merge rules](https://docs.docker.com/reference/compose-file/merge/).
 - [GitHub runner images](https://github.com/actions/runner-images) and [Android Gradle plugin 9.2 compatibility](https://developer.android.com/build/releases/agp-9-2-0-release-notes).
+
+## Hosted follow-up
+
+The first hosted run built and started all three images. It exposed that Docker cannot publish a port from an internal-only gateway. The gateway now joins a separate ingress bridge while the API remains internal-only, and the smoke test checks actual port publication and network membership. The first Android run also exposed a missing `sdkmanager` PATH entry; the workflow now invokes the runner SDK manager by its exact installed path. These fixes require observed follow-up runs; the earlier failed jobs are not counted as passes.

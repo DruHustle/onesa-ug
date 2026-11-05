@@ -57,9 +57,13 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m,mode=1777
     networks:
+      ingress: {}
       private:
         ipv4_address: '${MOBILE_LAB_PROXY_IP:-172.31.248.2}'
 networks:
+  # Docker publishes ports through a default-gateway network. Only the web
+  # gateway joins this ordinary bridge; the API remains internal-only.
+  ingress: {}
   private:
     internal: true
     ipam:

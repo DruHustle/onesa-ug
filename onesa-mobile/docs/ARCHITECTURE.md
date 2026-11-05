@@ -18,7 +18,7 @@ flowchart TB
 
 The public website exposes no account records. `/account/` and `/internal/` load separate customer/staff components and require server authentication/authorization. `/#demo` and `/preview/internal/` are isolated fictional examples. Route separation is a product boundary; the API is the security boundary.
 
-The lab gateway and API have a private container network, loopback host publication, restricted capabilities and one durable volume. The lab has no provider egress. The production overlay requires a different volume, real HTTPS ingress, explicit identity/secrets and an approved deployment environment. [Runtime guide](../infra/runtime/README.md).
+The lab gateway and API have a private container network, loopback host publication, restricted capabilities and one durable volume. The API has no provider egress. The web gateway also joins an ordinary ingress bridge so Docker can publish the loopback port; its upstream remains the private API. The production overlay requires a different volume, real HTTPS ingress, explicit identity/secrets and an approved deployment environment. [Runtime guide](../infra/runtime/README.md).
 
 Proposed future domains `mobile.onesa.eu` and `ops.mobile.onesa.eu` remain unconfigured. A later staff-origin split needs its own exact callback/cookie/origin design; the current implementation deliberately uses a single Mobile confidential identity client with separate customer/staff surfaces, server role enforcement and staff MFA. Do not describe the proposed split as deployed.
 

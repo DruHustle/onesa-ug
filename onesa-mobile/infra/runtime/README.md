@@ -15,7 +15,7 @@ Use the physical bench and acceptance sequence in [HARDWARE_PILOT.md](../../docs
 | Production identities | Explicitly registered Onesa Mobile confidential client, HTTPS origin and externally supplied authentication encryption key. |
 | Recovery | SQLite online backup, authenticated encrypted archive and restore into a new database path. No provider or radio connection is needed. |
 
-The API and gateway run without root, with read-only root filesystems, dropped Linux capabilities, bounded process/memory limits and health checks. Only their required data or temporary directories are writable. The lab network has no external egress. Containers still share the host kernel; protect the host and Docker administration separately.
+The API and gateway run without root, with read-only root filesystems, dropped Linux capabilities, bounded process/memory limits and health checks. Only their required data or temporary directories are writable. The API stays on an internal network with no external egress. The web gateway alone also joins an ingress bridge to publish its loopback port. Containers still share the host kernel; protect the host and Docker administration separately.
 
 The gateway overwrites `X-Forwarded-For` with the connection address. The API trusts only its configured gateway IP, not an arbitrary forwarded chain. Static private addresses make that boundary explicit. Raw API access and proxy error logs are suppressed because OAuth callback URLs can contain authorization codes. Backend request failures emit sanitized request IDs. Static access logs exclude query strings.
 
@@ -156,6 +156,10 @@ An approved TLS ingress must terminate HTTPS, enforce host routing and set trans
 This is a single-instance SQLite architecture. Do not scale API replicas against the same file, place the database on an unqualified network filesystem, or describe this Compose stack as highly available. A database/process or host failure can stop the control plane. Node.js 24.22.1 documents `node:sqlite` as a release-candidate API; pin and requalify the runtime. Before a customer production launch, commission the approved durable database architecture, load tests, operational monitoring, recovery exercises and provider integrations.
 
 Node image versions are fixed; the official NGINX stable image tag can move when upstream publishes fixes. Record and pin reviewed image digests for each hosted release, together with source revision and test receipts. These files do not claim an unrun image has been qualified.
+
+## Gateway publication and API isolation
+
+The web gateway joins both `ingress` and the internal `private` network. Docker needs a default-gateway network to publish a host port; an internal-only gateway can appear healthy while its requested host port is absent. The API joins only `private`, has no published port and retains outbound isolation. Only the gateway has an ordinary bridge/default route. Its host binding is explicitly `127.0.0.1`; NGINX proxies only to the fixed private API. The container smoke test verifies the actual mapping and network membership before testing requests. [Docker maintainer explanation](https://github.com/moby/moby/discussions/53256); [Compose internal networks](https://docs.docker.com/compose/how-tos/networking/#internal-networks).
 
 ## Qualification matrix
 
