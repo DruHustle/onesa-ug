@@ -1,0 +1,48 @@
+name: Drone mobile iOS/Android JS qualification
+on:
+  pull_request:
+    branches: [dev, staging, main]
+    paths:
+      - "onesa-drone/frontend/**"
+      - ".github/workflows/drone-mobile-verification.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile-bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.22.1
+      - name: Install pinned direct dependencies with an ephemeral lock
+        working-directory: onesa-drone/frontend/drone/mobile
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check Expo SDK compatibility
+        working-directory: onesa-drone/frontend/drone/mobile
+        run: npx --no-install expo install --check
+      - name: Route planning, secure drafts and safety unit tests
+        working-directory: onesa-drone/frontend/drone/mobile
+        run: npm test
+      - name: Bundle iOS and Android screens without aircraft access
+        working-directory: onesa-drone/frontend/drone/mobile
+        env:
+          EXPO_NO_TELEMETRY: "1"
+        run: npx --no-install expo export --platform all --output-dir "$RUNNER_TEMP/onesa-drone-mobile-bundles"
+      - name: Generate Android project without signing or hardware commands
+        working-directory: onesa-drone/frontend/drone/mobile
+        env:
+          EXPO_NO_TELEMETRY: "1"
+        run: npx --no-install expo prebuild --platform android --no-install
+      - name: Check safe mobile release flags
+        working-directory: onesa-drone/frontend/drone/mobile
+        run: |
+          node --input-type=module -e "import {readFileSync} from 'node:fs'; const config=JSON.parse(readFileSync('app.json')); if(config.expo.extra.hardwareFlightEnabled!==false||config.expo.extra.simulationOnly!==true)process.exit(1);"
+      # This is JS bundling and Android project generation, NOT native binary,
+      # on-device, iOS XCTest, A77 control or video hardware qualification.
