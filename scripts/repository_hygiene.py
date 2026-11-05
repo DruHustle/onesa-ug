@@ -30,7 +30,7 @@ def reviewed_historical_xcode_bootstrap(scope, name, data, mode="100644"):
         or mode != "100644"
     ):
         return False
-    header = b"blob " + str(len(data)).encode("ascii") + b"\\0"
+    header = b"blob " + str(len(data)).encode("ascii") + b"\0"
     return hashlib.sha1(header + data).hexdigest() == HISTORICAL_XCODE_BLOB
 
 
