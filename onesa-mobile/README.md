@@ -6,6 +6,8 @@ Canonical source: [`DruHustle/onesa-ug/onesa-mobile`](https://github.com/DruHust
 
 The implemented software includes the public website, authenticated customer and staff web workspaces, an API-connected iPhone/iPad/Android app, persistent hardware commissioning and operations records, scoped identity, support conversations, lab billing, protected PDFs, audit and encrypted recovery tooling. **It does not provide an operating mobile network.** Commercial onboarding, real payment settlement, SIM/eSIM provisioning and satellite entitlement remain disabled until the actual providers and Zimbabwe approvals are commissioned. No carrier or Starlink partnership is claimed.
 
+The public website deployment targets [mobile.onesa.eu](https://mobile.onesa.eu). Its initial hosted scope is the prelaunch website and synthetic previews; online account and staff services return an explicit unavailable response until the persistent backend and shared identity are connected. [Deployment scope and configuration](docs/DEPLOYMENT.md).
+
 ## Start with the hardware
 
 Use the [hardware pilot runbook](docs/HARDWARE_PILOT.md) and [planned inventory template](infra/hardware/pilot-template.json). Reuse a suitable workstation, obtain one managed router, a locally approved AP if needed, an iPhone, two representative Android phones, access to a tablet, measured backup power, cabling and encrypted recovery media. Starlink dish quantity starts at **zero**; add one only for a separately approved satellite-broadband IP test. A dish does not establish handset direct-to-cell service.
