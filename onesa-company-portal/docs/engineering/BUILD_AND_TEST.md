@@ -1137,13 +1137,20 @@ escaping, trusted-origin buttons, malformed-link rejection, embedded owner artwo
 secret-free preheaders, stable Resend retry bodies and actual text/HTML/inline-image
 SMTP MIME. They send no email. `tests/mail-claim.test.ts` uses the guarded disposable
 PostgreSQL database in the full backend suite to exercise real row locks, competing
-workers, commit/rollback, interrupted claims and legacy/versioned retries. A first
-claim persists the presentation before any provider request; existing attempted jobs
-stay plain. No schema migration, remote font, image tracker or external dependency
-is needed. Browser previews establish layout only; inbox/client acceptance and the
-independently released worker need genuine hosted evidence. Retain the deployed
-renderer for versioned retries during upgrades or rollback; never reset attempts or
-change provider keys to obtain a new design.
+workers, commit/rollback, interrupted claims and immutable encrypted request custody.
+It checks byte-identical replay through a new client/transport, sender/recipient/key
+drift, legacy-attempt reconciliation, expiry, clock rollback, independent queued
+jobs, and SMTP ambiguity. `tests/mail-worker.test.ts` exercises the actual worker
+against the guarded disposable database with a synthetic provider callback: that
+callback verifies committed custody through an independent database read before
+returning an ambiguous outcome. The recovered worker claim replays exactly the same
+bytes/key, preserves retry cooldown and marks acceptance only after a valid receipt.
+All delivery is synthetic; no provider credential, mailbox or production database
+is used. Run the ordinary Node 24 backend `npm test`, lint, typecheck and build.
+No schema migration, remote font, tracker or new dependency is needed. Hosted worker
+qualification and inbox/client acceptance remain separate release requirements.
+Custody-aware workers must be retained when rolling back other components; reconcile
+legacy or ambiguous attempts without resetting counts, bytes or provider keys.
 
 The maintained `test:engineering-sign-in` renderer suite checks that no MFA field
 appears before credential proof, enrolled accounts receive the factor step and
