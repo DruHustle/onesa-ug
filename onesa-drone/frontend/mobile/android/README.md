@@ -1,0 +1,1 @@
+# Android platform\n\nThis directory is populated by `npm run native:generate` (Expo continuous native generation). Android Studio/SDK and a locally controlled signing identity are needed for device APK/AAB release. Do not commit signing keys. No aircraft command SDK is linked.\n

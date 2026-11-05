@@ -1,0 +1,36 @@
+name: Onesa Drone web and mobile preview
+on:
+  pull_request:
+    paths:
+      - "onesa-drone/frontend/web/**"
+      - "onesa-drone/frontend/mobile/**"
+      - "onesa-drone/docs/engineering/drone-mobile-prototype.md"
+      - ".github/workflows/drone-mobile-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile_and_web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Install pinned web dependencies
+        run: npm --prefix onesa-drone/frontend/web ci
+      - name: Web unit tests and typechecked production build
+        run: |
+          npm --prefix onesa-drone/frontend/web run test:unit
+          npm --prefix onesa-drone/frontend/web run build
+      - name: Install pinned mobile dependencies
+        run: npm --prefix onesa-drone/frontend/mobile ci
+      - name: Review mobile mission tests and strict types
+        run: |
+          npm --prefix onesa-drone/frontend/mobile test
+          npm --prefix onesa-drone/frontend/mobile run typecheck
+      - name: Export both mobile platform bundles
+        run: npm --prefix onesa-drone/frontend/mobile run build

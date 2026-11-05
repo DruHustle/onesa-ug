@@ -1,0 +1,16 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "App.tsx",
+    "src/**/*.ts",
+    "index.js",
+    "test/**/*.ts"
+  ]
+}

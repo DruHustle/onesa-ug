@@ -1,0 +1,1 @@
+# iOS platform\n\nThis directory is populated by `npm run native:generate` (Expo continuous native generation). Xcode signing, provisioning, device hardware and App Store publication require the owner's Apple development identity. No aircraft command SDK is linked.\n

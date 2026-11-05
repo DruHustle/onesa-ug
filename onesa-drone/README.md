@@ -7,6 +7,8 @@ execute CI; nested legacy workflows are retained specifications. Historical rele
 links and accepted identifiers preserve their original repository provenance.
 Consolidation alone does not migrate live deployment settings or qualify a new release.
 
+**New development preview (not yet deployed):** `frontend/web/` contains an unchanged tree copy of the existing React/Three.js console; `frontend/mobile/` contains an independent iOS/Android Expo prototype with simulator-only route drafting, patrols, inspection notes and a clearly disconnected A77 camera/GPS status. The previous `frontend/` entrypoints remain for safe deployment continuity until an exact-source cutover is qualified. [Mobile prototype guide](docs/engineering/drone-mobile-prototype.md).
+
 **Intelligent Delivery Beyond Roads**
 
 An independent, simulation-only aerial logistics platform under development. No

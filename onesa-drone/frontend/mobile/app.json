@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Onesa Drone",
+    "slug": "onesa-drone",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "onesadrone",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "eu.onesa.drone",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "eu.onesa.drone"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "extra": {
+      "flightMode": "simulation-only",
+      "a77Adapter": "unavailable"
+    }
+  }
+}
