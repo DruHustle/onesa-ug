@@ -2,9 +2,12 @@
 import hashlib
 import importlib.util
 import unittest
+import sys
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[1] / "repository_hygiene.py"
+# The root scanner imports "ci.config" from scripts/, unlike test discovery.
+sys.path.insert(0, str(SOURCE.parent))
 spec = importlib.util.spec_from_file_location("hygiene_historical_bootstrap", SOURCE)
 scanner = importlib.util.module_from_spec(spec)
 # A stub for the path-based module importer is unnecessary; scripts/ci is on sys.path
