@@ -1,0 +1,57 @@
+name: Onesa Mobile foundation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'onesa-mobile/**'
+      - '.github/workflows/onesa-mobile-ci.yml'
+  pull_request:
+    paths:
+      - 'onesa-mobile/**'
+      - '.github/workflows/onesa-mobile-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onesa-mobile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Mobile web and operations preview
+            directory: onesa-mobile/onesa-mobile-frontend/web
+            command: npm test && npm run build
+          - name: Mobile API types and HTTP contracts
+            directory: onesa-mobile/onesa-mobile-backend
+            command: npm run check
+          - name: Native app types and JS bundles
+            directory: onesa-mobile/onesa-mobile-frontend/mobile
+            command: npm run verify
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: ${{ matrix.directory }}/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Verify package
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+        run: ${{ matrix.command }}

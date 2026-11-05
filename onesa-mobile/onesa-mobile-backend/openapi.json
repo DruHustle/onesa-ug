@@ -1,0 +1,911 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Onesa Mobile prelaunch demonstration API",
+    "version": "0.1.0",
+    "description": "Public read-only fictional demonstration. There are no live accounts, carrier services, satellite entitlement or payments. A healthy process is not a production-ready telecom service. All JSON responses identify their demo/prelaunch status."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:4000",
+      "description": "Local development only"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Check the process health, not telecom readiness",
+        "description": "Read-only. No query parameters or request body are accepted. An unknown Origin is rejected. Responses are never cached.",
+        "responses": {
+          "200": {
+            "description": "Check the process health, not telecom readiness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headHealth",
+        "summary": "Read headers only",
+        "responses": {
+          "200": {
+            "description": "No response body."
+          },
+          "400": {
+            "description": "No response body."
+          },
+          "403": {
+            "description": "No response body."
+          }
+        }
+      },
+      "options": {
+        "operationId": "optionsHealth",
+        "summary": "Restricted read-only CORS preflight",
+        "description": "Exact configured origins only. Requested method must be GET or HEAD. Allowed request headers are Accept and Content-Type. Credentials are not enabled.",
+        "responses": {
+          "204": {
+            "description": "No response body."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/catalog": {
+      "get": {
+        "operationId": "getCatalog",
+        "summary": "Read unpriced product concepts",
+        "description": "Read-only. No query parameters or request body are accepted. An unknown Origin is rejected. Responses are never cached.",
+        "responses": {
+          "200": {
+            "description": "Read unpriced product concepts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalog"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headCatalog",
+        "summary": "Read headers only",
+        "responses": {
+          "200": {
+            "description": "No response body."
+          },
+          "400": {
+            "description": "No response body."
+          },
+          "403": {
+            "description": "No response body."
+          }
+        }
+      },
+      "options": {
+        "operationId": "optionsCatalog",
+        "summary": "Restricted read-only CORS preflight",
+        "description": "Exact configured origins only. Requested method must be GET or HEAD. Allowed request headers are Accept and Content-Type. Credentials are not enabled.",
+        "responses": {
+          "204": {
+            "description": "No response body."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/readiness": {
+      "get": {
+        "operationId": "getReadiness",
+        "summary": "Read unavailable production capabilities",
+        "description": "Read-only. No query parameters or request body are accepted. An unknown Origin is rejected. Responses are never cached.",
+        "responses": {
+          "200": {
+            "description": "Read unavailable production capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headReadiness",
+        "summary": "Read headers only",
+        "responses": {
+          "200": {
+            "description": "No response body."
+          },
+          "400": {
+            "description": "No response body."
+          },
+          "403": {
+            "description": "No response body."
+          }
+        }
+      },
+      "options": {
+        "operationId": "optionsReadiness",
+        "summary": "Restricted read-only CORS preflight",
+        "description": "Exact configured origins only. Requested method must be GET or HEAD. Allowed request headers are Accept and Content-Type. Credentials are not enabled.",
+        "responses": {
+          "204": {
+            "description": "No response body."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/demo/account": {
+      "get": {
+        "operationId": "getDemoAccount",
+        "summary": "Read a fictional account illustration",
+        "description": "Read-only. No query parameters or request body are accepted. An unknown Origin is rejected. Responses are never cached.",
+        "responses": {
+          "200": {
+            "description": "Read a fictional account illustration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoAccount"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headDemoAccount",
+        "summary": "Read headers only",
+        "responses": {
+          "200": {
+            "description": "No response body."
+          },
+          "400": {
+            "description": "No response body."
+          },
+          "403": {
+            "description": "No response body."
+          }
+        }
+      },
+      "options": {
+        "operationId": "optionsDemoAccount",
+        "summary": "Restricted read-only CORS preflight",
+        "description": "Exact configured origins only. Requested method must be GET or HEAD. Allowed request headers are Accept and Content-Type. Credentials are not enabled.",
+        "responses": {
+          "204": {
+            "description": "No response body."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/activations": {
+      "post": {
+        "operationId": "rejectActivationPost",
+        "summary": "Activation is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "rejectActivationPut",
+        "summary": "Activation is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "rejectActivationPatch",
+        "summary": "Activation is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "rejectActivationDelete",
+        "summary": "Activation is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "options": {
+        "operationId": "rejectActivationOptions",
+        "summary": "Activation is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/payments": {
+      "post": {
+        "operationId": "rejectPaymentPost",
+        "summary": "Payment is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "rejectPaymentPut",
+        "summary": "Payment is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "rejectPaymentPatch",
+        "summary": "Payment is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "rejectPaymentDelete",
+        "summary": "Payment is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "options": {
+        "operationId": "rejectPaymentOptions",
+        "summary": "Payment is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/auth": {
+      "post": {
+        "operationId": "rejectIdentityPost",
+        "summary": "Identity is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "rejectIdentityPut",
+        "summary": "Identity is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "rejectIdentityPatch",
+        "summary": "Identity is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "rejectIdentityDelete",
+        "summary": "Identity is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "options": {
+        "operationId": "rejectIdentityOptions",
+        "summary": "Identity is unavailable",
+        "description": "No request body is supported or parsed. Do not submit personal information. This operation always fails closed; no environment setting can enable it. No carrier, identity or payment provider is called.",
+        "responses": {
+          "503": {
+            "description": "Service is not ready; no operation occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "Error": {
+        "description": "Structured demonstration API error; submitted input is not echoed.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "const": "demo"
+          },
+          "serviceStatus": {
+            "const": "prelaunch"
+          },
+          "status": {
+            "const": "ok"
+          },
+          "service": {
+            "const": "onesa-mobile-backend"
+          },
+          "productionReady": {
+            "const": false
+          }
+        },
+        "required": [
+          "mode",
+          "serviceStatus",
+          "status",
+          "service",
+          "productionReady"
+        ],
+        "additionalProperties": false
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "everyday",
+              "reach",
+              "family-farm"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "null"
+          },
+          "allowance": {
+            "type": "null"
+          },
+          "status": {
+            "const": "proposed"
+          },
+          "activationAvailable": {
+            "const": false
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "price",
+          "allowance",
+          "status",
+          "activationAvailable",
+          "features"
+        ],
+        "additionalProperties": false
+      },
+      "Catalog": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "const": "demo"
+          },
+          "serviceStatus": {
+            "const": "prelaunch"
+          },
+          "disclaimer": {
+            "type": "string"
+          },
+          "plans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Plan"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "mode",
+          "serviceStatus",
+          "disclaimer",
+          "plans"
+        ],
+        "additionalProperties": false
+      },
+      "PendingFeature": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "const": false
+          },
+          "status": {
+            "const": "provider_pending"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "status",
+          "detail"
+        ],
+        "additionalProperties": false
+      },
+      "Readiness": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "const": "demo"
+          },
+          "serviceStatus": {
+            "const": "prelaunch"
+          },
+          "productionReady": {
+            "const": false
+          },
+          "enabledTransports": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "features": {
+            "type": "object",
+            "properties": {
+              "cellular": {
+                "$ref": "#/components/schemas/PendingFeature"
+              },
+              "satellite": {
+                "$ref": "#/components/schemas/PendingFeature"
+              },
+              "activation": {
+                "$ref": "#/components/schemas/PendingFeature"
+              },
+              "payments": {
+                "$ref": "#/components/schemas/PendingFeature"
+              },
+              "identity": {
+                "$ref": "#/components/schemas/PendingFeature"
+              }
+            },
+            "required": [
+              "cellular",
+              "satellite",
+              "activation",
+              "payments",
+              "identity"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "mode",
+          "serviceStatus",
+          "productionReady",
+          "enabledTransports",
+          "features"
+        ],
+        "additionalProperties": false
+      },
+      "DemoAccount": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "const": "demo"
+          },
+          "serviceStatus": {
+            "const": "prelaunch"
+          },
+          "fictional": {
+            "const": true
+          },
+          "label": {
+            "type": "string"
+          },
+          "account": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "demo-account"
+              },
+              "displayName": {
+                "const": "Demo customer"
+              },
+              "selectedPlanId": {
+                "const": "everyday"
+              },
+              "subscriptionStatus": {
+                "const": "not_activated"
+              }
+            },
+            "required": [
+              "id",
+              "displayName",
+              "selectedPlanId",
+              "subscriptionStatus"
+            ],
+            "additionalProperties": false
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "usedGb": {
+                "const": 2.4
+              },
+              "totalGb": {
+                "const": 5
+              },
+              "source": {
+                "const": "fictional_fixture"
+              },
+              "lastUpdated": {
+                "type": "null"
+              },
+              "illustrationOnly": {
+                "const": true
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "usedGb",
+              "totalGb",
+              "source",
+              "lastUpdated",
+              "illustrationOnly",
+              "description"
+            ],
+            "additionalProperties": false
+          },
+          "activationAvailable": {
+            "const": false
+          },
+          "paymentAvailable": {
+            "const": false
+          }
+        },
+        "required": [
+          "mode",
+          "serviceStatus",
+          "fictional",
+          "label",
+          "account",
+          "usage",
+          "activationAvailable",
+          "paymentAvailable"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "const": "demo"
+          },
+          "serviceStatus": {
+            "const": "prelaunch"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "SERVICE_NOT_READY",
+                  "ORIGIN_NOT_ALLOWED",
+                  "REQUEST_TARGET_TOO_LONG",
+                  "INVALID_REQUEST_TARGET",
+                  "METHOD_NOT_ALLOWED",
+                  "NOT_FOUND",
+                  "REQUEST_BODY_NOT_ALLOWED",
+                  "HEADER_NOT_ALLOWED"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "mode",
+          "serviceStatus",
+          "error"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

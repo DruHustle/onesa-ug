@@ -1,0 +1,19 @@
+{
+  "name": "@onesa-mobile/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only, prelaunch demonstration API for Onesa Mobile.",
+  "engines": { "node": ">=24.12 <25" },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}
