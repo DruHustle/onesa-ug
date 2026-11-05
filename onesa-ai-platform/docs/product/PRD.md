@@ -312,7 +312,10 @@ bounded JSON transport have synthetic regressions. The version 1.1 source candid
 adds independently enrolled model and caller-owned Knowledge resources plus a
 user-selected `summarize-text` prompt. Every discovery/read/get reauthenticates;
 documents retain existing API ownership and embedding identity. Context scopes
-default empty, and prompt retrieval invokes no model or tool. HTTP MCP/OAuth
+default empty, and prompt retrieval invokes no model or tool. Version 1.2 also
+processes request-scoped wire cancellation while API work is pending, with bounded
+concurrency and response-stream cleanup. Cancellation never replays or rolls back
+an already committed remote request. HTTP MCP/OAuth
 discovery, dedicated service credentials, authenticated external-client qualification
 and hosted acceptance remain separate work.
 Robot's optional read-only asset-context import remains an ordinary HTTP integration.

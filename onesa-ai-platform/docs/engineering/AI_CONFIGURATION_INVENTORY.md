@@ -73,6 +73,17 @@ list-change notifications or pagination are advertised. Each context operation h
 one 25-second budget, including authentication and all enrolled resource reads.
 Cancellation closes the owned HTTP operation; there are no retries or fallbacks.
 
+Version 1.2 keeps pipe input responsive while requests are in flight. At most four
+requests may execute concurrently, each with a 25-second total deadline. Further
+requests receive a bounded busy error before contacting the API; ping and lifecycle
+notifications remain responsive. A valid `notifications/cancelled` targets only its
+outstanding request ID and produces no response for that request. Invalid, unknown
+or completed IDs cannot cancel other work, and initialization cannot be cancelled.
+Cancellation closes local HTTP work; it cannot reverse a remote record that was
+already committed and must never trigger replay. Oversized lines are drained in
+full before another frame is accepted. EOF drains already accepted bounded work;
+process cancellation closes every outstanding task.
+
 This is an opt-in software candidate, with synthetic fixtures only. Hosted activation,
 dedicated credentials, provider/privacy processing approval and external MCP-client
 acceptance require the existing qualified release process. No model is downloaded.

@@ -307,8 +307,9 @@ retaining the original consumed context and unissued intent. Current signed-chai
 and latest-decision reads occur under the same immediate SQLite write transaction
 as the single-use claim; source changes do not commission this optional extension.
 
-Consumer interoperability checks are in `tests/test_consumer.py` and
-`tests/test_mcp_stdio.py` and `tests/test_mcp_context.py`. They cover unchanged consumer business code with Onesa
+Consumer interoperability checks are in `tests/test_consumer.py`,
+`tests/test_mcp_stdio.py`, `tests/test_mcp_context.py` and `tests/test_mcp_transport.py`.
+They cover unchanged consumer business code with Onesa
 and compatible provider transports, portable history/provenance, credential separation,
 strict completion/failure boundaries, response/input limits, cancellation and MCP
 discovery/explicit permissions. Route fixtures without PostgreSQL simulate admission
@@ -322,6 +323,12 @@ adverse transport tests cover URI/parameter refusal before transmission, immutab
 scope lists, redacted malformed responses, cancellation and prompt injection remaining
 untrusted data without tool or model invocation. These tests do not substitute for
 a commissioned service identity, an external MCP client or hosted acceptance.
+Transport tests additionally send real pipe messages to a separate bridge process
+while its synthetic HTTP response is pending. They require cancellation to close
+that response before stdin closes, preserve a later ping, and emit no cancelled
+response or credential. Other cases cover duplicate IDs, concurrent-work bounds,
+fragmented oversized lines, deadlines and session cleanup. The synthetic upstream
+in this subprocess test does not establish a live provider's cancellation behavior.
 
 Release-unit fixtures pin a disposable commissioning registry and keep its keys,
 policy and database inside their temporary directory. Root test execution uses a

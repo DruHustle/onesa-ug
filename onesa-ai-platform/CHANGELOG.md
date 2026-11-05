@@ -6,6 +6,11 @@
 
 ## Unreleased
 
+- Source correction: keep MCP stdio input responsive during API calls, honor
+  request-scoped cancellation, and close the owned HTTP response without replay.
+  Bound outstanding work and whole-request duration; preserve initialization,
+  unrelated requests and completed results when a cancellation is invalid or stale.
+
 - Source candidate: add explicitly scoped MCP model/Knowledge resources and a
   bounded text-summary prompt, with fresh identity/ownership checks on discovery
   and reads. Preserve empty defaults, exact document scopes, embedding metadata,
