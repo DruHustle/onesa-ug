@@ -174,7 +174,7 @@ The web gateway joins both `ingress` and the internal `private` network. Docker 
 
 The container smoke script refuses any project name outside `onesa-mobile-ci-*`, creates only synthetic records and never prints or uploads its generated credentials or database. CI cleanup removes only that disposable project. Native compilation runs automatically for scoped changes and can also be dispatched manually. GitHub documents the selected standard Ubuntu and macOS runners as free for public repositories; this is the verified public repository's configuration. The workflow does not purchase larger runners, upload release keys or publish apps.
 
-As of this implementation, the six recovery tests were executed locally and passed. Docker and Apple/Android native toolchains are unavailable in this editing environment; the new container and native jobs must produce their own successful receipts before those claims can be made.
+The six recovery tests passed locally and on hosted CI. Final application source `3af4282` passed [qualification run 42080127807](https://github.com/DruHustle/onesa-ug/actions/runs/42080127807), including actual container build/start/restart/recovery and 35 Portal tests against disposable PostgreSQL. Docker and Apple/Android native toolchains are unavailable in the editing environment; those observations come from hosted jobs. See [VALIDATION.md](../../docs/VALIDATION.md) for the exact source, tested image IDs, native compilation/artifact receipts and physical acceptance boundaries.
 
 ## Primary implementation references
 

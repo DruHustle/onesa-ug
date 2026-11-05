@@ -54,7 +54,48 @@ Two workflows provide exact-source gates:
 - [Software, container and PostgreSQL qualification](../../.github/workflows/onesa-mobile-ci.yml): package checks, container build/start/restart, encrypted recovery and Portal identity tests against disposable PostgreSQL.
 - [Native compilation](../../.github/workflows/onesa-mobile-native-compile.yml): Android arm64 debug application and unsigned iPhone/iPad simulator build. No signing keys are uploaded and no app is published.
 
-Initial source: [`f95059f4`](https://github.com/DruHustle/onesa-ug/commit/f95059f4e1bb711b00057acf7233b431686f8336). [Qualification run](https://github.com/DruHustle/onesa-ug/actions/runs/42076695029): web, API and native JavaScript passed; **35 Portal identity tests passed against actual PostgreSQL**, including the existing concurrent-flow cases. Container images built and became healthy, but the first smoke test found an unpublished gateway port caused by its internal-only network. The gateway now has a separate ingress bridge; the API remains internal-only. [Native run](https://github.com/DruHustle/onesa-ug/actions/runs/42076694933): Android found an SDK-manager PATH error before compilation, which is corrected to the exact installed tool path. The follow-up [qualification run on `c84fa102`](https://github.com/DruHustle/onesa-ug/actions/runs/42077694265) **passed all five jobs**, including actual gateway publication, protected requests, restart persistence, encrypted recovery and PostgreSQL identity regression. Both native jobs also **passed** on `c84fa102` in [run 42077694246](https://github.com/DruHustle/onesa-ug/actions/runs/42077694246), producing Android arm64 debug and unsigned iOS simulator artifacts. A final client-privacy follow-up adds guarded session/storage/download lifecycles and draft cleanup, with the local results above; its exact-source hosted runs must be recorded after publication.
+### Integration history
+
+Initial source: [`f95059f4`](https://github.com/DruHustle/onesa-ug/commit/f95059f4e1bb711b00057acf7233b431686f8336). [Qualification run](https://github.com/DruHustle/onesa-ug/actions/runs/42076695029): web, API and native JavaScript passed; **35 Portal identity tests passed against actual PostgreSQL**, including the existing concurrent-flow cases. Container images built and became healthy, but the first smoke test found an unpublished gateway port caused by its internal-only network. The gateway now has a separate ingress bridge; the API remains internal-only. [Native run](https://github.com/DruHustle/onesa-ug/actions/runs/42076694933): Android found an SDK-manager PATH error before compilation, which is corrected to the exact installed tool path. The follow-up [qualification run on `c84fa102`](https://github.com/DruHustle/onesa-ug/actions/runs/42077694265) passed all five jobs. Both native jobs also passed on that revision in [run 42077694246](https://github.com/DruHustle/onesa-ug/actions/runs/42077694246). Failed initial jobs are not counted as successful evidence.
+
+### Final source qualification
+
+Qualified application source: [`3af428298835db7987c15a18a73133429e45d4ea`](https://github.com/DruHustle/onesa-ug/commit/3af428298835db7987c15a18a73133429e45d4ea). This includes the final guarded session/storage/download lifecycles and private-draft cleanup. A later documentation-only commit may record these receipts without changing the compiled application source.
+
+[Qualification run 42080127807](https://github.com/DruHustle/onesa-ug/actions/runs/42080127807) passed **all five jobs**. The job conclusions and bounded log evidence were inspected directly.
+
+| Job | Observed final result |
+| --- | --- |
+| Mobile API types and HTTP contracts | TypeScript passed; **78 tests passed, zero failures** |
+| Public, customer and staff web | Production build passed; **14 tests passed, zero failures** |
+| Native application types and JavaScript bundles | TypeScript and iOS/Android exports passed; **20 tests passed, zero failures** |
+| Container restart and encrypted recovery | Three images built; actual loopback gateway publication, protected HTTP, restart/session/record/idempotency/audit persistence and container recovery passed; **6 recovery tests passed, zero failures** |
+| Portal identity and Mobile authorization | **35 tests passed, zero failures**, against disposable actual PostgreSQL |
+
+The runtime job recorded these local Docker image IDs. They identify the tested job outputs, not images published to a registry:
+
+| Job image | SHA-256 image ID |
+| --- | --- |
+| `onesa-mobile-api:lab` | `4a4f04deb31f0abb2e3c87f515b8cfcc3026d72335fb8cc656ec4f688a14f73a` |
+| `onesa-mobile-web:lab` | `bf47030062a18c1071bc9141113ffdcfaec2e857cdcf4300b7bed1a70b7b4b7c` |
+| `onesa-mobile-recovery:ci` | `983eec71aae2377b66dca1669e0229279c8bf5afe1891b5a08d905b20c92d8c6` |
+
+The observed base images were Node `24.22.1-alpine` at `sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53` and NGINX unprivileged `stable-alpine` at `sha256:44e74ca483234093081138b6d7b6f561d55557756a2deefc3a5056148defeb99`. A future rebuild must requalify moving upstream image tags.
+
+### Final native artifacts
+
+[Native run 42080127515](https://github.com/DruHustle/onesa-ug/actions/runs/42080127515) completed successfully on the same source `3af428298835db7987c15a18a73133429e45d4ea`. Android job `127430692599` and iOS job `127430693000` both passed. Together with the five qualification jobs, **all seven hosted jobs passed**. Artifact metadata was inspected directly and identifies that exact source revision.
+
+| Artifact | GitHub archive size | Archive SHA-256 | Retention expiry (UTC) |
+| --- | ---: | --- | --- |
+| [Android arm64 debug APK, artifact 13440955996](https://github.com/DruHustle/onesa-ug/actions/runs/42080127515/artifacts/13440955996) | 47,909,070 bytes | `6f0b0a9ca182ca46b351375a26b97bd6f94a7b499c0aa38efece03d25d60ef2c` | 12 November 2026, 18:06:46 |
+| [Unsigned iOS simulator application, artifact 13440966608](https://github.com/DruHustle/onesa-ug/actions/runs/42080127515/artifacts/13440966608) | 34,481,194 bytes | `d10c04ebd12112f6c5c5f3aa207c497ee44825184701d387b8056c46796ca580` | 12 November 2026, 18:12:56 |
+
+These are the **GitHub artifact archive digests**, not checksums of an extracted APK or the inner simulator `.tar.gz`. Downloads may require GitHub sign-in. The workflow retains these artifacts for seven days and can regenerate them from source. Android compiled on `ubuntu-24.04` with the workflow-selected JDK 17 and pinned Android SDK/NDK; iOS compiled on `macos-26`, with installed Xcode/CocoaPods versions recorded by the workflow.
+
+The completed iOS full-log retrieval failed with `Transport closed`. Exact Xcode/CocoaPods versions and the compiler's final text line were therefore not independently extracted here. The successful job/step conclusions and uploaded artifact metadata establish the reported compilation result.
+
+Both outputs use Debug configuration and require Metro with the matching application source. The Android APK targets arm64 test devices and uses development signing. The iOS archive contains an unsigned iPhone/iPad **simulator** `.app`; it cannot be installed on a physical iPhone or iPad. Neither is an App Store/Play release, an installed-device observation or an operational radio test. The [hardware runbook](HARDWARE_PILOT.md#first-android-usb-bench-session) explains the first controlled Android USB session.
 
 ## Physical and commercial acceptance
 

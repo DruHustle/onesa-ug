@@ -20,7 +20,7 @@ Source: [telecom review](TELECOM_REVIEW.md). Live provider actions remain unavai
 | TEL-06 — usage authority | No invented live counters; unavailable/unobserved usage and required source/time/unit/event reconciliation documented | **External integration:** no metering feed has been supplied; live usage is not claimed |
 | TEL-07 — approved tariffs | Public concepts separate from purchasable offers; test-only ledger/PDF with exact amounts and currency | **Implemented hold. External acceptance:** approved tariffs, tax and charging/settlement |
 | TEL-08 — health separation | App health, refresh, manual observation and readiness distinguished; owned support queues | **Implemented separation. External integration:** radio/provider telemetry, service monitoring and escalation |
-| TEL-09 — native/physical acceptance | Generated native projects, compiler workflows and 14-case hardware matrix | **Hosted qualification** for compilers; **physical acceptance** for installed devices and services |
+| TEL-09 — native/physical acceptance | Generated native projects, compiler workflows and 14-case hardware matrix | **Hosted compilation passed** for Android and iPhone/iPad simulator on `3af4282`; **physical acceptance** remains for installed devices and services |
 | TEL-10 — emergency/numbering | Separate evidence gates and approved-test-only procedure | **External acceptance:** responsibilities, numbering/interconnect and test facility |
 | TEL-11 — hosting/recovery | Explicit identity/key/proxy configuration, private runtime, encrypted recovery and restored-user reissue | **Implemented controls. External acceptance:** data location, key custody, TLS, retention, durable host and timed restore |
 | TEL-12 — changes/rollback | Configuration history, invalidation after firmware/serial/approval changes and documented pre-change backup/rollback | **Implemented records. Physical acceptance:** prove restore/isolation on equipment |
@@ -71,7 +71,7 @@ Source: [security review](SECURITY_REVIEW.md) and [threat model](../THREAT_MODEL
 | Backup access revival | Restore disables all lab users and old capabilities; per-user reissue confirms role and privately rotates secrets | Operator reconciles actual people and current authority |
 | Accidental provider effects | Unavailable network/payment adapters; production rejects lab registration/charging | Contracted provider specification and negative-path acceptance |
 | Retry/audit integrity | Atomic records/idempotency/audit, revisions and immutable observations | Independent audit anchoring/retention; DB admin can recompute local chain |
-| Dependency advisories | Locked scoped glob/minimatch overrides, zero production advisories and real fingerprint generation | Ongoing monitoring and native compiler result |
+| Dependency advisories | Locked scoped glob/minimatch overrides, zero production advisories, real fingerprint generation and successful native compilation | Ongoing monitoring and requalification after dependency/toolchain changes |
 | Path/origin validation | Encoded OIDC queries handled correctly; production lacks implicit localhost trust; private HTTP requires real IPs | New regressions passed; deployed TLS/proxy qualification remains |
 | Late private work and retained drafts | Native lifecycle cancellation, guarded shared secure-storage queue, explicit failed-cleanup retry, cleared private drafts, scoped export sharing and web download/session guards | Delayed-response/storage/download regressions; physical OS storage/share-sheet acceptance remains |
 
@@ -81,7 +81,7 @@ Source: [principal engineering review](PRINCIPAL_ENGINEERING_REVIEW.md).
 
 | Finding | Implemented resolution | Evidence / remaining scope |
 | --- | --- | --- |
-| PE-01 — incomplete image | Locked runtime dependencies installed in non-root image | Container build/start/restart/recovery passed on `c84fa102`; no hosted production deployment |
+| PE-01 — incomplete image | Locked runtime dependencies installed in non-root image | Container build/start/restart/recovery passed on final application source `3af4282`; no hosted production deployment |
 | PE-02 — hidden failed check | Any failed required check remains dominant | Domain regression passed |
 | PE-03 — stale evidence | Firmware/serial/approval changes invalidate checks and retain history; receipt cannot hide failure | Domain/HTTP regressions passed |
 | PE-04 — truncated records | Scoped cursor pages, SQL totals/readiness, full export and retained loaded ranges | Multi-page HTTP and web merge tests passed |
@@ -90,7 +90,7 @@ Source: [principal engineering review](PRINCIPAL_ENGINEERING_REVIEW.md).
 | PE-07 — excessive history payload | Compact bounded history omitted from lists, retained in protected detail | HTTP regression passed |
 | PE-08 — secret artifacts | Git/Docker exclusions for keys, databases, credentials, archives and signing files | Scoped publication review; no real secrets supplied |
 | PE-09 — OAuth logging | Raw API proxy access/error logs disabled; sanitized correlation IDs | Config inspection; deployed log review remains |
-| PE-10 — absent runtime/native evidence | Container/restart/recovery, PostgreSQL identity, Android debug and unsigned iOS/iPad jobs | **Hosted qualification:** observe results; signing and physical installs remain |
+| PE-10 — absent runtime/native evidence | Container/restart/recovery, PostgreSQL identity, Android debug and unsigned iOS/iPad jobs | **All seven hosted jobs passed** on `3af4282`; exact artifact receipts are in [validation](../VALIDATION.md). Release signing and physical installs remain |
 
 ## Release decision
 
