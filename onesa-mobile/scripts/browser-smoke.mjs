@@ -93,11 +93,25 @@ async function save(page, form, path, method = 'POST', status = 201) {
 async function assertLayout(page, surface, widths = [320,390,768,1440]) {
   for (const width of widths) {
     await page.setViewportSize({width,height:1000});
-    const result = await page.evaluate(() => ({viewport:window.innerWidth, document:document.documentElement.scrollWidth, body:document.body.scrollWidth,
+    await page.evaluate(() => window.scrollTo({top:0,left:0,behavior:'instant'}));
+    const result = await page.evaluate(() => {
+      const brokenCheckWords=[];
+      for (const label of document.querySelectorAll('.mw-check-grid dt')) {
+        if (!label.getClientRects().length) continue;
+        const walker=document.createTreeWalker(label,NodeFilter.SHOW_TEXT);
+        for (let node=walker.nextNode();node;node=walker.nextNode()) {
+          for (const word of node.textContent.matchAll(/\S+/g)) {
+            const range=document.createRange();range.setStart(node,word.index);range.setEnd(node,word.index+word[0].length);
+            if (range.getClientRects().length>1) brokenCheckWords.push(word[0]);
+          }
+        }
+      }
+      return {viewport:window.innerWidth, document:document.documentElement.scrollWidth, body:document.body.scrollWidth,brokenCheckWords,
       controls:[...document.querySelectorAll('form input:not([type="checkbox"]):not([type="hidden"]), form select, form textarea, form button[type="submit"]')]
-        .filter(element=>element.getClientRects().length>0).map(element=>{const rect=element.getBoundingClientRect();return {name:element.getAttribute('name')??element.tagName,left:rect.left,right:rect.right,height:rect.height};})}));
+        .filter(element=>element.getClientRects().length>0).map(element=>{const rect=element.getBoundingClientRect();return {name:element.getAttribute('name')??element.tagName,left:rect.left,right:rect.right,height:rect.height};})};});
     assert.ok(Math.max(result.document,result.body) <= result.viewport+1, `${surface} overflows at ${width}px: ${JSON.stringify(result)}`);
     assert.deepEqual(result.controls.filter(control=>control.left < -1 || control.right > result.viewport+1 || control.height < 44),[],`${surface} visible form controls fit and have 44px targets at ${width}px`);
+    assert.deepEqual(result.brokenCheckWords,[],`${surface} commissioning labels preserve whole words at ${width}px`);
     layouts.push({surface,width,overflow:false});
     if ([390,1440].includes(width)) await page.screenshot({path:join(artifacts, surface+'-'+width+'.png'),fullPage:true});
   }
@@ -144,6 +158,13 @@ try {
 
   const customerContext = await context(), customerPage = await customerContext.newPage();
   await login(customerPage,accounts.customer,'customer');
+  const skip=customerPage.getByRole('link',{name:'Skip to workspace content',exact:true});
+  await skip.focus();
+  assert.ok((await skip.boundingBox()).height>=44,'the focused skip link is readable and operable');
+  await customerPage.keyboard.press('Enter');
+  assert.equal(await customerPage.evaluate(()=>document.activeElement?.id),'mw-main','the skip link moves keyboard focus into the workspace');
+  assert.ok((await skip.boundingBox()).height<=1,'the unfocused skip link cannot obscure workspace content');
+  record('workspace skip navigation is keyboard operable and hidden when unfocused');
   await section(customerPage,'application','Pilot application');
   const applicationForm = customerPage.getByRole('form',{name:'Pilot application',exact:true});
   await applicationForm.getByLabel('Pilot participant name',{exact:false}).fill('Synthetic bench participant');
@@ -195,7 +216,7 @@ try {
   await openDetails(staffPage,'Register a planned asset');
   const assetForm = staffPage.getByRole('form',{name:'Register a planned asset',exact:true});
   async function fillAsset() {
-    await assetForm.getByLabel('Site',{exact:false}).selectOption(site.id);
+    await assetForm.getByLabel(/^Site/).selectOption(site.id);
     await assetForm.getByLabel('Asset tag',{exact:false}).fill('SYNTH-PHONE-01');
     await assetForm.getByLabel('Equipment type',{exact:false}).selectOption('android_phone');
     await assetForm.getByLabel('Manufacturer',{exact:false}).fill('Synthetic');
@@ -239,7 +260,7 @@ try {
   await section(staffPage,'trials','Field trials');
   await openDetails(staffPage,'Plan a field trial');
   const trialForm = staffPage.getByRole('form',{name:'Plan a field trial',exact:true});
-  await trialForm.getByLabel('Site',{exact:false}).selectOption(site.id);
+  await trialForm.getByLabel(/^Site/).selectOption(site.id);
   await trialForm.getByLabel('Test asset',{exact:false}).selectOption(asset.id);
   await trialForm.getByLabel('Connectivity path',{exact:false}).selectOption('direct_to_cell');
   await trialForm.getByLabel('Function under test',{exact:false}).selectOption('sms');

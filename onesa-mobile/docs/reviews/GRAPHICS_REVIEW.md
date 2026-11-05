@@ -2,6 +2,10 @@
 
 ## Independent second review — 5 November 2026
 
+### Hosted screenshot follow-up
+
+The first authenticated Chromium run on source `e30427c` produced actual synthetic customer/hardware screenshots. The lead reviewer inspected the 390px and 1440px images and identified two additional layout defects: the public stylesheet's generic definition-list flex layout squeezed commissioning labels into broken words, and site status badges could shrink into split words. The workspace now explicitly stacks check labels/evidence and lets site rows wrap while preserving the status badge. Unfocused skip navigation uses clipping instead of a fixed offscreen offset, so larger text cannot expose it over the page. The harness scrolls to the top before full-page captures and checks whole-word commissioning labels and keyboard skip behavior. A subsequent hosted browser pass and new screenshot inspection are required to close this follow-up.
+
 Reviewed the published source at `29da3e5285a21ef4e01cff8ab1668c797475dc99`, all three web style sheets, the customer/staff component structure, native component/style definitions, and the existing synthetic hardware-workspace screenshot. This pass retains the forest-and-mint identity and corrects specific visibility and reflow defects. It does not treat the earlier review as proof that every screen is complete.
 
 | ID | Priority | Finding | Correction / disposition |

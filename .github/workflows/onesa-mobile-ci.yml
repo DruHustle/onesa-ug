@@ -130,7 +130,10 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
       - name: Install matching Chromium
-        run: npx --no-install playwright install --with-deps chromium
+        # This Ubuntu runner already supplies Chromium's shared libraries and
+        # Latin/emoji fonts. Avoid the unrelated optional-font apt downloads;
+        # actual browser launch and all journeys below remain required gates.
+        run: npx --no-install playwright install --only-shell chromium
       - name: Exercise real local UI and API with disposable synthetic data
         run: npm run test:browser
       - name: Retain synthetic screenshots and qualification summary
