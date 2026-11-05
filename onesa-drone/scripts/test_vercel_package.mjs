@@ -27,10 +27,10 @@ async function fixture(t) {
     "export const simulation=true;",
   );
   await mkdir(join(dist, "models"), { recursive: true });
-  await cp(new URL("../frontend/public/models/nvidia", import.meta.url),
+  await cp(new URL("../frontend/drone/web/public/models/nvidia", import.meta.url),
     join(dist, "models/nvidia"), { recursive: true });
   await mkdir(join(dist, "licenses"), { recursive: true });
-  await cp(new URL("../frontend/public/licenses/three.txt", import.meta.url),
+  await cp(new URL("../frontend/drone/web/public/licenses/three.txt", import.meta.url),
     join(dist, "licenses/three.txt"));
   return {
     root,
@@ -64,7 +64,7 @@ test("prebuilt routing keeps API before SPA and no private cache or indexing", a
     "public, max-age=31536000, immutable",
   );
   assert.equal(Object.keys(result.files).length, 16);
-  const catalogBytes = await readFile(new URL("../frontend/src/nvidia-manifest.json", import.meta.url));
+  const catalogBytes = await readFile(new URL("../frontend/drone/web/src/nvidia-manifest.json", import.meta.url));
   const expected = new Map([["models/nvidia/manifest.json", catalogBytes]]);
   for (const asset of JSON.parse(catalogBytes).assets) {
     for (const key of ["glb", "thumbnail", "licenseFile", "sourceFile"]) {
@@ -77,7 +77,7 @@ test("prebuilt routing keeps API before SPA and no private cache or indexing", a
     }
   }
   expected.set("licenses/three.txt",
-    await readFile(new URL("../frontend/public/licenses/three.txt", import.meta.url)));
+    await readFile(new URL("../frontend/drone/web/public/licenses/three.txt", import.meta.url)));
   for (const [path, bytes] of expected) {
     assert.deepEqual(await readFile(join(args.output, ".vercel/output/static", path)), bytes);
     assert.equal(result.files[path], createHash("sha256").update(bytes).digest("hex"));
