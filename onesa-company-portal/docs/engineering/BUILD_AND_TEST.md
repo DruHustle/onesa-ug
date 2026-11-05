@@ -3,8 +3,8 @@
 ## Dependency-patched Kubernetes component builds
 
 `infra/oracle/component_builds/build.py` prepares local ARM64 runtime images for
-the reviewed upstream Metrics Server and Local Path Provisioner sources. Its lock
-binds the exact upstream archive, original and resolved Go module locks, Go builder,
+the reviewed upstream CoreDNS, Metrics Server and Local Path Provisioner sources.
+Its lock binds the exact upstream archive, original and resolved Go module locks, Go builder,
 certificate image, patch versions and reproducible binary hashes. It runs upstream
 race tests and retains source/module license notices in non-root scratch images.
 The builder uses no provider credentials or Docker socket inside the build container,
@@ -17,16 +17,20 @@ python3 -m unittest discover -s scripts -p test_oracle_component_sources.py
 ```
 
 After retaining the exact builder and certificate image from `sources.lock.json`,
-run either component with a new absolute private output directory:
+run a component with a new absolute private output directory:
 
 ```sh
+python3 infra/oracle/component_builds/build.py coredns --output /absolute/private/new-dns-build
 python3 infra/oracle/component_builds/build.py metrics-server --output /absolute/private/new-metrics-build
 python3 infra/oracle/component_builds/build.py local-path-provisioner --output /absolute/private/new-storage-build
 ```
 
 `--source-archive` accepts a retained archive only when its SHA-256 matches the lock.
 `--cache` may reuse a dedicated absolute public Go-module cache. Existing output
-directories are refused. Upstream and resolved module hashes, package checksums,
+directories are refused. Only the three exact CoreDNS document aliases listed in
+the source lock may be materialized as regular copies of their reviewed in-archive
+files. All other links, link chains and traversal remain refused; no archive link
+is created on disk. Upstream and resolved module hashes, package checksums,
 binary bytes and actual runtime version must all match; a changed graph requires
 reviewed source updates. Local logs, images and build results remain private.
 

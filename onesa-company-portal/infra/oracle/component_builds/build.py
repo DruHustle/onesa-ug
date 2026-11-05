@@ -28,8 +28,10 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def unpack(raw, destination):
-    """Reject links, special files, traversal and duplicate output paths."""
+def unpack(raw, destination, document_symlinks=None):
+    """Copy only regular content; reviewed document aliases never become links."""
+    aliases = document_symlinks or {}
+    observed_aliases = {}
     with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as archive:
         members = archive.getmembers()
         if not members or sum(m.size for m in members) > MAX_EXTRACTED:
@@ -39,7 +41,7 @@ def unpack(raw, destination):
         for member in members:
             path = Path(member.name)
             if (path.is_absolute() or ".." in path.parts or not path.parts
-                    or path.parts[0] != prefix or not (member.isfile() or member.isdir())):
+                    or path.parts[0] != prefix):
                 raise ValueError("Unsafe source archive member")
             if len(path.parts) == 1:
                 if not member.isdir():
@@ -50,6 +52,18 @@ def unpack(raw, destination):
                 raise ValueError("Duplicate source archive member")
             seen.add(relative)
             target = destination / relative
+            if member.issym():
+                link = Path(member.linkname)
+                if (aliases.get(relative.as_posix()) != member.linkname
+                        or link.is_absolute() or ".." in link.parts or not link.parts):
+                    raise ValueError("Unreviewed source archive link")
+                original = archive.getmember(str(Path(prefix) / relative.parent / link))
+                if not original.isfile():
+                    raise ValueError("Document alias must refer directly to a regular file")
+                observed_aliases[relative.as_posix()] = member.linkname
+                member = original
+            if not (member.isfile() or member.isdir()):
+                raise ValueError("Unsafe source archive member")
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
             else:
@@ -60,6 +74,8 @@ def unpack(raw, destination):
                 with target.open("xb") as output:
                     shutil.copyfileobj(source, output)
                 target.chmod(0o755 if member.mode & 0o111 else 0o644)
+        if observed_aliases != aliases:
+            raise ValueError("Reviewed document aliases differ from source archive")
 
 
 def module_hashes(source):
@@ -100,7 +116,7 @@ def build(component, output, retained_archive=None, cache=None):
     (output / "source.tar.gz").write_bytes(raw)
     source = output / "source"
     source.mkdir()
-    unpack(raw, source)
+    unpack(raw, source, spec.get("document_symlinks"))
     if module_hashes(source) != spec["original_module_hashes"]:
         raise ValueError("Upstream module locks differ from reviewed source")
     identity = json.loads(subprocess.check_output(["docker", "image", "inspect", lock["builder_image"]]))[0]
@@ -127,7 +143,8 @@ def build(component, output, retained_archive=None, cache=None):
             raise ValueError("Resolved dependency graph differs from reviewed locks")
         go(["go", "test", "-short", "-race", "-p", "2", "-timeout", "5m", *spec["tests"]])
         go(["env", "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64", "go", "build", "-mod=readonly",
-            "-trimpath", "-buildvcs=false", "-ldflags", spec["link_flags"], "-o", "/src/onesa-build/" + component,
+            "-trimpath", "-buildvcs=false", *(["-tags=" + ",".join(spec["build_tags"])] if spec.get("build_tags") else []),
+            "-ldflags", spec["link_flags"], "-o", "/src/onesa-build/" + component,
             spec["package"]], network=False)
     binary = source / "onesa-build" / component
     if sha(binary.read_bytes()) != spec["binary_sha256"]:
@@ -184,10 +201,10 @@ ENTRYPOINT ["/{component}"]
     image = (output / "image.id").read_text().strip()
     runtime = ["docker", "run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL",
                "--security-opt", "no-new-privileges", "--cpus", "1", "--memory", "256m", image]
-    version = subprocess.check_output([*runtime, "--version"], text=True, timeout=30).strip()
-    if spec["version"] not in version:
+    version = subprocess.check_output([*runtime, spec.get("version_argument", "--version")], text=True, timeout=30).strip()
+    if spec.get("runtime_version_marker", spec["version"]) not in version:
         raise ValueError("Runtime version differs from reviewed build")
-    subprocess.run([*runtime, "--help"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=30)
+    subprocess.run([*runtime, spec.get("help_argument", "--help")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=30)
     result = {"component": component, "version": version, "source_commit": spec["commit"], "lock_sha256": sha(lock_bytes),
               "binary_sha256": sha(binary.read_bytes()), "image_id": image, "upstream_race_tests": "PASS",
               "runtime_version_help": "PASS", "license_files": len(list(notices.iterdir())),
@@ -198,7 +215,7 @@ ENTRYPOINT ["/{component}"]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("component", choices=("local-path-provisioner", "metrics-server"))
+    parser.add_argument("component", choices=("local-path-provisioner", "metrics-server", "coredns"))
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--source-archive", type=Path)
     parser.add_argument("--cache", type=Path)
