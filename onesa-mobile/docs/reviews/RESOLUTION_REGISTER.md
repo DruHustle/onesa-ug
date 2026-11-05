@@ -65,7 +65,7 @@ Source: [security review](SECURITY_REVIEW.md) and [threat model](../THREAT_MODEL
 | --- | --- | --- |
 | Access/object authority | Backend seven-role permissions, immutable-subject ownership, scoped SQL and private exports/documents | Real staff grant administration/access review |
 | Correct central protocol | Confidential authorization code, PKCE/state/nonce, signed identity and opaque-token `/session` revalidation | Qualified Portal migration 015, exact client/origins and actual deployment test |
-| Portal compatibility | Optional Mobile client/roles; legacy client vocabulary preserved; staff MFA | Hosted PostgreSQL regression; no live migration run |
+| Portal compatibility | Optional Mobile client/roles; legacy client vocabulary preserved; staff MFA | 35 tests passed against hosted disposable PostgreSQL; no live migration run |
 | Credential/replay controls | Scrypt, TOTP replay protection, hashed sessions, encrypted capabilities, exact origin/CSRF, 60-second one-use native PKCE handoff | External key custody and physical OS/callback acceptance |
 | Stale grants/outage logout | Live central authorization, source auth time, fresh approvals/refunds, local-first logout | Actual issuer outage/revocation drill |
 | Backup access revival | Restore disables all lab users and old capabilities; per-user reissue confirms role and privately rotates secrets | Operator reconciles actual people and current authority |
@@ -73,6 +73,7 @@ Source: [security review](SECURITY_REVIEW.md) and [threat model](../THREAT_MODEL
 | Retry/audit integrity | Atomic records/idempotency/audit, revisions and immutable observations | Independent audit anchoring/retention; DB admin can recompute local chain |
 | Dependency advisories | Locked scoped glob/minimatch overrides, zero production advisories and real fingerprint generation | Ongoing monitoring and native compiler result |
 | Path/origin validation | Encoded OIDC queries handled correctly; production lacks implicit localhost trust; private HTTP requires real IPs | New regressions passed; deployed TLS/proxy qualification remains |
+| Late private work and retained drafts | Native lifecycle cancellation, guarded shared secure-storage queue, explicit failed-cleanup retry, cleared private drafts, scoped export sharing and web download/session guards | Delayed-response/storage/download regressions; physical OS storage/share-sheet acceptance remains |
 
 ## Principal software engineering
 
@@ -80,11 +81,11 @@ Source: [principal engineering review](PRINCIPAL_ENGINEERING_REVIEW.md).
 
 | Finding | Implemented resolution | Evidence / remaining scope |
 | --- | --- | --- |
-| PE-01 — incomplete image | Locked runtime dependencies installed in non-root image | **Hosted qualification:** exact image build/start |
+| PE-01 — incomplete image | Locked runtime dependencies installed in non-root image | Container build/start/restart/recovery passed on `c84fa102`; no hosted production deployment |
 | PE-02 — hidden failed check | Any failed required check remains dominant | Domain regression passed |
 | PE-03 — stale evidence | Firmware/serial/approval changes invalidate checks and retain history; receipt cannot hide failure | Domain/HTTP regressions passed |
 | PE-04 — truncated records | Scoped cursor pages, SQL totals/readiness, full export and retained loaded ranges | Multi-page HTTP and web merge tests passed |
-| PE-05 — unsafe/missing recovery | Online encrypted WAL backup, validation, no overwrite, mode isolation and recovered-access invalidation | Six real-schema tests passed; hosted recovery and timed physical drill separate |
+| PE-05 — unsafe/missing recovery | Online encrypted WAL backup, validation, no overwrite, mode isolation and recovered-access invalidation | Six real-schema tests and actual container recovery passed; timed physical drill remains |
 | PE-06 — proxy/rate limiting | Exact trusted peers, overwritten forwarded input and expiry cleanup at limiter cap | Config/HTTP checks; actual ingress configuration remains |
 | PE-07 — excessive history payload | Compact bounded history omitted from lists, retained in protected detail | HTTP regression passed |
 | PE-08 — secret artifacts | Git/Docker exclusions for keys, databases, credentials, archives and signing files | Scoped publication review; no real secrets supplied |

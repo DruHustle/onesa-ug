@@ -23,6 +23,15 @@ import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
 import PreviewApp from "./src/PreviewApp";
 import {
+  inSession,
+  SessionBoundary,
+  SessionStorage,
+  shareSessionDocument,
+  StaleSessionError,
+  StorageCleanupRequiredError,
+  type SessionOperation,
+} from "./src/session";
+import {
   apiBase,
   ApiError,
   base64Url,
@@ -59,6 +68,15 @@ const configuration = (() => {
     };
   }
 })();
+// This queue must outlive MobileAccount: preview navigation unmounts that component.
+const privateStorage = new SessionStorage({
+  read: (key) => SecureStore.getItemAsync(key),
+  write: (key, value) =>
+    SecureStore.setItemAsync(key, value, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    }),
+  remove: (key) => SecureStore.deleteItemAsync(key),
+});
 const tabs = ["Home", "Application", "Help", "Account"] as const;
 type Tab = (typeof tabs)[number];
 const plans = [
@@ -143,6 +161,9 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     [notice, setNotice] = useState(""),
     [cached, setCached] = useState<Record<string, unknown> | null>(null),
     [lastFetched, setLastFetched] = useState("");
+  const [cleanupRequired, setCleanupRequired] = useState(false),
+    [clearingStorage, setClearingStorage] = useState(false),
+    [storageRetry, setStorageRetry] = useState(0);
   const [username, setUsername] = useState(""),
     [password, setPassword] = useState(""),
     [displayName, setDisplayName] = useState(""),
@@ -161,25 +182,77 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
   const current = useRef<Credential | null>(null),
     requestKeys = useRef(new Map<string, string>()),
     callbackCodes = useRef(new Set<string>()),
-    generation = useRef(0);
+    actionLock = useRef<symbol | null>(null),
+    cleanupPending = useRef(false),
+    cleanupFlight = useRef<Promise<SessionOperation> | null>(null);
+  const [boundary] = useState(() => new SessionBoundary());
   const base = configuration.base;
-  const clearLocal = useCallback(async () => {
-    generation.current++;
+  const resetPrivateState = useCallback(() => {
     current.current = null;
     setCredential(null);
     setAccount(null);
     setCached(null);
     setLastFetched("");
+    setLoading(false);
+    setUsername("");
+    setPassword("");
+    setDisplayName("");
+    setArea("");
+    setDeviceModel("");
+    setPlanId("everyday");
+    setSimFormat("physical");
+    setConsent(false);
+    setCategory("other");
+    setSubject("");
+    setMessage("");
+    setReplyId(null);
+    setReply("");
+    setRequestType("sim_replacement");
+    setRequestDetail("");
+    setError("");
+    setNotice("");
+    setTab("Home");
     requestKeys.current.clear();
-    if (storageKey)
-      await Promise.all([
-        SecureStore.deleteItemAsync(storageKey),
-        SecureStore.deleteItemAsync(storageKey + ".cache"),
-        SecureStore.deleteItemAsync(storageKey + ".flow"),
-      ]);
-  }, [storageKey]);
+    callbackCodes.current.clear();
+  }, []);
+  const clearLocal = useCallback(async () => {
+    if (cleanupFlight.current) return cleanupFlight.current;
+    const cleared = boundary.invalidate();
+    resetPrivateState();
+    cleanupPending.current = true;
+    setCleanupRequired(true);
+    setClearingStorage(true);
+    actionLock.current = null;
+    setBusy(false);
+    const clearing = (async () => {
+      try {
+        await privateStorage.clear(
+          storageKey
+            ? [storageKey, storageKey + ".cache", storageKey + ".flow"]
+            : [],
+        );
+        if (cleared.isCurrent()) {
+          cleanupPending.current = false;
+          setCleanupRequired(false);
+        }
+        return cleared;
+      } catch (e) {
+        if (cleared.isCurrent())
+          setError(
+            "Account data was cleared from this screen, but secure storage could not be cleared. Retry before closing the app.",
+          );
+        throw e;
+      } finally {
+        cleanupFlight.current = null;
+        if (boundary.isActive) setClearingStorage(false);
+      }
+    })();
+    cleanupFlight.current = clearing;
+    return clearing;
+  }, [storageKey, boundary, resetPrivateState]);
   const saveCredential = useCallback(
-    async (value: Credential) => {
+    async (value: Credential, operation: SessionOperation) => {
+      operation.assertCurrent();
       if (!storageKey || !base)
         throw Error("The account service is not configured.");
       if (
@@ -189,83 +262,124 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
         value.user.expiresAt * 1000 <= Date.now()
       )
         throw Error("The service returned an invalid session.");
-      generation.current++;
-      await SecureStore.deleteItemAsync(storageKey + ".cache");
-      await SecureStore.setItemAsync(storageKey, JSON.stringify(value), {
-        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      });
-      current.current = value;
-      setCredential(value);
-      setCached(null);
-      setAccount(null);
-      setPassword("");
-      setError("");
+      const committed = boundary.invalidate();
+      resetPrivateState();
+      try {
+        await privateStorage.write(
+          committed,
+          storageKey,
+          JSON.stringify(value),
+          [storageKey, storageKey + ".cache", storageKey + ".flow"],
+        );
+        committed.assertCurrent();
+        current.current = value;
+        setCredential(value);
+        return committed;
+      } catch (e) {
+        if (committed.isCurrent()) {
+          if (e instanceof StorageCleanupRequiredError) {
+            cleanupPending.current = true;
+            setCleanupRequired(true);
+          }
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Secure account storage could not be updated.",
+          );
+        }
+        throw e;
+      }
     },
-    [storageKey, base],
+    [storageKey, base, boundary, resetPrivateState],
   );
   const refresh = useCallback(
-    async (value: Credential | null = current.current) => {
-      if (!base || !value) return;
-      const run = generation.current;
+    async (
+      value: Credential | null = current.current,
+      operation = boundary.capture(),
+    ) => {
+      operation.assertCurrent();
+      if (!base || !value || current.current?.token !== value.token) return;
       setLoading(true);
       try {
-        const data = await request<Account>(base, "/v1/me", {
-          token: value.token,
-        });
-        if (
-          run !== generation.current ||
-          current.current?.token !== value.token
-        )
-          return;
+        const data = await inSession(operation, () =>
+          request<Account>(base, "/v1/me", {
+            token: value.token,
+            signal: operation.signal,
+          }),
+        );
+        operation.assertCurrent();
+        if (current.current?.token !== value.token)
+          throw new StaleSessionError();
         if (data.profile?.subject !== value.user.subject)
           throw Error("The account response did not match this session.");
-        setAccount(data);
+        setAccount((previous) =>
+          operation.isCurrent() && current.current?.token === value.token
+            ? data
+            : previous,
+        );
         setLastFetched(new Date().toISOString());
         setError("");
         const snapshot = compactCache(data);
         setCached(snapshot as Record<string, unknown>);
         if (storageKey)
-          await SecureStore.setItemAsync(
+          await privateStorage.write(
+            operation,
             storageKey + ".cache",
             JSON.stringify(snapshot),
-            { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY },
           );
       } catch (e) {
-        if (run !== generation.current) return;
-        if (e instanceof ApiError && e.status === 401) await clearLocal();
+        if (!operation.isCurrent() || e instanceof StaleSessionError) return;
+        if (e instanceof ApiError && e.status === 401) {
+          const cleared = await clearLocal();
+          if (!cleared.isCurrent()) return;
+        }
         setError(
           e instanceof Error ? e.message : "Unable to refresh your account.",
         );
       } finally {
-        if (run === generation.current) setLoading(false);
+        if (operation.isCurrent()) setLoading(false);
       }
     },
-    [base, storageKey, clearLocal],
+    [base, storageKey, clearLocal, boundary],
   );
   useEffect(() => {
-    let alive = true;
+    const operation = boundary.activate();
+    resetPrivateState();
+    actionLock.current = null;
+    setBusy(false);
+    setStorageKey(null);
+    setAuthMode(null);
+    setSsoAvailable(false);
+    setLoading(true);
     void (async () => {
       if (!base) {
         setLoading(false);
         return;
       }
       try {
-        const hash = await Crypto.digestStringAsync(
-            Crypto.CryptoDigestAlgorithm.SHA256,
-            base,
+        const hash = await inSession(operation, () =>
+            Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, base),
           ),
           key = "onesa.mobile.v1." + hash.slice(0, 24);
-        if (!alive) return;
+        operation.assertCurrent();
         setStorageKey(key);
-        const [stored, previous, session] = await Promise.all([
-          SecureStore.getItemAsync(key),
-          SecureStore.getItemAsync(key + ".cache"),
-          request<{ authMode: "lab" | "onesa"; ssoAvailable: boolean }>(
-            base,
-            "/v1/session",
-          ).catch(() => null),
-        ]);
-        if (!alive) return;
+        const [[stored, previous], session] = await inSession(operation, () =>
+          Promise.all([
+            privateStorage.read(operation, [
+              key,
+              key + ".cache",
+              key + ".flow",
+            ]),
+            request<{ authMode: "lab" | "onesa"; ssoAvailable: boolean }>(
+              base,
+              "/v1/session",
+              { signal: operation.signal },
+            ).catch(() => null),
+          ]),
+        );
+        operation.assertCurrent();
+        cleanupPending.current = false;
+        setCleanupRequired(false);
         if (session) {
           setAuthMode(session.authMode);
           setSsoAvailable(session.ssoAvailable);
@@ -283,55 +397,85 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
               if (parsed.subject === value.user.subject) setCached(parsed);
             }
           } else
-            await Promise.all([
-              SecureStore.deleteItemAsync(key),
-              SecureStore.deleteItemAsync(key + ".cache"),
-            ]);
+            await privateStorage.clear(
+              [key, key + ".cache", key + ".flow"],
+              operation,
+            );
+          operation.assertCurrent();
         }
         if (!session)
           setError(
             "The account service is unavailable. Saved information may be out of date.",
           );
-      } catch {
-        if (alive)
+      } catch (e) {
+        if (operation.isCurrent()) {
+          if (e instanceof StorageCleanupRequiredError) {
+            cleanupPending.current = true;
+            setCleanupRequired(true);
+          }
           setError(
-            "Secure account storage could not be opened. Please try again.",
+            e instanceof StorageCleanupRequiredError
+              ? e.message
+              : "Secure account storage could not be opened. Please try again.",
           );
+        }
       } finally {
-        if (alive) setLoading(false);
+        if (operation.isCurrent()) setLoading(false);
       }
     })();
     return () => {
-      alive = false;
-      generation.current++;
+      boundary.dispose();
+      current.current = null;
+      actionLock.current = null;
     };
-  }, [base]);
+  }, [base, boundary, resetPrivateState, storageRetry]);
   useEffect(() => {
-    if (credential && storageKey) void refresh(credential);
+    if (credential && storageKey)
+      void refresh(credential).catch(() => undefined);
   }, [credential, storageKey, refresh]);
-  const run = async (action: () => Promise<void>) => {
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await action();
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "The operation could not be completed.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
+  const run = useCallback(
+    async (action: (operation: SessionOperation) => Promise<void>) => {
+      if (actionLock.current || cleanupPending.current || !boundary.isActive)
+        return;
+      const operation = boundary.capture();
+      const lock = Symbol("account action");
+      actionLock.current = lock;
+      setBusy(true);
+      setError("");
+      setNotice("");
+      try {
+        await action(operation);
+      } catch (e) {
+        if (operation.isCurrent() && !(e instanceof StaleSessionError)) {
+          if (e instanceof StorageCleanupRequiredError) {
+            cleanupPending.current = true;
+            setCleanupRequired(true);
+          }
+          setError(
+            e instanceof Error
+              ? e.message
+              : "The operation could not be completed.",
+          );
+        }
+      } finally {
+        if (actionLock.current === lock) {
+          actionLock.current = null;
+          if (boundary.isActive) setBusy(false);
+        }
+      }
+    },
+    [boundary],
+  );
   const completeNative = useCallback(
-    async (url: string) => {
+    async (url: string, operation: SessionOperation) => {
+      operation.assertCurrent();
       if (!base || !storageKey) return;
       const callbackCode = new URL(url).searchParams.get("code");
       if (callbackCode && callbackCodes.current.has(callbackCode)) return;
-      const raw = await SecureStore.getItemAsync(storageKey + ".flow");
+      const [raw] = await privateStorage.read(operation, [
+        storageKey + ".flow",
+      ]);
+      operation.assertCurrent();
       if (!raw) throw Error("Start sign-in again on this device.");
       const flow = JSON.parse(raw) as {
         state: string;
@@ -344,18 +488,21 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
       if (callbackCodes.current.has(result.code)) return;
       callbackCodes.current.add(result.code);
       try {
-        const issued = await request<{
-          token: string;
-          user: Credential["user"];
-        }>(base, "/v1/auth/onesa/native/exchange", {
-          method: "POST",
-          body: { ...result, verifier: flow.verifier },
-        });
-        await saveCredential(issued);
-        await SecureStore.deleteItemAsync(storageKey + ".flow");
-        setTab("Home");
+        const issued = await inSession(operation, () =>
+          request<{
+            token: string;
+            user: Credential["user"];
+          }>(base, "/v1/auth/onesa/native/exchange", {
+            method: "POST",
+            body: { ...result, verifier: flow.verifier },
+            signal: operation.signal,
+          }),
+        );
+        const committed = await saveCredential(issued, operation);
+        committed.assertCurrent();
+        callbackCodes.current.add(result.code);
       } catch (e) {
-        callbackCodes.current.delete(result.code);
+        if (operation.isCurrent()) callbackCodes.current.delete(result.code);
         throw e;
       }
     },
@@ -363,93 +510,119 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
   );
   useEffect(() => {
     if (!storageKey) return;
+    let listening = true;
     const handler = ({ url }: { url: string }) => {
-      if (url.startsWith("onesamobile://auth/callback"))
-        void completeNative(url).catch((e) =>
-          setError(e instanceof Error ? e.message : "Sign-in failed."),
-        );
+      if (listening && url.startsWith("onesamobile://auth/callback"))
+        void run((operation) => completeNative(url, operation));
     };
     const listener = Linking.addEventListener("url", handler);
     void Linking.getInitialURL().then((url) => {
       if (url) handler({ url });
     });
-    return () => listener.remove();
-  }, [storageKey, completeNative]);
+    return () => {
+      listening = false;
+      listener.remove();
+    };
+  }, [storageKey, completeNative, run]);
   const signIn = () =>
-    run(async () => {
+    run(async (operation) => {
       if (!base) return;
-      const result = await request<{ token: string; user: Credential["user"] }>(
-        base,
-        "/v1/session/login",
-        {
-          method: "POST",
-          body: {
-            username,
-            password,
-            surface: "customer",
-            transport: "bearer",
+      const result = await inSession(operation, () =>
+        request<{ token: string; user: Credential["user"] }>(
+          base,
+          "/v1/session/login",
+          {
+            method: "POST",
+            signal: operation.signal,
+            body: {
+              username,
+              password,
+              surface: "customer",
+              transport: "bearer",
+            },
           },
-        },
+        ),
       );
-      await saveCredential(result);
-      setTab("Home");
+      await saveCredential(result, operation);
     });
   const signInOnesa = () =>
-    run(async () => {
+    run(async (operation) => {
       if (!base || !storageKey) return;
-      const state = base64Url(await Crypto.getRandomBytesAsync(32)),
-        verifier = base64Url(await Crypto.getRandomBytesAsync(32)),
+      const state = base64Url(
+          await inSession(operation, () => Crypto.getRandomBytesAsync(32)),
+        ),
+        verifier = base64Url(
+          await inSession(operation, () => Crypto.getRandomBytesAsync(32)),
+        ),
         challenge = (
-          await Crypto.digestStringAsync(
-            Crypto.CryptoDigestAlgorithm.SHA256,
-            verifier,
-            { encoding: Crypto.CryptoEncoding.BASE64 },
+          await inSession(operation, () =>
+            Crypto.digestStringAsync(
+              Crypto.CryptoDigestAlgorithm.SHA256,
+              verifier,
+              { encoding: Crypto.CryptoEncoding.BASE64 },
+            ),
           )
         )
           .replaceAll("+", "-")
           .replaceAll("/", "_")
           .replaceAll("=", "");
-      await SecureStore.setItemAsync(
+      await privateStorage.write(
+        operation,
         storageKey + ".flow",
         JSON.stringify({ state, verifier, expires: Date.now() + 600000 }),
-        { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY },
       );
+      operation.assertCurrent();
       const url = new URL(base + "/v1/auth/onesa/start");
       url.searchParams.set("surface", "customer");
       url.searchParams.set("codeChallenge", challenge);
       url.searchParams.set("state", state);
-      const result = await WebBrowser.openAuthSessionAsync(
-        url.href,
-        "onesamobile://auth/callback",
+      const result = await inSession(operation, () =>
+        WebBrowser.openAuthSessionAsync(
+          url.href,
+          "onesamobile://auth/callback",
+        ),
       );
-      if (result.type === "success") await completeNative(result.url);
-      else setNotice("Sign-in cancelled. No account change was made.");
+      if (result.type === "success")
+        await completeNative(result.url, operation);
+      else {
+        await privateStorage.clear([storageKey + ".flow"], operation);
+        operation.assertCurrent();
+        setNotice("Sign-in cancelled. No account change was made.");
+      }
     });
-  const signOut = () =>
-    run(async () => {
-      const previous = current.current;
-      await clearLocal();
-      setTab("Home");
-      if (previous && base) {
-        try {
-          await request(base, "/v1/session/logout", {
-            method: "POST",
-            token: previous.token,
-          });
-          setNotice("Signed out on this device.");
-        } catch {
+  // Sign-out must be able to cancel an in-flight private operation.
+  const signOut = async () => {
+    const previous = current.current;
+    let cleared: SessionOperation;
+    try {
+      cleared = await clearLocal();
+    } catch {
+      return; // clearLocal reports the secure-storage failure on the cleared screen.
+    }
+    if (previous && base) {
+      try {
+        // Revoking the captured old token remains valid even if a new sign-in starts.
+        await request(base, "/v1/session/logout", {
+          method: "POST",
+          token: previous.token,
+        });
+        if (cleared.isCurrent()) setNotice("Signed out on this device.");
+      } catch {
+        if (cleared.isCurrent())
           setNotice(
             "Signed out on this device. The service could not confirm remote session revocation.",
           );
-        }
       }
-    });
+    }
+  };
   const mutate = async (
+    operation: SessionOperation,
     path: string,
     body: unknown,
     success: string,
     method: "POST" | "PATCH" = "POST",
   ) => {
+    operation.assertCurrent();
     const user = current.current;
     if (!base || !user) throw Error("Sign in first.");
     const signature = method + path + JSON.stringify(body);
@@ -459,67 +632,89 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
       requestKeys.current.set(signature, key);
     }
     try {
-      await request(base, path, { token: user.token, method, body, key });
+      await inSession(operation, () =>
+        request(base, path, {
+          token: user.token,
+          method,
+          body,
+          key,
+          signal: operation.signal,
+        }),
+      );
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) await clearLocal();
-      else if (e instanceof ApiError && e.status === 409) await refresh(user);
+      operation.assertCurrent();
+      if (e instanceof ApiError && e.status === 401) {
+        const cleared = await clearLocal();
+        if (cleared.isCurrent()) setError(e.message);
+      } else if (e instanceof ApiError && e.status === 409)
+        await refresh(user, operation);
       throw e;
     }
+    operation.assertCurrent();
     requestKeys.current.delete(signature);
-    if (current.current?.token !== user.token) return;
-    await refresh(user);
+    if (current.current?.token !== user.token) throw new StaleSessionError();
+    await refresh(user, operation);
+    operation.assertCurrent();
     setNotice(success);
   };
   const shareDocument = (item?: Item) =>
-    run(async () => {
+    run(async (operation) => {
       const user = current.current;
       if (!user || !base) return;
-      if (!(await Sharing.isAvailableAsync()))
+      if (!(await inSession(operation, () => Sharing.isAvailableAsync())))
         throw Error("Document sharing is unavailable on this device.");
       const file = new File(
         Paths.cache,
         "onesa-mobile-" + Crypto.randomUUID() + (item ? ".pdf" : ".json"),
       );
-      try {
-        if (item) {
-          if (!/^[a-f0-9-]{36}$/.test(item.id))
+      await shareSessionDocument(operation, {
+        download: async () => {
+          if (item && !/^[a-f0-9-]{36}$/.test(item.id))
             throw Error("Invalid document reference.");
           await File.downloadFileAsync(
-            base + "/v1/documents/" + item.id + ".pdf",
+            base +
+              (item ? "/v1/documents/" + item.id + ".pdf" : "/v1/me/export"),
             file,
-            { headers: { Authorization: "Bearer " + user.token } },
+            {
+              headers: { Authorization: "Bearer " + user.token },
+              signal: operation.signal,
+            },
           );
-        } else {
-          await File.downloadFileAsync(base + "/v1/me/export", file, {
-            headers: { Authorization: "Bearer " + user.token },
-          });
-        }
-        await Sharing.shareAsync(file.uri, {
-          mimeType: item ? "application/pdf" : "application/json",
-          dialogTitle: item
-            ? "Share your test receipt"
-            : "Export your account records",
-        });
-      } finally {
-        if (file.exists) file.delete();
-      }
+        },
+        share: () =>
+          Sharing.shareAsync(file.uri, {
+            mimeType: item ? "application/pdf" : "application/json",
+            dialogTitle: item
+              ? "Share your test receipt"
+              : "Export your account records",
+          }),
+        cleanup: () => {
+          if (file.exists) file.delete();
+        },
+      });
     });
   const loadMore = (kind: "tickets" | "ledger" | "requests") =>
-    run(async () => {
+    run(async (operation) => {
       const user = current.current,
         cursor = account?.cursors?.[kind];
       if (!base || !user || !cursor) return;
-      const page = await request<{
-        items: Item[];
-        nextCursor: string | null;
-        total: number;
-      }>(base, "/v1/me/records/" + kind, {
-        token: user.token,
-        query: { cursor, limit: 50 },
-      });
-      if (current.current?.token !== user.token) return;
+      const page = await inSession(operation, () =>
+        request<{
+          items: Item[];
+          nextCursor: string | null;
+          total: number;
+        }>(base, "/v1/me/records/" + kind, {
+          token: user.token,
+          query: { cursor, limit: 50 },
+          signal: operation.signal,
+        }),
+      );
+      operation.assertCurrent();
+      if (current.current?.token !== user.token) throw new StaleSessionError();
       setAccount((previous) =>
-        previous
+        operation.isCurrent() &&
+        current.current?.token === user.token &&
+        previous?.profile.subject === user.user.subject
           ? {
               ...previous,
               [kind]: [
@@ -550,7 +745,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     setTab("Application");
   };
   const submitApplication = () =>
-    run(async () => {
+    run(async (operation) => {
       if (!consent) throw Error("Confirm the pilot consent before submitting.");
       const input = {
         displayName,
@@ -566,11 +761,13 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
           String(application.state),
         );
       await mutate(
+        operation,
         existing ? "/v1/applications/" + application.id : "/v1/applications",
         existing ? { ...input, revision: application.revision } : input,
         "Your pilot application was saved. Mobile service remains unavailable.",
         existing ? "PATCH" : "POST",
       );
+      operation.assertCurrent();
       setTab("Home");
     });
   const canEdit =
@@ -614,6 +811,29 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
           <View accessibilityRole="alert" style={local.error}>
             <Text style={local.errorText}>{error}</Text>
           </View>
+        ) : null}
+        {cleanupRequired ? (
+          <Card>
+            <Text style={styles.body}>
+              Sign-in stays unavailable until this device's saved account data
+              has been cleared.
+            </Text>
+            <Button
+              disabled={clearingStorage}
+              onPress={() => {
+                void clearLocal()
+                  .then((cleared) => {
+                    if (cleared.isCurrent())
+                      setStorageRetry((value) => value + 1);
+                  })
+                  .catch(() => undefined);
+              }}
+            >
+              {clearingStorage
+                ? "Clearing this device…"
+                : "Retry clearing this device"}
+            </Button>
+          </Card>
         ) : null}
         {notice ? (
           <Text accessibilityLiveRegion="polite" style={local.notice}>
@@ -662,7 +882,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   />
                   <Button
                     onPress={signIn}
-                    disabled={busy || !username || !password}
+                    disabled={busy || cleanupRequired || !username || !password}
                   >
                     Sign in to the lab
                   </Button>
@@ -671,7 +891,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                 <>
                   <Button
                     onPress={signInOnesa}
-                    disabled={busy || !ssoAvailable}
+                    disabled={busy || cleanupRequired || !ssoAvailable}
                   >
                     Continue with Onesa
                   </Button>
@@ -686,7 +906,11 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   ) : null}
                 </>
               )}
-              <Button secondary onPress={openPreview}>
+              <Button
+                secondary
+                onPress={openPreview}
+                disabled={cleanupRequired}
+              >
                 Explore without signing in
               </Button>
             </Card>
@@ -736,7 +960,11 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   </Text>
                   <Button
                     secondary
-                    onPress={() => void run(() => refresh())}
+                    onPress={() =>
+                      void run((operation) =>
+                        refresh(current.current, operation),
+                      )
+                    }
                     disabled={busy}
                   >
                     Refresh account
@@ -903,12 +1131,14 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   <Button
                     disabled={busy || !subject.trim() || !message.trim()}
                     onPress={() =>
-                      void run(async () => {
+                      void run(async (operation) => {
                         await mutate(
+                          operation,
                           "/v1/support/tickets",
                           { category, subject, message },
                           "Your support case was saved.",
                         );
+                        operation.assertCurrent();
                         setSubject("");
                         setMessage("");
                       })
@@ -961,14 +1191,16 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                           <Button
                             disabled={busy || !reply.trim()}
                             onPress={() =>
-                              void run(async () => {
+                              void run(async (operation) => {
                                 await mutate(
+                                  operation,
                                   "/v1/support/tickets/" +
                                     ticket.id +
                                     "/replies",
                                   { revision: ticket.revision, message: reply },
                                   "Your reply was saved.",
                                 );
+                                operation.assertCurrent();
                                 setReply("");
                                 setReplyId(null);
                               })
@@ -1030,7 +1262,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   >
                     Export my account records
                   </Button>
-                  <Button secondary onPress={signOut} disabled={busy}>
+                  <Button secondary onPress={() => void signOut()}>
                     Sign out
                   </Button>
                 </Card>
@@ -1093,12 +1325,14 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   <Button
                     disabled={busy || !requestDetail.trim()}
                     onPress={() =>
-                      void run(async () => {
+                      void run(async (operation) => {
                         await mutate(
+                          operation,
                           "/v1/account/requests",
                           { type: requestType, detail: requestDetail },
                           "Your request is with the team. No automatic account or SIM change was made.",
                         );
+                        operation.assertCurrent();
                         setRequestDetail("");
                       })
                     }

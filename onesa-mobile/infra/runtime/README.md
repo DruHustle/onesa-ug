@@ -2,7 +2,7 @@
 
 This runtime operates the Mobile software control plane: customer pilot records, staff workflows, hardware inventory, commissioning evidence, support and test billing. It does not operate a cellular radio, provision a SIM, route emergency calls, charge a customer or grant satellite entitlement. `GET /api/v1/status` and `/api/healthz` continue to identify the service as prelaunch.
 
-Use the physical bench and acceptance sequence in [HARDWARE_PILOT.md](../../docs/HARDWARE_PILOT.md). A dish connected to a router is a backhaul experiment; it does not establish handset direct-to-cell capability.
+Use the physical bench and acceptance sequence in [HARDWARE_PILOT.md](../../docs/HARDWARE_PILOT.md). A dish connected to a router is a separate satellite-broadband IP path; it does not establish handset direct-to-cell capability.
 
 ## Runtime boundaries
 

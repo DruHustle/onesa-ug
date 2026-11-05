@@ -161,7 +161,7 @@ export default function InternalApp() {
   return <div className="ops-root">
     <a href="#ops-main" className="ops-skip">Skip to operations content</a>
     <header className="ops-header"><div className="ops-brand"><span className="ops-brand-mark" aria-hidden="true"><i /><i /><i /></span><span>onesa <small>mobile</small></span><span className="ops-brand-divider" /><strong>Operations</strong></div><div className="ops-header-actions"><a href="/">Customer website <span aria-hidden="true">→</span></a><button className="ops-button ops-button-light" onClick={reset}>Reset demo</button></div></header>
-    <div className="ops-banner"><span aria-hidden="true" />Internal operations preview · synthetic records · staff authentication pending</div>
+    <div className="ops-banner"><span aria-hidden="true" />Internal operations demo · synthetic records · no operational access</div>
     <div className="ops-layout">
       <aside className="ops-sidebar">
         <label className="ops-section-picker">

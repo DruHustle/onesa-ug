@@ -56,3 +56,11 @@ Code links are relative to this product directory; sibling Portal changes remain
 - [Local identity tests](../../onesa-mobile-backend/test/auth.test.ts), [OIDC/native identity tests](../../onesa-mobile-backend/test/auth-onesa.test.ts), [HTTP routes](../../onesa-mobile-backend/src/platform/http.ts), [business authorization](../../onesa-mobile-backend/src/platform/model.ts), [persistent operations](../../onesa-mobile-backend/src/platform/service.ts).
 - [Threat model](../THREAT_MODEL.md).
 - [glob advisory](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4), [minimatch advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+
+## Final client-lifecycle follow-up
+
+A focused review after the runtime qualification identified client privacy gaps: native drafts survived a local sign-out, and an old component's delayed login or secure-storage write could finish after unmount and overwrite a later login. A web export could also finish after the requesting session ended. These were application-client races; server ownership checks were already enforced.
+
+The remediation gives native reads, mutations, authentication handoff, storage and exports an explicit cancellable identity/lifecycle scope. A shared serialized secure-storage queue prevents an old mount from overwriting a new mount's identity; failed stale-write cleanup blocks later reads/writes until explicit cleanup succeeds. Private drafts are cleared on identity replacement/logout. The UI provides a cleanup retry and blocks login while device cleanup is pending. Downloads are cancelled and rechecked before sharing; temporary files are removed. Successful handoff codes retain in-memory duplicate suppression for the committed session. The web applies a corresponding abortable session scope around private response/Blob delivery, including guarded 401 handling. Deterministic delayed-response/storage/download tests exercise these races. The final validation document records their completed counts and the rebuilt source revision.
+
+These checks establish the tested lifecycle behavior, not physical-device keychain, OS-share-sheet or screen-reader acceptance. The hardware matrix retains those checks.

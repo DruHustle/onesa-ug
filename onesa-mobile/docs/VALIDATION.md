@@ -7,8 +7,8 @@ Date: **5 November 2026**. Scope: the persistent Onesa Mobile hardware-pilot and
 | Area | Observed result | What the check establishes |
 | --- | --- | --- |
 | Mobile API | Strict TypeScript and **78 tests passed** | Domain transitions, authenticated HTTP, role/owner isolation, retry/revision handling, evidence review, lab receipts, current OpenAPI and identity failure boundaries |
-| Public/customer/staff web | TypeScript, production build and **11 tests passed** | Buildable application; preview rules, money parsing, retry identity, truthful pilot states and cursor merging |
-| Native application | TypeScript and **8 tests passed** | Pilot/demo state, API configuration, real private-IP development origins and scoped pagination |
+| Public/customer/staff web | TypeScript, production build and **14 tests passed** | Buildable application; preview rules, money parsing, retry identity, truthful pilot states, cursor merging and stale-session export cancellation |
+| Native application | TypeScript and **20 tests passed** | Pilot/demo state, API configuration, private-IP origins, scoped pagination and 12 delayed-session/storage/download regressions |
 | Native JavaScript | Metro/Hermes production exports completed for iOS and Android | Compilable source and JavaScript bundles; native compilers are a separate gate below |
 | Native generation and artwork | Expo prebuild completed; deterministic SVG-to-PNG generation and visual icon inspection passed | iOS/Android source/configuration and consistent installed artwork; iPhone/iPad support enabled |
 | Encrypted recovery | **6 tests passed** against actual platform/authentication schemas | Online WAL capture, integrity/audit/idempotency preservation, tamper/wrong-key refusal, no overwrite, mode isolation and recovered-access invalidation |
@@ -17,7 +17,7 @@ Date: **5 November 2026**. Scope: the persistent Onesa Mobile hardware-pilot and
 | Portal local identity exercise | Migrations 001–015 and **7 focused cases passed** using disposable PGlite | Selected migration/protocol behavior; not PostgreSQL concurrency |
 | Dependency review | API and native production audits reported **zero advisories**; Expo fingerprint completed | Inspected lockfiles and audit snapshot; not a guarantee against future advisories |
 
-The API, web, native logic and recovery suites contain **103 passing tests** in total. Portal results are separate. Generated OpenAPI tests are included in the backend count. Repeated checkpoints are not counted as independent coverage.
+The API, web, native logic and recovery suites contain **118 passing tests** in total. Portal results are separate. Generated OpenAPI tests are included in the backend count. Repeated checkpoints are not counted as independent coverage.
 
 The legacy Portal hygiene command rejected the ancestor monorepo because it expects a standalone repository root. It is not reported as passed. Publication uses a scoped monorepo diff, artifact and secret review instead.
 
@@ -31,6 +31,8 @@ Identity tests exercise signed OIDC, PKCE/state/nonce, the Portal opaque-token c
 
 Recovery rejects corrupt archives and wrong keys, clears historical sessions/flows/handoffs, preserves idempotency/audit continuity and disables all restored lab identities. Reissue tests require explicit current-role confirmation, password/TOTP rotation and private output persistence before committing.
 
+Client lifecycle regressions deliberately delay reads, old 401 responses, login responses, uncancellable storage writes and export completion across logout, identity replacement and unmount. They verify stale results cannot replace a later account, stale private files are not shared, and failed cleanup blocks later reads/writes until an explicit successful retry.
+
 These are synthetic protocol tests. They do not establish a configured live Portal, carrier or payment provider.
 
 ## Browser and visual review
@@ -41,6 +43,8 @@ Reviewed actual customer components for summary, application/correction, support
 
 Checks covered mobile navigation, readable labels, contained tables, equipment details, seven commissioning states, custody/serial/supplier references and the protected-history control. A correction form preserved its values and produced the expected local fixture submission; no real application was saved. Authenticated browser login and production transactions were not performed. Real authorization was exercised through the HTTP suite.
 
+The preserved staff preview was rechecked at 360px after its typography/navigation changes. Its document and viewport widths both measured 345 CSS pixels (the frame reserves 15px for the scrollbar), and the section selector measured 44px high with 16px text. Switching to Billing & agents worked without document overflow. Its banner now identifies an unauthenticated demonstration instead of implying operational authentication is still pending.
+
 The [hardware workspace screenshot](screenshots/hardware-workspace.png) shows actual components with synthetic review data. It is not operational inventory or a network measurement. This focused review is not WCAG certification or a Zimbabwe subscriber usability study. Native styling and artwork were inspected; physical screens, text scaling, VoiceOver and TalkBack require hardware acceptance.
 
 ## Hosted qualification
@@ -50,7 +54,7 @@ Two workflows provide exact-source gates:
 - [Software, container and PostgreSQL qualification](../../.github/workflows/onesa-mobile-ci.yml): package checks, container build/start/restart, encrypted recovery and Portal identity tests against disposable PostgreSQL.
 - [Native compilation](../../.github/workflows/onesa-mobile-native-compile.yml): Android arm64 debug application and unsigned iPhone/iPad simulator build. No signing keys are uploaded and no app is published.
 
-Initial source: [`f95059f4`](https://github.com/DruHustle/onesa-ug/commit/f95059f4e1bb711b00057acf7233b431686f8336). [Qualification run](https://github.com/DruHustle/onesa-ug/actions/runs/42076695029): web, API and native JavaScript passed; **35 Portal identity tests passed against actual PostgreSQL**, including the existing concurrent-flow cases. Container images built and became healthy, but the first smoke test found an unpublished gateway port caused by its internal-only network. The gateway now has a separate ingress bridge; the API remains internal-only. [Native run](https://github.com/DruHustle/onesa-ug/actions/runs/42076694933): Android found an SDK-manager PATH error before compilation, which is corrected to the exact installed tool path. Follow-up container/native runs must pass before these gates are closed.
+Initial source: [`f95059f4`](https://github.com/DruHustle/onesa-ug/commit/f95059f4e1bb711b00057acf7233b431686f8336). [Qualification run](https://github.com/DruHustle/onesa-ug/actions/runs/42076695029): web, API and native JavaScript passed; **35 Portal identity tests passed against actual PostgreSQL**, including the existing concurrent-flow cases. Container images built and became healthy, but the first smoke test found an unpublished gateway port caused by its internal-only network. The gateway now has a separate ingress bridge; the API remains internal-only. [Native run](https://github.com/DruHustle/onesa-ug/actions/runs/42076694933): Android found an SDK-manager PATH error before compilation, which is corrected to the exact installed tool path. The follow-up [qualification run on `c84fa102`](https://github.com/DruHustle/onesa-ug/actions/runs/42077694265) **passed all five jobs**, including actual gateway publication, protected requests, restart persistence, encrypted recovery and PostgreSQL identity regression. Both native jobs also **passed** on `c84fa102` in [run 42077694246](https://github.com/DruHustle/onesa-ug/actions/runs/42077694246), producing Android arm64 debug and unsigned iOS simulator artifacts. A final client-privacy follow-up adds guarded session/storage/download lifecycles and draft cleanup, with the local results above; its exact-source hosted runs must be recorded after publication.
 
 ## Physical and commercial acceptance
 

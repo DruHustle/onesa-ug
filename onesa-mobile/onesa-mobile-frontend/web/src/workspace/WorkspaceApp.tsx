@@ -4,7 +4,7 @@ import { Brand, DateText, Info, Panel } from './components';
 import { CustomerAccount, CustomerApplication, CustomerHelp, CustomerHome, CustomerPayments } from './Customer';
 import { Hardware, Trials } from './Hardware';
 import { Applications, Audit, Billing, ReadinessWorkspace, StaffHome, Support } from './Staff';
-import { humanize, makeRetryKeys, mergeRecordPage } from './helpers.mjs';
+import { createSessionDownloadScope, humanize, makeRetryKeys, mergeRecordPage } from './helpers.mjs';
 import type { Collection, CustomerData, Item, Session, StaffData, Surface, WorkspaceContext } from './types';
 import './workspace.css';
 
@@ -64,14 +64,18 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
   const sessionRef=useRef<Session|null>(null),requestSequence=useRef(0),controller=useRef<AbortController|null>(null),operationInProgress=useRef(false);
   const loadedData=useRef<WorkspaceData|null>(null),pageControllers=useRef(new Map<Collection,AbortController>());
   const retryKeys=useRef(makeRetryKeys()),heading=useRef<HTMLHeadingElement|null>(null),focusHeading=useRef(false);
+  const downloadScope=useRef(createSessionDownloadScope());
 
   const publishData=useCallback((next:WorkspaceData|null)=>{loadedData.current=next;setData(next);},[]);
   const acceptSession = useCallback((next: Session) => {
+    const previous=sessionRef.current;
+    if(previous?.authenticated!==next.authenticated||previous?.user?.subject!==next.user?.subject||previous?.user?.role!==next.user?.role||previous?.user?.source!==next.user?.source||previous?.csrfToken!==next.csrfToken)downloadScope.current.invalidate();
     if(sessionRef.current?.user?.subject!==next.user?.subject||sessionRef.current?.user?.role!==next.user?.role){publishData(null);setLoadedAt(null);retryKeys.current.clear();}
     sessionRef.current=next;setSession(next);
     if(!next.authenticated){publishData(null);setLoadedAt(null);retryKeys.current.clear();}
   },[publishData]);
   const expireSession = useCallback(() => {
+    downloadScope.current.invalidate();
     controller.current?.abort();for(const pending of pageControllers.current.values())pending.abort();pageControllers.current.clear();requestSequence.current++;
     setRefreshing(false);setLoadingPages({});
     const known=sessionRef.current;
@@ -113,14 +117,18 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
       if(active.signal.aborted||sequence!==requestSequence.current)return false;
       if(error instanceof ApiError&&error.status===401)expireSession();
       else {
-        if(error instanceof ApiError&&(error.status===403||error.code==='AUTH_PROVIDER_UNAVAILABLE'))publishData(null);
+        if(error instanceof ApiError&&(error.status===403||error.code==='AUTH_PROVIDER_UNAVAILABLE')){downloadScope.current.invalidate();publishData(null);}
         setStale(true);setPageError(errorMessage(error));
       }
       return false;
     } finally {if(sequence===requestSequence.current&&!active.signal.aborted)setRefreshing(false);}
   },[surface,acceptSession,expireSession,publishData]);
 
-  useEffect(()=>{void refresh();return()=>{controller.current?.abort();for(const pending of pageControllers.current.values())pending.abort();requestSequence.current++;};},[refresh]);
+  useEffect(()=>{
+    const cancelDownloads=()=>downloadScope.current.invalidate();
+    window.addEventListener('pagehide',cancelDownloads);void refresh();
+    return()=>{window.removeEventListener('pagehide',cancelDownloads);cancelDownloads();controller.current?.abort();for(const pending of pageControllers.current.values())pending.abort();requestSequence.current++;};
+  },[refresh]);
   useEffect(()=>{
     if(!session?.authenticated||!session.user)return;
     const remaining=session.user.expiresAt*1000-Date.now();
@@ -154,7 +162,7 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
     } catch(error) {
       if(active.signal.aborted||sequence!==requestSequence.current)return;
       if(error instanceof ApiError&&error.status===401)expireSession();
-      else {if(error instanceof ApiError&&(error.status===403||error.code==='AUTH_PROVIDER_UNAVAILABLE')){publishData(null);setStale(true);}setPageError(errorMessage(error));}
+      else {if(error instanceof ApiError&&(error.status===403||error.code==='AUTH_PROVIDER_UNAVAILABLE')){downloadScope.current.invalidate();publishData(null);setStale(true);}setPageError(errorMessage(error));}
     } finally {
       if(pageControllers.current.get(kind)===active){pageControllers.current.delete(kind);setLoadingPages(previous=>({...previous,[kind]:false}));}
     }
@@ -162,6 +170,7 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
 
   async function login(username:string,password:string,totp:string) {
     if(operationInProgress.current)return;
+    downloadScope.current.invalidate();
     operationInProgress.current=true;setBusy(true);setPageError(null);setNotice(null);
     try {
       const issued=await api<{authenticated:boolean;mode:'lab'|'production';user:Session['user'];csrfToken:string}>('/v1/session/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,...(totp?{totp}:{}),surface,transport:'cookie'})});
@@ -172,6 +181,7 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
   }
   async function logout() {
     if(operationInProgress.current)return;
+    downloadScope.current.invalidate();
     operationInProgress.current=true;setBusy(true);setPageError(null);
     try {
       const result=await api<{signedOut:boolean;centralRevocation:string}>('/v1/session/logout',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':sessionRef.current?.csrfToken??''},body:'{}'});
@@ -204,13 +214,16 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
     } finally {operationInProgress.current=false;setBusy(false);}
   }
   async function download(path:string,name:string) {
-    try {
-      const response=await apiResponse(path),blob=await response.blob();
+    if(operationInProgress.current)throw new Error('Wait for the current action to finish.');
+    if(!sessionRef.current?.authenticated||!sessionRef.current.user)throw new Error('Sign in again to continue.');
+    await downloadScope.current.run(signal=>apiResponse(path,{signal}),blob=>{
       if(!['application/pdf','application/json'].includes(blob.type.split(';')[0]))throw new Error('This download returned an unexpected format. Please retry.');
       const url=URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);setNotice('Your download is ready.');
-    } catch(error) {if(error instanceof ApiError&&error.status===401)expireSession();throw error;}
+      try {
+        link.href=url;link.download=name;document.body.appendChild(link);link.click();
+        setNotice('Your download is ready.');
+      } finally {link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+    },error=>{if(error instanceof ApiError&&error.status===401)expireSession();});
   }
 
   let content:ReactNode=null;

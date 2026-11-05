@@ -47,3 +47,47 @@ export function mergeRecordPage(existing, incoming) {
   }
   return [...rows.values()];
 }
+
+/** A private download belongs to the session that requested it. Aborting the
+ * request is not enough: a response or Blob conversion may already be queued. */
+export function createSessionDownloadScope() {
+  let epoch = 0;
+  const controllers = new Set();
+  return {
+    invalidate() {
+      epoch++;
+      for (const controller of controllers) controller.abort();
+      controllers.clear();
+    },
+    /**
+     * @param {(signal: AbortSignal) => Promise<{blob: () => Promise<Blob>}>} read
+     * @param {(blob: Blob) => void} deliver
+     * @param {(error: unknown) => void} onError
+     */
+    async run(read, deliver, onError = () => {}) {
+      const started = epoch, controller = new AbortController();
+      const current = () => started === epoch && !controller.signal.aborted;
+      controllers.add(controller);
+      try {
+        const response = await read(controller.signal);
+        if (!current()) return false;
+        const blob = await response.blob();
+        if (!current()) return false;
+        // Delivery is synchronous: no session transition can interleave between
+        // this check and the browser download / success notification.
+        deliver(blob);
+        return true;
+      } catch (error) {
+        // An obsolete 401 must not sign out a subsequently authenticated user.
+        if (!current()) return false;
+        // Handle session-wide errors in the guarded turn, before a caller's
+        // later Promise continuation could belong to a different session.
+        onError(error);
+        if (!current()) return false;
+        throw error;
+      } finally {
+        controllers.delete(controller);
+      }
+    },
+  };
+}

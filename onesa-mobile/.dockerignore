@@ -18,3 +18,4 @@
 **/*.omb
 **/*-credentials.json
 onesa-mobile-frontend/mobile
+native-artifacts/

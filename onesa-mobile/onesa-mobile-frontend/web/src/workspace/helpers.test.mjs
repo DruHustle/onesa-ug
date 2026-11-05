@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { usdMinor, makeRetryKeys, applicationState, stateTone, mergeRecordPage } from './helpers.mjs';
+import { usdMinor, makeRetryKeys, applicationState, stateTone, mergeRecordPage, createSessionDownloadScope } from './helpers.mjs';
 
 test('money input uses exact minor units and rejects excess precision or ambiguous amounts', () => {
   assert.equal(usdMinor('12.34'), 1234);
@@ -31,4 +31,51 @@ test('overlapping cursor pages preserve row identity and the latest record revis
   assert.equal(merged[0].state,'review_required');
   assert.equal(merged[1].revision,2);
   assert.deepEqual(current,[{id:'a',revision:3,state:'review_required'},{id:'b',revision:1}]);
+});
+
+function deferred() {
+  let resolve, reject;
+  const promise=new Promise((accept,fail)=>{resolve=accept;reject=fail;});
+  return {promise,resolve,reject};
+}
+test('a late export from the signed-out session cannot download or announce success in the next session', async () => {
+  const scope=createSessionDownloadScope(),response=deferred(),delivered=[];
+  let signal,oldBodyReads=0;
+  const old=scope.run(active=>{signal=active;return response.promise;},blob=>delivered.push(blob));
+  scope.invalidate(); // Sign-out cancels immediately, before its HTTP reply.
+  assert.equal(signal.aborted,true);
+  scope.invalidate(); // A different login, including a new session for the same user.
+  const currentBlob=new Blob(['current account'],{type:'application/json'});
+  assert.equal(await scope.run(async()=>({blob:async()=>currentBlob}),blob=>delivered.push(blob)),true);
+  response.resolve({blob:async()=>{oldBodyReads++;return new Blob(['old account']);}});
+  assert.equal(await old,false);
+  assert.equal(oldBodyReads,0);
+  assert.deepEqual(delivered,[currentBlob]);
+});
+test('session expiry during Blob conversion suppresses the private download callback', async () => {
+  const scope=createSessionDownloadScope(),body=deferred(),bodyStarted=deferred();
+  let downloads=0,notices=0,signal;
+  const pending=scope.run(async active=>{
+    signal=active;
+    return {blob:()=>{bodyStarted.resolve();return body.promise;}};
+  },()=>{downloads++;notices++;});
+  await bodyStarted.promise;
+  scope.invalidate();
+  body.resolve(new Blob(['private receipt'],{type:'application/pdf'}));
+  assert.equal(await pending,false);
+  assert.equal(signal.aborted,true);
+  assert.equal(downloads,0);
+  assert.equal(notices,0);
+});
+test('obsolete download errors are discarded while current-session failures still reach the caller', async () => {
+  const scope=createSessionDownloadScope(),response=deferred();
+  const errors=[];
+  const obsolete=scope.run(()=>response.promise,()=>assert.fail('An obsolete download must not be delivered.'),error=>errors.push(error));
+  scope.invalidate(); // Session changed or the workspace unmounted.
+  const expired=Object.assign(new Error('Authentication required'),{status:401});
+  response.reject(expired);
+  assert.equal(await obsolete,false); // No stale 401 can expire the new session.
+  assert.deepEqual(errors,[]);
+  await assert.rejects(scope.run(async()=>{throw expired;},()=>assert.fail('A failed download must not be delivered.'),error=>errors.push(error)),error=>error===expired);
+  assert.deepEqual(errors,[expired]);
 });

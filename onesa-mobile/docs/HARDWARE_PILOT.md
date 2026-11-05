@@ -74,6 +74,37 @@ Example using invented sizing assumptions: a 100 W load, two-hour target, 80% us
 9. **Run direct-to-cell acceptance separately.** Begin only with written country/service authorization and entitlement. Confirm actual transport using agreed network/device evidence; the presence of a dish or an app label is insufficient.
 10. **Review and sign off.** Require the named technical and operational owners to accept results and open exceptions. Commissioning status does not authorize customer sales; the commercial/regulatory release gates remain separate.
 
+## First Android USB bench session
+
+This is an operator procedure for a device in your custody. It has not been executed on a physical phone in this task. Start the local Docker lab and issue synthetic identities using the [runtime guide](../infra/runtime/README.md). Keep the gateway bound to loopback. Obtain the debug APK from the successful native workflow for the source revision you are testing, or build that revision locally. The CI APK targets **arm64** and needs Metro; it is not a standalone store release.
+
+Install official Android Platform Tools on the workstation. On the intended test phone, enable developer/USB debugging and approve the connection yourself. Use `adb devices` to identify that exact device, then forward only the lab gateway and development bundler over USB:
+
+```sh
+ONESA_TEST_SERIAL='replace-with-your-authorized-test-device-serial'
+adb -s "$ONESA_TEST_SERIAL" reverse tcp:8080 tcp:8080
+adb -s "$ONESA_TEST_SERIAL" reverse tcp:8081 tcp:8081
+adb -s "$ONESA_TEST_SERIAL" install /absolute/path/to/app-debug.apk
+```
+
+From `onesa-mobile/onesa-mobile-frontend/mobile/`, using the same source revision and Node 24.22.1:
+
+```sh
+npm ci
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8080/api npm start -- --localhost
+```
+
+Open **Onesa Mobile Preview** on the connected phone. The two forwarded ports allow the debug app to reach Metro and the synthetic account API without changing the lab's public-network exposure. If an earlier debug install has a different debug signing certificate, use a deliberately managed test-device installation process; do not erase an existing app's data blindly. The release signing identity and physical iOS signing are separate owner-controlled steps.
+
+Record the source/build ID, exact phone/OS, launch behavior, readable text, sign-in, session switch/logout, draft clearing, offline recovery and a synthetic account export. Test loss of the USB/data path and reconnection. Complete the hardware acceptance rows with actual observations; a successful compiler job does not complete them. After the session, remove the two forwards and revoke USB-debugging trust when the test-device policy requires it:
+
+```sh
+adb -s "$ONESA_TEST_SERIAL" reverse --remove tcp:8080
+adb -s "$ONESA_TEST_SERIAL" reverse --remove tcp:8081
+```
+
+Primary procedure references: [React Native device/USB setup](https://reactnative.dev/docs/running-on-device), [Expo localhost development server](https://docs.expo.dev/more/expo-cli/). For physical iPhone/iPad use the owner's Apple signing/provisioning and an approved lab connection; the unsigned CI simulator archive cannot be installed on those devices.
+
 ## Acceptance cases
 
 All cases start as **not run** in the machine-readable [pilot template](../infra/hardware/pilot-template.json). Recommended samples and thresholds must be agreed before a test; do not decide pass criteria after seeing the result.
