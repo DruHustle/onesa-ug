@@ -31,6 +31,18 @@ def tar_bytes(entries):
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_missing_vendor_custody_blocks_before_any_docker_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            inputs = root / "inputs"
+            inputs.mkdir()
+            with patch.object(build.subprocess, "run") as run, patch.object(build.subprocess, "check_output") as read:
+                with self.assertRaises(FileNotFoundError):
+                    build.build(root / "output", root / "cache", None, None, inputs)
+                run.assert_not_called()
+                read.assert_not_called()
+            self.assertFalse((root / "output/vendor-custody.tar.gz").exists())
+
     def test_original_notices_preserved_with_either_spelling(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

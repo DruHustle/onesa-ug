@@ -14,6 +14,7 @@ import subprocess
 import tarfile
 import urllib.request
 import zipfile
+from custody import retain_custody
 
 HERE = Path(__file__).resolve().parent
 MAX_SOURCE = 32 * 1024**2
@@ -119,7 +120,7 @@ def copy_notices(directory, target, label):
         shutil.copyfile(notice, target / (label.replace("/", "__") + "--" + notice.name))
 
 
-def build(output, cache, retained, builder):
+def build(output, cache, retained, builder, vendor_custody):
     lock_bytes = (HERE / "sources.lock.json").read_bytes()
     lock = json.loads(lock_bytes)
     require(lock["schema_version"] == 1 and lock["platform"] == "linux/arm64"
@@ -130,6 +131,8 @@ def build(output, cache, retained, builder):
     require(sha(HERE / "vendor-runtime-files.json") == lock["vendor_inventory_sha256"], "Vendor inventory differs")
     require(sha(HERE / "containerd-parser-fixtures.patch") == lock["containerd_test_patch_sha256"], "Test fixture patch differs")
     output.mkdir(mode=0o700)
+    # Source/notice custody is mandatory before any builder or vendor execution.
+    custody = retain_custody(lock, vendor_custody, output)
     cache.mkdir(mode=0o700, exist_ok=True)
     require(shutil.disk_usage(output).free > 24 * 1024**3, "Insufficient local build/restore space")
     if builder is None:
@@ -221,8 +224,10 @@ def build(output, cache, retained, builder):
         package_runtime(lock, output, retained, builder, base, command)
     result = {"status": "BUILT_NOT_INSTALL_QUALIFIED", "lock_sha256": hashlib.sha256(lock_bytes).hexdigest(),
               "builder_image": builder, "components": results, "wrapper_sha256": sha(output / "k3s-arm64"),
-              "license_files": len(list(licenses.iterdir())), "installed": False, "published": False,
+              "license_files": len(list(licenses.iterdir())), "vendor_custody": custody,
+              "installed": False, "published": False,
               "limitations": ["Independent review and exact artifact security assessment required",
+                              "Vendor source custody is not legal-completeness or bit-identical rebuild certification",
                               "Embedded registry must remain disabled; DHT has no fixed version",
                               "Vendor add-ons are unqualified and must stay disabled",
                               "No cluster, workload, Portainer or VM recovery acceptance"]}
@@ -242,6 +247,9 @@ def package_runtime(lock, output, retained, builder, base, command):
                     "/vendor", "kubectl", "version", "--client", "-o", "json"],
                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=120)
     inventory = json.loads((HERE / "vendor-runtime-files.json").read_text())
+    observed_files = {str(p.relative_to(extracted)) for p in extracted.rglob("*")
+                      if p.is_file() and not p.is_symlink()}
+    require(observed_files == {row["path"] for row in inventory["files"]}, "Vendor regular-file inventory differs")
     for row in inventory["files"]:
         original = extracted / relative(row["path"])
         require(original.is_file() and not original.is_symlink() and original.stat().st_size == row["bytes"]
@@ -298,9 +306,11 @@ def main():
     parser.add_argument("--cache", type=Path, required=True)
     parser.add_argument("--retained-inputs", type=Path)
     parser.add_argument("--builder-image")
+    parser.add_argument("--vendor-custody", type=Path, required=True,
+                        help="Private retained inputs matching vendor-custody.lock.json")
     args = parser.parse_args()
     os.umask(0o077)
-    build(args.output, args.cache, args.retained_inputs, args.builder_image)
+    build(args.output, args.cache, args.retained_inputs, args.builder_image, args.vendor_custody)
 
 
 if __name__ == "__main__":
