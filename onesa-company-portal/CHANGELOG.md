@@ -7,6 +7,12 @@
 
 ## Unreleased — Shared sending domain
 
+- Add pinned, local-only ARM64 builds for dependency-patched CoreDNS, Metrics Server
+  and Local Path Provisioner, retaining upstream race tests and license notices.
+  Source/module/binary hashes and non-root runtime version checks bind each build.
+  This does not change the Kubernetes installer, install a cluster or establish
+  DNS, metrics, storage or workload acceptance.
+
 - Authorize `it-infrastructure@onesa.eu` for infrastructure notifications. Keep
   its `OPERATIONS_NOTIFY_EMAIL` setting separate from application mail. Keep
   historical recipients valid for immutable pending-request reconciliation and
