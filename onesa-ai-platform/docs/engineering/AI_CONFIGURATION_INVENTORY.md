@@ -53,6 +53,37 @@ permission and deadline checks. The bridge never exposes mission, hardware, arbi
 HTTP, file, shell, or administrative tools. Standard input/output carry only bounded
 JSON-RPC lines; no network listener or remote OAuth server is introduced.
 
+The version 1.1 context adapter additionally accepts private
+`ONESA_MCP_ALLOWED_RESOURCES` and `ONESA_MCP_ALLOWED_PROMPTS` lists. Both default
+empty and are independent of the tool allowlist. Resource entries are the exact
+URI `onesa://models/default` or `onesa://knowledge/documents/<canonical-uuid>`;
+at most eight resources may be enrolled. Document enrollment permits only the
+existing caller-owned API read: it cannot grant another user's document. List
+and read operations revalidate current identity and document access, preserve
+model/embedding metadata, and refuse incomplete, malformed or oversized responses.
+Deleted documents and revoked sessions cannot reuse a cached result. Discovery
+does not enumerate other documents or grant access to URLs or local files.
+
+The only prompt is `summarize-text`, with one required `text` argument of at most
+4,000 characters. It returns a user-role prompt containing separately JSON-encoded
+untrusted input. It does not execute instructions in that input, call a tool, or
+invoke an inference provider. Prompt discovery and retrieval both reauthenticate.
+Resources/prompts are advertised only when explicitly enrolled; no subscriptions,
+list-change notifications or pagination are advertised. Each context operation has
+one 25-second budget, including authentication and all enrolled resource reads.
+Cancellation closes the owned HTTP operation; there are no retries or fallbacks.
+
+Version 1.2 keeps pipe input responsive while requests are in flight. At most four
+requests may execute concurrently, each with a 25-second total deadline. Further
+requests receive a bounded busy error before contacting the API; ping and lifecycle
+notifications remain responsive. A valid `notifications/cancelled` targets only its
+outstanding request ID and produces no response for that request. Invalid, unknown
+or completed IDs cannot cancel other work, and initialization cannot be cancelled.
+Cancellation closes local HTTP work; it cannot reverse a remote record that was
+already committed and must never trigger replay. Oversized lines are drained in
+full before another frame is accepted. EOF drains already accepted bounded work;
+process cancellation closes every outstanding task.
+
 This is an opt-in software candidate, with synthetic fixtures only. Hosted activation,
 dedicated credentials, provider/privacy processing approval and external MCP-client
 acceptance require the existing qualified release process. No model is downloaded.
