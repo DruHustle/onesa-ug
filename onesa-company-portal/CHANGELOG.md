@@ -17,6 +17,20 @@
 
 ## Unreleased — Shared sending domain
 
+- Prepare immutable encrypted Portal mail custody before the first external send.
+  Persist exact Resend JSON or SMTP MIME and bind sender, recipient, provider and
+  credentials across recovery. Hold changed or legacy attempted requests for
+  reconciliation; SMTP ambiguity cannot be safely replayed automatically.
+  Real PostgreSQL and worker regressions cover commit-before-send, competing
+  claims, byte-identical retry, cooldown and expiry. No runtime change is claimed;
+  rollout requires a quiesced, reconciled queue and a compatible retained worker.
+
+- Add pinned, local-only ARM64 builds for dependency-patched CoreDNS, Metrics Server
+  and Local Path Provisioner, retaining upstream race tests and license notices.
+  Source/module/binary hashes and non-root runtime version checks bind each build.
+  This does not change the Kubernetes installer, install a cluster or establish
+  DNS, metrics, storage or workload acceptance.
+
 - Authorize `it-infrastructure@onesa.eu` for infrastructure notifications. Keep
   its `OPERATIONS_NOTIFY_EMAIL` setting separate from application mail. Keep
   historical recipients valid for immutable pending-request reconciliation and

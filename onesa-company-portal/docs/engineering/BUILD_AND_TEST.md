@@ -73,6 +73,47 @@ deployment authorization occurs. Security assessment, independent review, disabl
 embedded registry and vendor add-ons, real workload/network/storage acceptance,
 Portainer compatibility and VM recovery remain separate requirements.
 
+## Dependency-patched Kubernetes component builds
+
+`infra/oracle/component_builds/build.py` prepares local ARM64 runtime images for
+the reviewed upstream CoreDNS, Metrics Server and Local Path Provisioner sources.
+Its lock binds the exact upstream archive, original and resolved Go module locks, Go builder,
+certificate image, patch versions and reproducible binary hashes. It runs upstream
+race tests and retains source/module license notices in non-root scratch images.
+The builder uses no provider credentials or Docker socket inside the build container,
+and does not install, publish, modify a cluster or grant deployment authority.
+
+Run the archive-custody refusal tests with:
+
+```sh
+python3 -m unittest discover -s scripts -p test_oracle_component_sources.py
+```
+
+After retaining the exact builder and certificate image from `sources.lock.json`,
+run a component with a new absolute private output directory:
+
+```sh
+python3 infra/oracle/component_builds/build.py coredns --output /absolute/private/new-dns-build
+python3 infra/oracle/component_builds/build.py metrics-server --output /absolute/private/new-metrics-build
+python3 infra/oracle/component_builds/build.py local-path-provisioner --output /absolute/private/new-storage-build
+```
+
+`--source-archive` accepts a retained archive only when its SHA-256 matches the lock.
+`--cache` may reuse a dedicated absolute public Go-module cache. Existing output
+directories are refused. Only the three exact CoreDNS document aliases listed in
+the source lock may be materialized as regular copies of their reviewed in-archive
+files. All other links, link chains and traversal remain refused; no archive link
+is created on disk. Upstream and resolved module hashes, package checksums,
+binary bytes and actual runtime version must all match; a changed graph requires
+reviewed source updates. Local logs, images and build results remain private.
+
+Scan the resulting exact image IDs with the reviewed vulnerability tool and database.
+Retain raw findings and package-level applicability evidence; do not suppress a
+whole advisory because another image was reviewed. These builds do not change
+`k3s_release_lock.json` or the installed component manifests. Actual cluster DNS,
+storage retention/recovery, metrics TLS and resource behavior must be qualified
+before adopting an image. Command-line version/help checks are not that acceptance.
+
 ## NVIDIA reference asset gallery
 
 The product index and Drone product page contain three browser derivatives from
@@ -1169,13 +1210,20 @@ escaping, trusted-origin buttons, malformed-link rejection, embedded owner artwo
 secret-free preheaders, stable Resend retry bodies and actual text/HTML/inline-image
 SMTP MIME. They send no email. `tests/mail-claim.test.ts` uses the guarded disposable
 PostgreSQL database in the full backend suite to exercise real row locks, competing
-workers, commit/rollback, interrupted claims and legacy/versioned retries. A first
-claim persists the presentation before any provider request; existing attempted jobs
-stay plain. No schema migration, remote font, image tracker or external dependency
-is needed. Browser previews establish layout only; inbox/client acceptance and the
-independently released worker need genuine hosted evidence. Retain the deployed
-renderer for versioned retries during upgrades or rollback; never reset attempts or
-change provider keys to obtain a new design.
+workers, commit/rollback, interrupted claims and immutable encrypted request custody.
+It checks byte-identical replay through a new client/transport, sender/recipient/key
+drift, legacy-attempt reconciliation, expiry, clock rollback, independent queued
+jobs, and SMTP ambiguity. `tests/mail-worker.test.ts` exercises the actual worker
+against the guarded disposable database with a synthetic provider callback: that
+callback verifies committed custody through an independent database read before
+returning an ambiguous outcome. The recovered worker claim replays exactly the same
+bytes/key, preserves retry cooldown and marks acceptance only after a valid receipt.
+All delivery is synthetic; no provider credential, mailbox or production database
+is used. Run the ordinary Node 24 backend `npm test`, lint, typecheck and build.
+No schema migration, remote font, tracker or new dependency is needed. Hosted worker
+qualification and inbox/client acceptance remain separate release requirements.
+Custody-aware workers must be retained when rolling back other components; reconcile
+legacy or ambiguous attempts without resetting counts, bytes or provider keys.
 
 The maintained `test:engineering-sign-in` renderer suite checks that no MFA field
 appears before credential proof, enrolled accounts receive the factor step and
