@@ -1,110 +1,102 @@
 # Architecture and integration boundaries
 
-Decision date: **5 November 2026**. These are implementation decisions and future integration requirements. The foundation consists of demo clients, a synthetic internal operations preview and a read-only API. Authentication and live customer/staff workflows remain future work.
+Decision date: **5 November 2026**. Current source implements a **single-instance hardware and operations pilot**. It includes persistent authenticated workflows and a production identity configuration path. Actual telecommunications, subscriber registration and payment providers are not commissioned.
 
-Canonical source: the `onesa-mobile/` application directory in the existing `DruHustle/onesa-ug` repository. The application packages remain independently buildable within that directory.
+Canonical location: `DruHustle/onesa-ug/onesa-mobile`. Packages remain independently installable/buildable; the website and native app use HTTP contracts, not cross-package runtime imports.
 
-## Three application surfaces
-
-| Surface | Intended production behavior | Proposed location |
-| --- | --- | --- |
-| Public website | Public plan information, eligibility explanations, coverage limitations and help; no subscriber records | `mobile.onesa.eu` |
-| Customer portal | Authenticated self-service for authorized accounts, subscriptions, usage, payments, invoices and support | Authenticated area of `mobile.onesa.eu` |
-| Staff operations | Authorized company workflows, exception queues, reports, permissions and audit | `ops.mobile.onesa.eu` |
-
-The domain names are proposals; they have not been configured. The repository's `/internal/` route is an unauthenticated synthetic operations preview. Its records and any local interactions confer no real staff access, provisioning authority or financial effect. The customer demo likewise does not establish an authenticated account.
-
-Before production, give the staff portal a separate deployment/origin and identity client. Validate token audience, product scopes and per-object permissions at the backend on every protected request. Require staff MFA and explicit grants. A dedicated hostname and hidden navigation are not authorization controls. The public site must never receive internal queues, subscriber records or staff credentials.
-
-## Two separate systems
-
-The customer platform sells and manages an authorized subscription. The mobile network carries calls, messages and data. Building the first does not establish the second.
+## Implemented application topology
 
 ```mermaid
 flowchart TB
-  subgraph "Onesa platform"
-    W["Public website"] --> R["Public catalogue API"]
-    CUST["Customer portal and apps"] --> B["Protected Onesa API"]
-    OPS["Staff operations portal"] --> B
-    B --> I["Identity and billing providers"]
-    B --> P["Host provisioning interface"]
-  end
-  subgraph "Contracted network"
-    U["Eligible phone and SIM"] --> T["Terrestrial access"]
-    U --> S["Authorized satellite access"]
-    T --> C["Host mobile core"]
-    S --> C
-    P --> C
-  end
+  Web["Public, customer and staff web"] --> Gateway["Same-origin web gateway"]
+  Native["iPhone, iPad and Android"] --> Gateway
+  Gateway --> API["Protected Mobile API"]
+  API --> DB["Local durable SQLite"]
+  API --> Identity["Onesa identity, when configured"]
+  DB --> Backup["Encrypted recovery archive"]
 ```
 
-The diagram is a target architecture, not a claim of an existing Starlink or operator integration. Starlink's technical description explains an operator roaming-style integration; Onesa must obtain the actual contracted interfaces. [Starlink technical release](https://starlink.com/public-files/DIRECT_TO_CELL_SERVICE_FEB_25.pdf).
+The public website exposes no account records. `/account/` and `/internal/` load separate customer/staff components and require server authentication/authorization. `/#demo` and `/preview/internal/` are isolated fictional examples. Route separation is a product boundary; the API is the security boundary.
 
-## Package choices
+The lab gateway and API have a private container network, loopback host publication, restricted capabilities and one durable volume. The lab has no provider egress. The production overlay requires a different volume, real HTTPS ingress, explicit identity/secrets and an approved deployment environment. [Runtime guide](../infra/runtime/README.md).
 
-| Component | Current choice | Reason |
+Proposed future domains `mobile.onesa.eu` and `ops.mobile.onesa.eu` remain unconfigured. A later staff-origin split needs its own exact callback/cookie/origin design; the current implementation deliberately uses a single Mobile confidential identity client with separate customer/staff surfaces, server role enforcement and staff MFA. Do not describe the proposed split as deployed.
+
+## Telecom topology to contract and qualify
+
+```mermaid
+flowchart TB
+  Phone["Qualified phone and host profile"] --> Radio["Host terrestrial radio"]
+  Phone --> Satellite["Authorized Starlink mobile access"]
+  Radio --> Core["Host mobile core"]
+  Satellite --> Core
+  Core --> Voice["Voice, SMS, data and interconnect"]
+  Onesa["Onesa operations API"] -.-> Provider["Contracted host interface"]
+  Provider -.-> Core
+```
+
+This second diagram is a target network, not an existing integration. A Light MVNO uses the host's radio and core; Onesa focuses on customer, brand and operations. POTRAZ describes Full, Light, Reseller and MVNE categories separately. [POTRAZ licensing guidelines](https://www.potraz.gov.zw/wp-content/uploads/2025/06/Licence-Application-General-Guidelines.pdf).
+
+Starlink's mobile architecture integrates with operators in a roaming-style arrangement. A normal Starlink broadband terminal is a separate dish/router internet path. An app, eSIM or terminal purchase does not establish Zimbabwe mobile satellite authorization or Onesa wholesale entitlement. [Starlink technical description](https://starlink.com/public-files/DIRECT_TO_CELL_SERVICE_FEB_25.pdf), [current Mobile service](https://starlink.com/mobile).
+
+## Runtime choices and limits
+
+| Component | Current implementation | Boundary |
 | --- | --- | --- |
-| Web | React, TypeScript, Vite | Public site, customer demo and synthetic internal preview; independently buildable static output |
-| Mobile | Expo, React Native, TypeScript | One mobile implementation with actual iOS and Android projects; iPad enabled |
-| API | Node.js 24, TypeScript, native HTTP | Read-only contract foundation with no runtime dependency burden |
-| Data | Fictional fixtures only | No premature collection of regulated subscriber information |
-| Future storage | PostgreSQL plus approved encrypted object storage | Transactional billing/operational records and separate protected document handling |
-| Future identity | Standards-based OIDC, subject to approved Onesa identity design | One identity across products, with product-specific access and roles |
+| Web | React, TypeScript, Vite; static output with same-origin API proxy | No secrets or real fixtures in bundles |
+| Native | Expo 58 / React Native; secure store, system-browser sign-in and requested file sharing | No native radio control or assumed satellite optimization entitlement |
+| API | Node 24.22.1 native HTTP, Zod, OpenID client and PDFKit | Bounded JSON input, explicit methods, exact origins, request limits |
+| Persistence | SQLite WAL; one local durable database, one API replica | Pilot sizing only; not a high-availability multi-instance carrier ledger |
+| Authentication state | Hashed local capabilities, encrypted upstream tokens/TOTP, source authentication time | Production must use central identity; generated lab key never becomes a production key |
+| Recovery | Online SQLite backup, authenticated encryption and verified restore | Correct separate key required; restored local identities require controlled reissue |
+| Provider effects | Explicit unavailable routes | No activation, settlement or RF operation can be enabled by a flag |
 
-Use independent packages rather than a shared runtime folder. OpenAPI is an interface contract; clients can later generate types from it without importing backend source. The current native demo uses local fixtures; it does not claim an API integration.
+Node 24.22.1 documents `node:sqlite` as Stability 1.2 (release candidate). The runtime is pinned for qualification and recovery is tested; this does not justify silent runtime upgrades or horizontal scaling of a shared WAL file. For a commercial multi-instance system, choose and qualify the approved transactional store and migration under actual capacity/availability requirements. [Node runtime documentation](https://nodejs.org/download/release/v24.22.1/docs/api/sqlite.html).
 
-Keep a modular backend initially. Split billing-event processing or notifications into separate worker processes when their delivery semantics require it. Independent microservices for every screen would add operational work before there is a contracted provider.
+## Data model and mutation semantics
 
-## Future business modules
+The domain store maintains sites, assets, trials, scoped evidence, pilot applications, support cases, test ledger entries and account requests. Each record has an immutable UUID, owner subject, positive revision and timestamps. Domain updates, audit records and idempotent outcomes commit atomically. An identical per-actor retry key returns the recorded result; a changed input/operation returns conflict. Current revisions prevent lost updates.
 
-| Internal module | Intended operational work |
+Inventory is a manual record. Seven required commissioning checks determine readiness; a failed check persists across unrelated passes. Firmware and approval changes invalidate relevant checks while retaining compact history. Bulk pages omit history; authorized detail reads include it. Passing observations require a commissioned asset. Completed observations are immutable and identify manual versus simulated evidence. No record claims live telemetry.
+
+Readiness evidence is scoped by country, operator, access path and device scope, with expiry and a separate accepting reviewer. Counts span recorded scopes and do not imply universal approval. Even accepted evidence cannot activate service.
+
+List pages use stable created-at/UUID cursors, with a maximum of 50 records. Owner/role filters apply before pagination. Customer export uses a consistent read snapshot and streams every owned record with backpressure; it does not truncate at the list limit. Financial values are explicit USD integer minor units in the lab. Refunds cannot exceed the original amount; PDFs clearly identify test receipts rather than tax invoices.
+
+An audit hash chain detects alteration unless a privileged database administrator rewrites and recomputes the entire chain. Production needs independently controlled audit retention/anchoring. No absolute tamper-proof claim is made.
+
+## Identity integration
+
+Company Portal access tokens are opaque. Mobile uses confidential OIDC Authorization Code with S256 PKCE, state, nonce, signed ID-token validation and **live `/session` authorization inspection**. On every protected central request it verifies the Mobile client/product, active access, current role, original `auth_time` and staff MFA evidence. A generic JWT access-token validator would not implement this contract.
+
+The additive Portal migration 015 and related account/admin UI enable the Mobile product only when configured. Existing AI/Drone/Robot consumers retain their three-product claims vocabulary. The Mobile client receives its expanded vocabulary. This source change does not create a live client, access grant or deployment; follow the Portal release process separately.
+
+Web cookies are HttpOnly, Secure under HTTPS and checked with exact Origin plus CSRF on mutation. Native sessions use bearer transport and device secure storage. Native browser handoff carries only a short-lived single-use code bound to the app's state/verifier. Logout can destroy the local session during an upstream outage without authorizing any business request.
+
+## Roles
+
+| Role | Enforced API access |
 | --- | --- |
-| Subscribers and registration | Review approved registration evidence, resolve exceptions and maintain verified subscriber state |
-| Provisioning and subscriptions | Track SIM/eSIM inventory, orders, activation, renewal, suspension and replacement against host-confirmed results |
-| Billing and reconciliation | Compare ledger, provider and settlement records; issue invoices/credit notes and handle authorized refunds |
-| Agent cash settlements | Attribute each sale to an agent, track cash obligations and reconcile settlements |
-| Support | Manage assigned cases, complaints, recovery and provider escalation |
-| Providers and service readiness | Track contracted capabilities, incidents, approvals, evidence and review dates |
-| Reports | Present scoped operational and financial metrics with source and freshness |
-| Staff access and audit | Manage grants, approval limits and reviewable records of sensitive actions |
+| Customer | Own applications, cases, receipts, requests and export |
+| Support | Subscriber review context and support/request operations; no hardware or billing writes |
+| Operations | Hardware/trials, evidence submission, application review and support; cannot accept evidence or write financial records |
+| Finance | Lab ledger/receipts/refunds and minimum billing-account lookup; no hardware or general subscriber directory |
+| Agent | Lab sale creation and its own recorded sales; no refund authority or general customer lookup |
+| Auditor | Read-only operational, financial and audit views |
+| Admin | Full pilot permissions, still subject to separate evidence review, source freshness and audit |
 
-These are future live workflows. Internal preview fixtures illustrate the operations layout without implementing authenticated approvals, persistent records or provider mutations.
+All staff require MFA. Sensitive evidence reviews and refunds require a recent original authentication proof. Permissions are checked on every server operation and object scope. Central account access and local lab credential custody are separate responsibilities. [Threat model](THREAT_MODEL.md), [security review](reviews/SECURITY_REVIEW.md).
 
-Each provider event needs its external identifier, source, received timestamp and processing status. Each money value needs an explicit currency and integer minor-unit amount. Use a transactional outbox and durable jobs when implementing effects; enforce idempotency on payments, activation and invoice issuance. Never infer success from a redirect page or an unsigned webhook.
+## Workflows that need actual provider contracts
 
-An app user, payer, registered subscriber and SIM are different records. A parent or overseas family member can pay without gaining access to another adult's communications or ID documents. Onesa identity should assign access to this product without automatically sharing telecom records with unrelated products.
+Carrier adapters must eventually implement SIM/eSIM inventory, provisioning, suspension/replacement, number transfer and authoritative metering against documented provider interfaces. Provider event IDs, observed/received times, authentication and reconciliation are mandatory design inputs. Add durable outbox/job handling when actual external effects exist; do not substitute a synchronous mock for delivery guarantees.
 
-## Proposed roles and access boundaries
+Commercial billing requires approved offers, tax treatment, payment intents, authenticated provider events, settlement reconciliation, invoices/credit notes, agent cash settlement and customer remedy. Lab money records do none of those external effects. A payer, account holder, registered subscriber and SIM must remain distinct; family funding does not grant access to another adult's communications or identity documents.
 
-| Role | Minimum intended scope | Boundary |
-| --- | --- | --- |
-| Customer | Own account and explicitly authorized financial actions | No access to other subscribers' private records; family funding does not grant communications or ID access |
-| Support | Assigned cases and necessary masked account/service status | Escalate provisioning, financial or identity-sensitive actions through approved workflows |
-| Billing | Invoices, reconciliation and refunds within approved limits | No staff-role administration or unrestricted registration evidence |
-| Agent | Own authorized cash sales and settlements | No unrelated customers, other agents' balances or broad subscriber search |
-| Operations | Approved provisioning queues, provider incidents and service readiness | No independent financial approval or unrestricted staff administration |
-| Admin | Staff grants, product configuration and audit oversight | Sensitive data/actions still require explicit scope and an audit trail |
+Actual subscriber registration needs the approved evidence/retention process, not merely app login or a staff review reference. Define data location, controller responsibilities, incident procedure and key custody before collecting real subscriber records. See the [regulatory matrix](REGULATORY_MATRIX.md).
 
-Enforce permissions server-side using the authenticated subject, product audience, role, account/case/agent scope and requested action. Default to denial. Use separate customer and staff identity clients, short-lived sessions, staff MFA and step-up verification for sensitive changes. Define approval limits and separate approval from execution where appropriate for refunds, cash corrections and permission changes.
+## Constrained connectivity
 
-Retain the actor, action, target reference, outcome and correlation identifier in protected audit records. Minimize sensitive payloads and control report/export permissions. These controls require implementation and acceptance tests before live data or mutations; the current `/internal/` demo does not supply them.
+Native requests time out, reject redirects and avoid background polling; mutations retain explicit retry keys. The minimized local cache identifies age and excludes support/payment details. Documents download on request. Web lists are bounded and the UI exposes older pages. Neither client infers satellite transport from reachability.
 
-## Capability model
-
-Represent availability per **country + operator + product + device/software + service**. Keep SMS, selected-app data, app voice, native voice and emergency capability separate. Preserve statuses such as `unverified`, `partner_pending`, `test_only`, `approved` and `suspended`, with evidence and review dates.
-
-A boolean `STARLINK_ENABLED` is insufficient. An eSIM, successful login or installed app must not be treated as satellite entitlement. Provider timeouts should preserve the last confirmed state with a timestamp instead of changing it to active.
-
-## Mobile behavior under limited connectivity
-
-Cache the last confirmed plan/usage with an explicit age. Use compact responses, bounded retries and user-controlled refresh. Defer document uploads and downloads. Never queue an irreversible payment operation invisibly. Explain unsent requests and allow users to retry safely.
-
-Platform-specific constrained-network opt-ins and optimization are future work requiring testing. Android's official documentation describes explicit satellite-data optimization metadata; Apple documents carrier-constrained networking entitlements. Adding either declaration alone does not prove provider approval or good satellite performance. [Android guidance](https://developer.android.com/develop/connectivity/satellite/constrained-networks); [Apple entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.networking.carrier-constrained.app-optimized).
-
-## Production operations to design after contracting
-
-Use a containerized local PostgreSQL development environment and an independently managed production database if the approved hosting design permits it. Keep migrations, encrypted backups and restore tests in the release process. Do not treat an external backup bucket as a database replica.
-
-Before customer onboarding, implement OIDC token validation, authorization for every account and operational object, staff MFA, audit records, rate limits, secure secret injection, data retention and operational alerting. Determine permitted data location and key custody with the licensed provider and adviser first. The current demos have no live customer database and implement no customer or staff authentication.
-
-Measure activation completion/failure, usage-data freshness, payment settlement mismatch, duplicate-effect prevention, refund time and provider incident recovery. Separate API uptime from radio service availability. Qualify rollback and the customer-remedy process before opening sales.
+Carrier-constrained network entitlements, Android satellite optimization declarations and physical radio testing remain separate qualification. Declaring a capability does not prove approval or useful performance. [Android guidance](https://developer.android.com/develop/connectivity/satellite/constrained-networks), [Apple entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.networking.carrier-constrained.app-optimized).

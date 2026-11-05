@@ -7,9 +7,9 @@ import { join } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const web = join(root, "onesa-mobile-frontend/web");
 const vite = join(web, "node_modules/vite/bin/vite.js");
-if (!existsSync(vite)) {
+if (!existsSync(vite) || !existsSync(join(root, "onesa-mobile-backend/node_modules/openid-client/package.json"))) {
   console.error(
-    "Install the web dependencies first: npm ci --prefix onesa-mobile-frontend/web",
+    "Install backend and web dependencies first: npm ci --prefix onesa-mobile-backend && npm ci --prefix onesa-mobile-frontend/web",
   );
   process.exit(1);
 }

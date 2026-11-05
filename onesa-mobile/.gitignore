@@ -18,3 +18,14 @@ coverage/
 **/xcuserdata/
 **/*.xcuserstate
 .validation/
+var/
+backups/
+restored/
+private/
+private-recovery/
+*.sqlite
+*.sqlite-*
+*.authkey
+*.omb
+*.key
+*-credentials.json

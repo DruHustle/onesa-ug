@@ -1,99 +1,79 @@
 # Onesa Mobile
 
-**A simpler mobile experience for Zimbabwe, with a planned satellite extension.**
+**A Zimbabwe mobile-service venture, starting with a physical device bench and a secured pilot operations platform.**
 
-Canonical source: [`DruHustle/onesa-ug`](https://github.com/DruHustle/onesa-ug), in the **`onesa-mobile/`** product directory.
+Canonical source: [`DruHustle/onesa-ug/onesa-mobile`](https://github.com/DruHustle/onesa-ug/tree/main/onesa-mobile). The product is part of the existing Onesa UG repository; it is not a nested Git repository.
 
-This product folder is a working **development foundation**, not an operating mobile network. It contains a public website, customer account demo, internal operations preview, an iOS/iPadOS and Android app, a read-only backend and the business/technical brief needed to develop the service. No carrier or Starlink partnership is claimed. Proposed plans are not for sale; identity, payments, SIM activation and satellite service remain unavailable.
+The implemented software includes the public website, authenticated customer and staff web workspaces, an API-connected iPhone/iPad/Android app, persistent hardware commissioning and operations records, scoped identity, support conversations, lab billing, protected PDFs, audit and encrypted recovery tooling. **It does not provide an operating mobile network.** Commercial onboarding, real payment settlement, SIM/eSIM provisioning and satellite entitlement remain disabled until the actual providers and Zimbabwe approvals are commissioned. No carrier or Starlink partnership is claimed.
 
-## Recommended business model
+## Start with the hardware
 
-Start negotiations as a Light MVNO using a licensed Zimbabwean host operator, with Onesa providing the brand and customer experience. Evaluate branded resale as an alternative with clear subscriber and exit rights. Negotiate satellite eligibility explicitly; it must not be assumed to come with normal mobile wholesale access. See the [business brief](docs/BUSINESS_BRIEF.md) and [partner questions](docs/PARTNER_DUE_DILIGENCE.md).
+Use the [hardware pilot runbook](docs/HARDWARE_PILOT.md) and [planned inventory template](infra/hardware/pilot-template.json). Reuse a suitable workstation, obtain one managed router, a locally approved AP if needed, an iPhone, two representative Android phones, access to a tablet, measured backup power, cabling and encrypted recovery media. Starlink dish quantity starts at **zero**; add one only for a separately approved satellite-broadband IP test. A dish does not establish handset direct-to-cell service.
 
-## Repository map
+The proposed commercial model is a **Light MVNO**, with a licensed host supplying radio/core functions and Onesa supplying the customer experience and operations. Satellite country, device and service entitlement needs its own written scope. [Business brief](docs/BUSINESS_BRIEF.md), [regulatory matrix](docs/REGULATORY_MATRIX.md), [partner due diligence](docs/PARTNER_DUE_DILIGENCE.md).
 
-| Path | Purpose |
-| --- | --- |
-| `onesa-mobile-frontend/web/` | React/TypeScript public website and customer-account demo |
-| `onesa-mobile-frontend/web/src/internal/` | Internal company operations preview, independently loaded at `/internal/` |
-| `onesa-mobile-frontend/mobile/` | Independent Expo/React Native app |
-| `onesa-mobile-frontend/mobile/ios/` | Generated native Xcode project for iPhone and iPad |
-| `onesa-mobile-frontend/mobile/android/` | Generated native Android project |
-| `onesa-mobile-backend/` | Independent Node.js/TypeScript development API, OpenAPI contract and container definition |
-| `docs/` | Business brief, architecture, roadmap, due diligence and dated validation |
-| `../.github/workflows/onesa-mobile-ci.yml` | Monorepo-root workflow with independent Mobile web, backend and native qualification jobs |
+## Product surfaces
 
-There is no shared runtime or cross-import between frontend and backend. Each package has its own dependencies and lockfile. iPad uses the iOS project with tablet support enabled.
+| Surface | Route / source | Implemented behavior |
+| --- | --- | --- |
+| Public website | `/`, web `src/App.tsx` | Concept plans, three connectivity paths, FAQs, account/staff entry points |
+| Customer workspace | `/account/`, web `src/workspace/` | Pilot application/corrections, cases/replies, account requests, private test receipts, complete account export |
+| Staff operations | `/internal/`, web `src/workspace/` | Role-filtered inventory, commissioning, trial observations, launch evidence, application reviews, support, test ledger/refunds and audit |
+| Isolated visual previews | `/#demo`, `/preview/internal/` | Explicitly fictional, browser-local examples; no operational authority |
+| Native customer app | `onesa-mobile-frontend/mobile/` | Home, Application, Help and Account; secure sessions, Onesa browser sign-in, explicit refresh, private downloads, optional local preview |
+| API | `onesa-mobile-backend/` | Independent Node 24 service, SQLite transactions, authenticated REST contract, PDF generation |
+| Runtime and recovery | `infra/runtime/`, `scripts/` | Isolated lab Compose stack, production configuration candidate, authenticated encryption of backups and verified restore |
+| Reviews | `docs/reviews/` | Telecom, graphics, telecom UX, cybersecurity and principal engineering findings |
 
-## Start developing
+Each package has its own dependencies and lockfile. Frontends communicate with the backend over HTTP; they do not import backend runtime code. Native iPhone and iPad share the iOS target. Workflows live at the monorepo root.
 
-Install Node.js **24.12 or newer in the 24 LTS line** and Git, then clone the Onesa UG repository:
+## Run the local pilot
 
-```sh
-git clone https://github.com/DruHustle/onesa-ug.git
-cd onesa-ug/onesa-mobile
-```
-
-Open separate terminals for the packages you need.
-
-For a single development command that runs both web and API after installing the web dependencies, run `npm run dev` from the `onesa-mobile` product folder. This launches independent processes and shuts them down together. It exposes the web development server to your local network; use only in a trusted development environment. The mobile package remains separate.
-
-### Website
+Use Node **24.22.1** (the qualified runtime) and Git. Start from this product directory:
 
 ```sh
-cd onesa-mobile-frontend/web
-npm ci
+npm ci --prefix onesa-mobile-backend
+npm ci --prefix onesa-mobile-frontend/web
+node onesa-mobile-backend/src/auth/bootstrap.ts --database onesa-mobile-backend/var/onesa-mobile.sqlite --output onesa-mobile-backend/var/lab-credentials.json --all-roles
 npm run dev
 ```
 
-Open **http://localhost:5173**. The demo works independently. The Help screen can check the backend through a local Vite proxy when that backend is running.
+Open `http://localhost:5173/account/` or `http://localhost:5173/internal/`. The bootstrap writes random lab credentials into a private, ignored file; it never overwrites accounts. Staff require the generated TOTP seed in an authenticator. Keep the credentials local and use synthetic records. This command exposes Vite to the local network; use a trusted development environment. The API binds to loopback by default.
 
-Open **http://localhost:5173/internal/** for the internal operations preview. It uses synthetic records and local demo state, with no staff authentication or real customer records. It is a separate interface, not a security boundary. Live company operations require server-enforced staff roles, MFA and audit storage before deployment; the proposed production operations hostname is documented but not configured.
-
-### Backend
-
-```sh
-cd onesa-mobile-backend
-npm ci
-npm run check
-npm start
-```
-
-The API listens at **http://127.0.0.1:4000**. Start with `/healthz` or `/v1/readiness`. It exposes proposed plans and fictional usage; unavailable mutations return an explicit error. See its [README](onesa-mobile-backend/README.md) for configuration and Docker commands.
+The [runtime guide](infra/runtime/README.md) provides the isolated Docker stack, key handling, recovery drill and production separation. Do not use the production overlay as evidence that a commercial service has been deployed.
 
 ### Native app
 
 ```sh
 cd onesa-mobile-frontend/mobile
 npm ci
-npm start
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.20:4000 npm start
 ```
 
-Use a compatible Expo development environment. `npm run ios` requires macOS/Xcode; `npm run android` requires an Android development environment. Native signing and developer/store accounts must be configured for distribution. The [mobile README](onesa-mobile-frontend/mobile/README.md) explains generation, local builds and limitations. This repository does not include a signed IPA, APK or AAB.
+The sample LAN address must be replaced with the actual reachable lab API address. Development allows private HTTP endpoints; production builds require HTTPS. Configure an intentional API listener/firewall for physical-device testing. For a same-origin hosted gateway, use its HTTPS URL ending in `/api`. `npm run ios` needs macOS/Xcode; `npm run android` needs the Android SDK/JDK. Signing and physical-device qualification are separate release steps. [Native guide](onesa-mobile-frontend/mobile/README.md).
 
-## What the preview does
+## Security and operational behavior
 
-- Explains ordinary mobile access, direct-to-cell satellite access and dish-based Wi-Fi separately.
-- Lets a visitor explore Everyday, Reach and Family & Farm concepts.
-- Shows compact fictional account information and realistic pending service states.
-- Provides independent mobile navigation, concept selection and reset.
-- Provides a separate internal operations preview for subscriber reviews, billing, support, partners and team/audit planning.
-- Exposes documented backend contracts and rejects unimplemented service activation, identity and payment operations.
+- Lab staff use password plus TOTP. Production requires the registered Onesa Mobile OIDC client and current Mobile grants; local lab authentication is refused.
+- Cookies are HttpOnly, use exact allowed origins and anti-CSRF tokens. Native tokens use the device secure store. Role and owner checks run on the server.
+- Mutations require actor-scoped retry keys and current record revisions. Evidence acceptance needs a different authorized reviewer. Completed trial observations are immutable.
+- Failed commissioning checks remain failed until corrected; firmware/approval changes invalidate affected checks. Inventory has no invented live telemetry.
+- List pages are bounded and have cursors; account exports stream all owned records. Test PDFs are labelled **not tax invoices**, and no lab ledger entry moves money.
+- Backups are encrypted; restore verifies the archive/database and invalidates sessions and pending sign-in flows. The audit hash chain detects local alteration but needs independent anchoring to resist a privileged host administrator.
 
-## What comes next
+## Verification
 
-Host agreement and applicable licence; confirmed satellite access; approved subscriber-registration process; identity and authorization; database/retention design; carrier provisioning; payment reconciliation and invoices; support operations; signed native builds; physical-device and provider acceptance; controlled customer pilot.
-
-The business and roadmap documents describe those as future work. They are not claims of implemented integrations. Existing Onesa hosting must not receive live subscriber records until its jurisdiction, encryption and key-custody design is qualified.
-
-## Checks
-
-| Package | Command |
+| Package / area | Command |
 | --- | --- |
 | Web | `npm test && npm run build` |
 | Backend | `npm run check` |
-| Mobile | `npm run verify` |
+| Native | `npm run verify` |
+| Recovery, from product root | `node --test scripts/tests/*.test.mjs` |
 
-Run each in its package directory after `npm ci`. Read [validation](docs/VALIDATION.md) for exactly what was and was not tested.
+Run package commands after `npm ci`. [Validation evidence and boundaries](docs/VALIDATION.md) distinguish automated tests, browser component checks, native compilation, actual devices and actual provider acceptance. [Review resolution register](docs/reviews/RESOLUTION_REGISTER.md) maps findings to changes and remaining external dependencies.
 
-No blanket open-source licence is granted for original Onesa source. Third-party framework/native-template files retain their respective licences and notices.
+## Release boundaries
+
+The software pilot is available for synthetic operational exercises. A commercial launch still needs the licensed host/wholesale model, POTRAZ and data-controller decisions, provider sandboxes and documented APIs, approved tariffs/registration, authoritative metering and settlement, native signing, physical commissioning and service acceptance. The related Company Portal Mobile identity migration is additive source code and must be released separately through its normal process. No live client, secret, user grant, public domain or regulator application is created here.
+
+No blanket open-source licence is granted for original Onesa source. Framework/native-template files retain their own licences and notices.

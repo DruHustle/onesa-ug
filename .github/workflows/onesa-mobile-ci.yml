@@ -1,4 +1,4 @@
-name: Onesa Mobile foundation
+name: Onesa Mobile qualification
 
 on:
   push:
@@ -6,10 +6,16 @@ on:
     paths:
       - 'onesa-mobile/**'
       - '.github/workflows/onesa-mobile-ci.yml'
+      - 'onesa-company-portal/onesa-company-portal-backend/src/identity/**'
+      - 'onesa-company-portal/onesa-company-portal-backend/migrations/015_mobile_identity.sql'
+      - 'onesa-company-portal/onesa-company-portal-backend/tests/*identity*.test.ts'
   pull_request:
     paths:
       - 'onesa-mobile/**'
       - '.github/workflows/onesa-mobile-ci.yml'
+      - 'onesa-company-portal/onesa-company-portal-backend/src/identity/**'
+      - 'onesa-company-portal/onesa-company-portal-backend/migrations/015_mobile_identity.sql'
+      - 'onesa-company-portal/onesa-company-portal-backend/tests/*identity*.test.ts'
   workflow_dispatch:
 
 permissions:
@@ -22,13 +28,13 @@ concurrency:
 jobs:
   verify:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Mobile web and operations preview
+          - name: Mobile public, customer and staff web
             directory: onesa-mobile/onesa-mobile-frontend/web
             command: npm test && npm run build
           - name: Mobile API types and HTTP contracts
@@ -55,3 +61,79 @@ jobs:
           CI: '1'
           EXPO_NO_TELEMETRY: '1'
         run: ${{ matrix.command }}
+
+  runtime:
+    name: Container restart and encrypted recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      MOBILE_CI_PROJECT: onesa-mobile-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      MOBILE_LAB_ORIGIN: http://localhost:8080
+    defaults:
+      run:
+        working-directory: onesa-mobile
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: onesa-mobile/onesa-mobile-backend/package-lock.json
+      - name: Install backend test dependencies
+        working-directory: onesa-mobile/onesa-mobile-backend
+        run: npm ci --no-audit --no-fund
+      - name: Restore drill and hostile archive tests
+        run: node --test scripts/tests/recovery.test.mjs
+      - name: Validate lab Compose configuration
+        run: docker compose -p "$MOBILE_CI_PROJECT" -f infra/runtime/compose.lab.yaml config --quiet
+      - name: Build isolated lab and recovery tool
+        run: |
+          docker compose -p "$MOBILE_CI_PROJECT" -f infra/runtime/compose.lab.yaml build --pull
+          docker build --pull -f infra/runtime/recovery.Dockerfile -t onesa-mobile-recovery:ci .
+      - name: Start healthy lab
+        run: docker compose -p "$MOBILE_CI_PROJECT" -f infra/runtime/compose.lab.yaml up -d --wait --wait-timeout 120
+      - name: Verify authentication, persistence and commercial hold
+        run: node scripts/container-smoke.mjs
+      - name: Remove this job's disposable lab
+        if: always()
+        run: docker compose -p "$MOBILE_CI_PROJECT" -f infra/runtime/compose.lab.yaml down --volumes --remove-orphans
+
+  portal_identity:
+    name: Portal identity and Mobile authorization regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # This is an empty, disposable PostgreSQL service on an isolated hosted runner.
+    # Trust authentication is confined to the loopback service binding; no live secret is used.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: onesa_mobile_identity_test
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - '127.0.0.1:5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U postgres -d onesa_mobile_identity_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: onesa-company-portal/onesa-company-portal-backend
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: onesa-company-portal/onesa-company-portal-backend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Exercise migrations and actual identity-provider flows
+        env:
+          TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/onesa_mobile_identity_test
+        run: node --import tsx --import ./tests/local-environment.ts --test --test-concurrency=1 tests/identity-mobile-policy.test.ts tests/onesa-identity.test.ts

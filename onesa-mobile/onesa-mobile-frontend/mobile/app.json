@@ -18,7 +18,7 @@
       "package": "eu.onesa.mobile.preview",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#102B29"
+        "backgroundColor": "#103C35"
       },
       "permissions": [],
       "blockedPermissions": [
@@ -37,13 +37,21 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#102B29",
+          "backgroundColor": "#103C35",
           "image": "./assets/splash.png",
           "imageWidth": 180,
           "resizeMode": "contain"
         }
       ],
-      "./plugins/withPreviewSigning.cjs"
+      "./plugins/withPreviewSigning.cjs",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
+      "expo-web-browser",
+      "expo-sharing"
     ],
     "extra": {
       "environment": "development-demo",

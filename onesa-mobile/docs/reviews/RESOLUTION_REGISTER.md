@@ -1,0 +1,98 @@
+# Specialist review resolution register
+
+Date: **5 November 2026**. Product: `DruHustle/onesa-ug/onesa-mobile`.
+
+Five specialist agent reviews were assigned: principal telecommunications engineering, senior graphics design, senior telecom UI/UX, cybersecurity engineering and principal software engineering. These are source/research reviews and implementation checks, not independent human professional certification.
+
+**Status meanings:** “Implemented” means the software/document change exists and has the cited local checks. “Hosted qualification” requires an observed CI result. “External acceptance” requires evidence from actual equipment, authorities, operators, providers or deployment owners. No internal checkbox closes an external dependency. See [validation](../VALIDATION.md) for exact-source results.
+
+## Principal telecommunications engineering
+
+Source: [telecom review](TELECOM_REVIEW.md). Live provider actions remain unavailable.
+
+| Finding | Resolution | Disposition / remaining evidence |
+| --- | --- | --- |
+| TEL-01 — host/satellite authority | Light MVNO negotiating position, distinct terrestrial/D2C/dish paths, scoped readiness and explicit provider hold | **External acceptance:** signed host/service/territory responsibilities, POTRAZ route, test access and satellite entitlement |
+| TEL-02 — physical inventory | Persistent sites/assets, custody/serial/supplier/firmware/power/approval fields, receipt state, seven commissioning checks and history export | **Implemented. Physical acceptance:** receive assets and perform checks |
+| TEL-03 — evidence validity | Issuer, issue date, country/operator/path/device scope, expiry, revocation and independent fresh-auth reviewer; no automatic activation | **Implemented. External acceptance:** obtain and verify actual documents |
+| TEL-04 — eligibility | Scoped trials/evidence; dish/router cannot stand in for a D2C handset; exact device/software/SIM/feature matrix specified | **Implemented pilot records. External acceptance:** host-qualified combinations and commercial eligibility interface |
+| TEL-05 — subscriber lifecycle | Owned lab application, information-request correction, staff review and awaiting-host state; registration/payment/network states distinct | **Implemented pilot journey. External integration:** registration and host provisioning/reconciliation |
+| TEL-06 — usage authority | No invented live counters; unavailable/unobserved usage and required source/time/unit/event reconciliation documented | **External integration:** no metering feed has been supplied; live usage is not claimed |
+| TEL-07 — approved tariffs | Public concepts separate from purchasable offers; test-only ledger/PDF with exact amounts and currency | **Implemented hold. External acceptance:** approved tariffs, tax and charging/settlement |
+| TEL-08 — health separation | App health, refresh, manual observation and readiness distinguished; owned support queues | **Implemented separation. External integration:** radio/provider telemetry, service monitoring and escalation |
+| TEL-09 — native/physical acceptance | Generated native projects, compiler workflows and 14-case hardware matrix | **Hosted qualification** for compilers; **physical acceptance** for installed devices and services |
+| TEL-10 — emergency/numbering | Separate evidence gates and approved-test-only procedure | **External acceptance:** responsibilities, numbering/interconnect and test facility |
+| TEL-11 — hosting/recovery | Explicit identity/key/proxy configuration, private runtime, encrypted recovery and restored-user reissue | **Implemented controls. External acceptance:** data location, key custody, TLS, retention, durable host and timed restore |
+| TEL-12 — changes/rollback | Configuration history, invalidation after firmware/serial/approval changes and documented pre-change backup/rollback | **Implemented records. Physical acceptance:** prove restore/isolation on equipment |
+
+## Senior graphics design
+
+Source: [graphics review](GRAPHICS_REVIEW.md) and [design system](../DESIGN_SYSTEM.md).
+
+| Findings | Implemented resolution | Evidence / remaining scope |
+| --- | --- | --- |
+| GFX-01, GFX-02 — tiny text | Public, protected, legacy-preview and native readable type scale; operational inputs 16px | Web build and focused browser review; physical text scaling remains |
+| GFX-03 — inconsistent brand | Common forest/mint palette, three-bar marks and deterministic native SVG-to-PNG artwork | Source/asset inspection and prebuild; installed behavior remains |
+| GFX-04 — small targets | At least 44px product target for touch actions | Style/layout review; not a blanket accessibility certification |
+| GFX-05 — marketing-first account | Customer/native home leads with state and next task; public hero retained | Actual component and native source review |
+| GFX-06 — concealed navigation | Labelled phone section selectors in protected and legacy workspaces | Phone component review and build |
+| GFX-07 — misleading colors | Neutral concept/demo, labelled pending/failure/unavailable states; no activation by selection | State/source review |
+| GFX-08 — weak focus | Mint focus on dark headers, dark focus on light controls | Source and focused browser review |
+| GFX-09 — unjustified online status | Planned/received/commissioned/faulty inventory, not-run checks and observed source/time | Domain/HTTP tests and browser review; equipment remains unmeasured |
+
+## Senior telecom UI/UX
+
+Source: [telecom UX review](TELECOM_UX_REVIEW.md).
+
+| Findings | Implemented resolution | Evidence / remaining scope |
+| --- | --- | --- |
+| UX-01 — ephemeral operations | Protected persistent `/internal/`; synthetic preview relocated to `/preview/internal/` | Real HTTP permission/persistence checks and component browser review |
+| UX-02 — incomplete recovery | `/account/` and native application/correction, conversations, requests, receipts and exports | Domain/HTTP tests and form review; production browser SSO remains |
+| UX-03 — conflated states | Account/application/registration/test finance/network separated; explicit refresh | State/source/browser review |
+| UX-04 — no hardware journey | Receipt, checks and trials; immutable finished observations and manual/simulated source | Domain/HTTP and component review |
+| UX-05 — duplicates/conflicts | Persistent idempotency, retained retry keys, revisions, preserved input and required refresh | Domain/HTTP/web tests; slow physical link in HW-06 |
+| UX-06 — apparent commerce | Test ledger/receipts, exact minor units, bounded refunds and protected downloads | Financial/authorization tests; no settlement or tax-invoice claim |
+| UX-07 — small-screen difficulty | Labelled mobile navigation, readable type, 44px controls, contained tables, expandable forms | Narrow-frame review; no exhaustive accessibility certification |
+| UX-08 — native/offline hierarchy | Four task tabs, account-first home, minimized cache, freshness and secure storage | Logic/types/bundles; device acceptance remains |
+| UX-09 — ambiguous authentication | Actual configured mode, central production login, generated lab credentials and staff MFA | Auth/HTTP tests and actual sign-in page review |
+| UX-10 — unscoped readiness | Issuer/date/scope/expiry, second reviewer and reason; no live toggle | Evidence tests and component review |
+
+## Cybersecurity engineering
+
+Source: [security review](SECURITY_REVIEW.md) and [threat model](../THREAT_MODEL.md). No fail-open authorization defect was identified in the inspected source scope. This is not a penetration test of a deployed system.
+
+| Finding group | Implemented control/evidence | Remaining acceptance |
+| --- | --- | --- |
+| Access/object authority | Backend seven-role permissions, immutable-subject ownership, scoped SQL and private exports/documents | Real staff grant administration/access review |
+| Correct central protocol | Confidential authorization code, PKCE/state/nonce, signed identity and opaque-token `/session` revalidation | Qualified Portal migration 015, exact client/origins and actual deployment test |
+| Portal compatibility | Optional Mobile client/roles; legacy client vocabulary preserved; staff MFA | Hosted PostgreSQL regression; no live migration run |
+| Credential/replay controls | Scrypt, TOTP replay protection, hashed sessions, encrypted capabilities, exact origin/CSRF, 60-second one-use native PKCE handoff | External key custody and physical OS/callback acceptance |
+| Stale grants/outage logout | Live central authorization, source auth time, fresh approvals/refunds, local-first logout | Actual issuer outage/revocation drill |
+| Backup access revival | Restore disables all lab users and old capabilities; per-user reissue confirms role and privately rotates secrets | Operator reconciles actual people and current authority |
+| Accidental provider effects | Unavailable network/payment adapters; production rejects lab registration/charging | Contracted provider specification and negative-path acceptance |
+| Retry/audit integrity | Atomic records/idempotency/audit, revisions and immutable observations | Independent audit anchoring/retention; DB admin can recompute local chain |
+| Dependency advisories | Locked scoped glob/minimatch overrides, zero production advisories and real fingerprint generation | Ongoing monitoring and native compiler result |
+| Path/origin validation | Encoded OIDC queries handled correctly; production lacks implicit localhost trust; private HTTP requires real IPs | New regressions passed; deployed TLS/proxy qualification remains |
+
+## Principal software engineering
+
+Source: [principal engineering review](PRINCIPAL_ENGINEERING_REVIEW.md).
+
+| Finding | Implemented resolution | Evidence / remaining scope |
+| --- | --- | --- |
+| PE-01 — incomplete image | Locked runtime dependencies installed in non-root image | **Hosted qualification:** exact image build/start |
+| PE-02 — hidden failed check | Any failed required check remains dominant | Domain regression passed |
+| PE-03 — stale evidence | Firmware/serial/approval changes invalidate checks and retain history; receipt cannot hide failure | Domain/HTTP regressions passed |
+| PE-04 — truncated records | Scoped cursor pages, SQL totals/readiness, full export and retained loaded ranges | Multi-page HTTP and web merge tests passed |
+| PE-05 — unsafe/missing recovery | Online encrypted WAL backup, validation, no overwrite, mode isolation and recovered-access invalidation | Six real-schema tests passed; hosted recovery and timed physical drill separate |
+| PE-06 — proxy/rate limiting | Exact trusted peers, overwritten forwarded input and expiry cleanup at limiter cap | Config/HTTP checks; actual ingress configuration remains |
+| PE-07 — excessive history payload | Compact bounded history omitted from lists, retained in protected detail | HTTP regression passed |
+| PE-08 — secret artifacts | Git/Docker exclusions for keys, databases, credentials, archives and signing files | Scoped publication review; no real secrets supplied |
+| PE-09 — OAuth logging | Raw API proxy access/error logs disabled; sanitized correlation IDs | Config inspection; deployed log review remains |
+| PE-10 — absent runtime/native evidence | Container/restart/recovery, PostgreSQL identity, Android debug and unsigned iOS/iPad jobs | **Hosted qualification:** observe results; signing and physical installs remain |
+
+## Release decision
+
+The completed software scope is an authenticated, persistent **hardware-pilot control plane** with customer web/native journeys and internal operations. Code can close its software findings. It cannot create a host contract, provider specification, regulated tariff, approved site, measured radio service or physical custody.
+
+Before real subscriber launch, appoint accountable owners for licensing/host negotiation, privacy/hosting, field acceptance, identity/security and settlement. Execute the [hardware pilot](../HARDWARE_PILOT.md), [regulatory matrix](../REGULATORY_MATRIX.md), [runtime guide](../../infra/runtime/README.md) and [roadmap](../ROADMAP.md). All unperformed physical cases remain “not run”; all uncommissioned commercial/provider actions remain unavailable.

@@ -1,38 +1,59 @@
-# Foundation validation
+# Hardware-pilot software validation
 
-Date: **5 November 2026**. Scope: the repository's development preview, not a live telecommunications service.
+Date: **5 November 2026**. Scope: the persistent Onesa Mobile hardware-pilot and customer/staff control plane, its native clients, and the additive Company Portal identity integration. This is software qualification with synthetic records. It is not evidence of an operating mobile network or commissioned equipment.
 
-## Passed locally
+## Local results
 
-| Area | Evidence |
-| --- | --- |
-| Website | TypeScript check, Vite production build and 7 readiness/operations tests passed |
-| Backend | Strict TypeScript and 27 HTTP/configuration tests passed |
-| Mobile | TypeScript and 3 preview-isolation/reset tests passed |
-| iOS JavaScript | Metro/Hermes production export completed, 629 modules |
-| Android JavaScript | Metro/Hermes production export completed, 627 modules |
-| Native project generation | Expo generated actual iOS and Android projects; iPhone/iPad device family is enabled |
-| OpenAPI | All 69 local references resolve and 27 operation IDs are unique; this is a consistency check, not independent full-schema certification |
-| Development integration | Root launcher started web and API together; browser readiness request displayed the expected connected development status while keeping customer activation unavailable |
+| Area | Observed result | What the check establishes |
+| --- | --- | --- |
+| Mobile API | Strict TypeScript and **78 tests passed** | Domain transitions, authenticated HTTP, role/owner isolation, retry/revision handling, evidence review, lab receipts, current OpenAPI and identity failure boundaries |
+| Public/customer/staff web | TypeScript, production build and **11 tests passed** | Buildable application; preview rules, money parsing, retry identity, truthful pilot states and cursor merging |
+| Native application | TypeScript and **8 tests passed** | Pilot/demo state, API configuration, real private-IP development origins and scoped pagination |
+| Native JavaScript | Metro/Hermes production exports completed for iOS and Android | Compilable source and JavaScript bundles; native compilers are a separate gate below |
+| Native generation and artwork | Expo prebuild completed; deterministic SVG-to-PNG generation and visual icon inspection passed | iOS/Android source/configuration and consistent installed artwork; iPhone/iPad support enabled |
+| Encrypted recovery | **6 tests passed** against actual platform/authentication schemas | Online WAL capture, integrity/audit/idempotency preservation, tamper/wrong-key refusal, no overwrite, mode isolation and recovered-access invalidation |
+| API schema | **41 paths / 87 operations**; freshness and formal OpenAPI 3.1 validation passed | Requests, responses, authorization and route inventory agree with implementation |
+| Portal integration | Backend types/build/lint/contracts passed; frontend generated types/types/lint and **26 domain/callback tests passed** | Additive Mobile product/client/role support and existing-product compatibility |
+| Portal local identity exercise | Migrations 001–015 and **7 focused cases passed** using disposable PGlite | Selected migration/protocol behavior; not PostgreSQL concurrency |
+| Dependency review | API and native production audits reported **zero advisories**; Expo fingerprint completed | Inspected lockfiles and audit snapshot; not a guarantee against future advisories |
 
-Total focused automated tests: **37**. These checks verify the implemented preview boundary and contracts. They do not demonstrate any carrier, payment or subscriber integration.
+The API, web, native logic and recovery suites contain **103 passing tests** in total. Portal results are separate. Generated OpenAPI tests are included in the backend count. Repeated checkpoints are not counted as independent coverage.
 
-## Browser checks
+The legacy Portal hygiene command rejected the ancestor monorepo because it expects a standalone repository root. It is not reported as passed. Publication uses a scoped monorepo diff, artifact and secret review instead.
 
-Checked the local website in Chromium, including 360 px and 390 px phone frames, a 768 px tablet frame and a 1440 px desktop frame. Layout measurements showed no horizontal document overflow in the inspected views. The browser's scrollbars reduce the inner CSS content width by 15 px in these frames.
+## Authenticated HTTP and recovery evidence
 
-Verified the connectivity-path explanations, landing-to-demo navigation, proposed-plan selection retained across demo tabs, billing explanation, Help navigation and the API's connected/unavailable states. The skip link now preserves the demo route and focuses the content. Connectivity selectors use a labelled button group with pressed states, and low-contrast secondary text/focus colors identified during review were corrected.
+HTTP tests start the actual server against temporary SQLite databases and generated identities. They cover cookie/CSRF and bearer sessions, customer denial of staff access, cross-customer record/receipt denial, least-privilege staff, independent evidence acceptance, idempotent mutations, stale revisions, immutable completed observations and unavailable provider operations.
 
-Desktop internal-operations checks covered fictional subscriber search and reviews, matching a synthetic payment, and assigning and resolving sample support cases. Derived queues changed as expected: reviews **4 → 3**, open support cases **3 → 2**, and unmatched entries **2 → 1**. Four local audit events were recorded, and reset restored the baseline. The internal overview at **360 px** and the proposed role matrix at **360 px** and **768 px** showed no document overflow; horizontal scrolling stayed contained within the role table. Two missing arrow glyphs were replaced. These checks used synthetic records in an unauthenticated preview and do not establish live staff authentication or authorisation.
+Pagination tests create more than one page, apply owner/role scope before pagination, retrieve subsequent pages and verify complete owner export. Bulk equipment responses omit history; the protected detail endpoint retains it. Readiness aggregates include older evidence and never enable service.
 
-This was focused browser review, not an exhaustive accessibility or browser-compatibility certification. The ignored local responsive-review harness is not part of the shipped website.
+Identity tests exercise signed OIDC, PKCE/state/nonce, the Portal opaque-token contract, live role/MFA changes, replay/expiry, secure native handoff, TOTP replay, restart persistence and logout during issuer outage. Encoded HTTPS issuer query parameters reach the callback; encoded path separators remain rejected. Production does not inherit localhost browser trust.
 
-## Native limits
+Recovery rejects corrupt archives and wrong keys, clears historical sessions/flows/handoffs, preserves idempotency/audit continuity and disables all restored lab identities. Reissue tests require explicit current-role confirmation, password/TOTP rotation and private output persistence before committing.
 
-JavaScript/Hermes exports are **not** signed native binaries. Xcode/Gradle native compilation, simulators, physical phones/tablets, VoiceOver/TalkBack, store signing and submissions have not been verified. No IPA, APK or AAB is supplied.
+These are synthetic protocol tests. They do not establish a configured live Portal, carrier or payment provider.
 
-## Service and infrastructure limits
+## Browser and visual review
 
-No real SIM, eSIM, mobile number, satellite link, payment, subscriber identity or invoice was created. Docker configuration exists, but its image was not built or run during this foundation task. No production service, DNS change, regulator application, partner outreach or customer-data collection took place.
+Reviewed the actual public page and customer/staff sign-in routes in Chromium at phone and desktop sizes. Corrected a hidden mobile account link and a workspace footer contrast/style collision. At the inspected 360px frame, document width remained within available CSS width after the scrollbar.
 
-The GitHub workflow repeats the package checks on repository changes. Consult the check result for the exact commit; this document does not predict a future CI outcome.
+Reviewed actual customer components for summary, application/correction, support, lab billing and requests; staff components for overview, equipment, trials, evidence, applications, support, ledger and audit. An ignored local harness supplied prominently labelled synthetic props at 360, 390, 768 and 1280px widths. It had no authentication, credentials or business API calls, was not imported by the application and is not shipped.
+
+Checks covered mobile navigation, readable labels, contained tables, equipment details, seven commissioning states, custody/serial/supplier references and the protected-history control. A correction form preserved its values and produced the expected local fixture submission; no real application was saved. Authenticated browser login and production transactions were not performed. Real authorization was exercised through the HTTP suite.
+
+The [hardware workspace screenshot](screenshots/hardware-workspace.png) shows actual components with synthetic review data. It is not operational inventory or a network measurement. This focused review is not WCAG certification or a Zimbabwe subscriber usability study. Native styling and artwork were inspected; physical screens, text scaling, VoiceOver and TalkBack require hardware acceptance.
+
+## Hosted qualification
+
+Two workflows provide exact-source gates:
+
+- [Software, container and PostgreSQL qualification](../../.github/workflows/onesa-mobile-ci.yml): package checks, container build/start/restart, encrypted recovery and Portal identity tests against disposable PostgreSQL.
+- [Native compilation](../../.github/workflows/onesa-mobile-native-compile.yml): Android arm64 debug application and unsigned iPhone/iPad simulator build. No signing keys are uploaded and no app is published.
+
+At this checkpoint the newly extended jobs are **awaiting the exact-source hosted run**. Their existence is not a passing result. Consult the final commit's run links and outcomes before claiming container, PostgreSQL or native compiler acceptance.
+
+## Physical and commercial acceptance
+
+No site, router, UPS, phone, SIM, eSIM or terminal was commissioned. No real subscriber, payment, number, tax invoice or emergency call was created. No live Portal migration, production service, DNS change, partner outreach, regulatory submission or app-store release occurred.
+
+The [hardware runbook](HARDWARE_PILOT.md) defines 14 acceptance cases. The [regulatory matrix](REGULATORY_MATRIX.md) and [resolution register](reviews/RESOLUTION_REGISTER.md) identify external evidence. Physical installs, provider sandbox/reconciliation, approved hosting, identity/TLS/key custody, operational recovery, licensing and host/satellite entitlement remain necessary before real service.

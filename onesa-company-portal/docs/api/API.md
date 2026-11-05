@@ -164,7 +164,8 @@ matching grant and its exact source session are required before revoking that
 account across products. `all_sessions_revoked` is true only after that transaction
 commits; an idempotent `ok` alone never proves global sign-out.
 
-`/account/register` accepts a name, email and one to three requested products.
+`/account/register` accepts a name, email and one to four requested products.
+Mobile requests are accepted only when a Mobile client is explicitly configured.
 One-use mailbox verification creates a `member`, with pending product access and
 no Portal administration authority. Connecting an existing Portal account requires
 its current password and a verification link bound to its immutable user ID. It
@@ -173,7 +174,13 @@ requests use host-only cookies, exact Origin and CSRF on authenticated mutations
 Identity artifacts stay encrypted server-side. Email uses the existing encrypted
 outbox; queue success does not establish delivery.
 
-Owner and Administrator roles administer Company Portal, AI, Drone and Robot.
+Owner and Administrator roles administer Company Portal and configured Onesa products.
+The optional Mobile client uses `customer`, `agent`, `support`, `operations`,
+`finance`, `auditor` and `admin` roles. New Mobile requests default to pending
+`customer` access. Every Mobile staff role requires MFA at sign-in, continuation
+and live assertion; existing AI/Drone/Robot role rules remain unchanged.
+Mobile claims are returned to the Mobile client only. Legacy client assertions
+retain their three-product vocabulary even when Mobile is configured.
 Assigning or removing an Onesa Administrator requires fresh owner password/MFA
 proof; existing administrative routes enforce the same rule in shared mode.
 `/admin/identity/accounts` provides bounded account search. Product-access updates

@@ -1,251 +1,1230 @@
-import { useReducer } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  INITIAL_PREVIEW,
-  NETWORK_FACTS,
-  PLANS,
-  liveActionAvailability,
-  previewReducer,
-} from './src/domain';
-import type { PlanId, ScreenId } from './src/domain';
-import { Button, Card, DetailRow, Label, SectionHeading, Tag, styles } from './src/ui';
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { StatusBar } from "expo-status-bar";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import * as SecureStore from "expo-secure-store";
+import * as Crypto from "expo-crypto";
+import * as WebBrowser from "expo-web-browser";
+import * as Sharing from "expo-sharing";
+import { File, Paths } from "expo-file-system";
+import PreviewApp from "./src/PreviewApp";
+import {
+  apiBase,
+  ApiError,
+  base64Url,
+  callbackParameters,
+  compactCache,
+  request,
+  type Account,
+  type Credential,
+  type Item,
+} from "./src/api";
+import {
+  BrandMark,
+  Button,
+  Card,
+  DetailRow,
+  Label,
+  SectionHeading,
+  Tag,
+  colors,
+  styles,
+} from "./src/ui";
 
-const tabs: ReadonlyArray<{ id: ScreenId; label: string }> = [
-  { id: 'home', label: 'Home' },
-  { id: 'plans', label: 'Plans' },
-  { id: 'network', label: 'Network' },
-  { id: 'account', label: 'Account' },
-];
-
-function HomeScreen({ selectedPlanId, navigate }: { selectedPlanId: PlanId | null; navigate: (screen: ScreenId) => void }) {
-  const selectedPlan = PLANS.find((plan) => plan.id === selectedPlanId);
+const configuration = (() => {
+  try {
+    return {
+      base: apiBase(process.env.EXPO_PUBLIC_API_BASE_URL, __DEV__),
+      error: null,
+    };
+  } catch {
+    return {
+      base: null,
+      error:
+        "The account service address needs to be configured for this build.",
+    };
+  }
+})();
+const tabs = ["Home", "Application", "Help", "Account"] as const;
+type Tab = (typeof tabs)[number];
+const plans = [
+  ["everyday", "Everyday"],
+  ["reach", "Reach"],
+  ["family-farm", "Family & Farm"],
+] as const;
+const human = (value: unknown) =>
+  String(value ?? "Not recorded").replaceAll("_", " ");
+function Field({
+  label,
+  value,
+  onChange,
+  multiline = false,
+  password = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (s: string) => void;
+  multiline?: boolean;
+  password?: boolean;
+}) {
   return (
-    <>
-      <View style={styles.hero}>
-        <Label light>BUILT AROUND ZIMBABWE</Label>
-        <Text accessibilityRole="header" style={styles.heroTitle}>A simpler way{ '\n' }to stay connected.</Text>
-        <View style={styles.heroRule} />
-        <Text style={styles.heroBody}>A mobile service designed around clear plans, easy control and the ambition to reach further.</Text>
-      </View>
-
-      <Card>
-        <View style={styles.cardTitleRow}>
-          <SectionHeading>Your Onesa preview</SectionHeading>
-          <Tag>DEMO</Tag>
-        </View>
-        <View>
-          <DetailRow label="Plan idea" value={selectedPlan?.name ?? 'Choose a concept'} />
-          <DetailRow label="Mobile service" value="Not active" />
-          <DetailRow label="Satellite availability" value="Unconfirmed" />
-        </View>
-        <Button onPress={() => navigate('plans')}>{selectedPlan ? 'Review plan concepts' : 'Explore plan concepts'}</Button>
-      </Card>
-
-      <SectionHeading>Simple from the start</SectionHeading>
-      <Card>
-        <View style={styles.steps}>
-          {[
-            ['Choose your plan', 'Clear allowances and renewal choices.'],
-            ['Verify your identity', 'A future registration flow agreed with the licensed host.'],
-            ['Activate your line', 'Available only after approvals and partner integration.'],
-          ].map(([title, detail], index) => (
-            <View key={title} style={styles.step}>
-              <Text style={styles.stepNumber}>{index + 1}</Text>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>{title}</Text>
-                <Text style={styles.small}>{detail}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </Card>
-
-      <Card tinted>
-        <Label>THE NEXT HORIZON</Label>
-        <Text style={styles.cardHeading}>What could satellite add?</Text>
-        <Text style={styles.body}>Learn how direct phone connectivity differs from Starlink Wi-Fi, and what still needs to be confirmed.</Text>
-        <Button secondary onPress={() => navigate('network')}>Understand the network</Button>
-      </Card>
-    </>
+    <View style={local.field}>
+      <Text style={styles.strongBody}>{label}</Text>
+      <TextInput
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChange}
+        style={[local.input, multiline && local.textarea]}
+        secureTextEntry={password}
+        autoCapitalize="none"
+        autoCorrect={!password}
+        multiline={multiline}
+        maxLength={multiline ? 1200 : password ? 256 : 100}
+        textAlignVertical={multiline ? "top" : "center"}
+      />
+    </View>
   );
 }
-
-function PlansScreen({ selectedPlanId, selectPlan }: { selectedPlanId: PlanId | null; selectPlan: (planId: PlanId) => void }) {
-  const selectedPlan = PLANS.find((plan) => plan.id === selectedPlanId);
+function Choice({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly (readonly [string, string])[];
+  value: string;
+  onChange: (s: string) => void;
+}) {
   return (
-    <>
-      <View style={styles.stack}>
-        <Label>PLANS IN DEVELOPMENT</Label>
-        <Text accessibilityRole="header" style={styles.screenTitle}>Keep it simple.</Text>
-        <Text style={styles.body}>Explore three starting ideas. Prices, allowances and launch availability will follow confirmed partner terms.</Text>
-      </View>
-      {selectedPlan && (
-        <View style={styles.selectedNotice} accessibilityLiveRegion="polite">
-          <Text style={styles.strongBody}>{selectedPlan.name} selected for your preview.</Text>
-          <Text style={styles.small}>This creates no order, subscription or payment.</Text>
-        </View>
-      )}
-      <View style={styles.planList}>
-        {PLANS.map((plan) => (
-          <Card key={plan.id} tinted={plan.id === selectedPlanId}>
-            <Label>{plan.eyebrow}</Label>
-            <View style={styles.cardTitleRow}>
-              <Text style={styles.planName}>{plan.name}</Text>
-              <Tag tone={plan.id === 'reach' ? 'amber' : 'green'}>{plan.id === 'reach' ? 'FUTURE OPTION' : 'CONCEPT'}</Tag>
-            </View>
-            <Text style={styles.body}>{plan.summary}</Text>
-            <View style={styles.features}>
-              {plan.features.map((feature) => (
-                <View key={feature} style={styles.feature}>
-                  <View style={styles.featureDot} />
-                  <Text style={styles.featureText}>{feature}</Text>
-                </View>
-              ))}
-            </View>
-            <Button
-              secondary={plan.id === selectedPlanId}
-              accessibilityLabel={`${plan.id === selectedPlanId ? 'Selected' : 'Preview'} ${plan.name} concept. No purchase.`}
-              onPress={() => selectPlan(plan.id)}
-            >
-              {plan.id === selectedPlanId ? 'Selected in preview' : 'Choose in preview'}
-            </Button>
-          </Card>
+    <View style={local.field}>
+      <Text style={styles.strongBody}>{label}</Text>
+      <View style={local.choices}>
+        {options.map(([id, title]) => (
+          <Pressable
+            key={id}
+            onPress={() => onChange(id)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: value === id }}
+            style={[local.choice, value === id && local.selected]}
+          >
+            <Text style={styles.strongBody}>{title}</Text>
+          </Pressable>
         ))}
       </View>
-      <Text style={styles.small}>Selections stay in memory for this app session only. These concepts are not offers for sale.</Text>
-    </>
+    </View>
   );
 }
-
-function NetworkScreen() {
-  return (
-    <>
-      <View style={styles.stack}>
-        <Label>KNOW YOUR CONNECTION</Label>
-        <Text accessibilityRole="header" style={styles.screenTitle}>Three paths.{ '\n' }Different possibilities.</Text>
-        <Text style={styles.body}>A clear explanation of the network options being explored for Onesa.</Text>
-      </View>
-      <Card tinted>
-        <Tag tone="amber">NO LIVE NETWORK DATA</Tag>
-        <Text style={styles.strongBody}>This preview does not detect your mobile carrier or satellite connection.</Text>
-        <Text style={styles.body}>{liveActionAvailability('connect-satellite').reason}</Text>
-      </Card>
-      {NETWORK_FACTS.map((fact) => (
-        <Card key={fact.title}>
-          <Label>{fact.tag}</Label>
-          <Text style={styles.cardHeading}>{fact.title}</Text>
-          <Text style={styles.body}>{fact.description}</Text>
-        </Card>
-      ))}
-      <View style={styles.notice}>
-        <Text style={styles.strongBody}>Your phone and network control the connection.</Text>
-        <Text style={styles.small}>An account app cannot switch on satellite service by itself. A partner agreement, local authorisation and supported device are needed. Native calling, data and messaging may have different availability.</Text>
-      </View>
-    </>
-  );
-}
-
-function AccountScreen({ selectedPlanId, reset }: { selectedPlanId: PlanId | null; reset: () => void }) {
-  const selectedPlan = PLANS.find((plan) => plan.id === selectedPlanId);
-  return (
-    <>
-      <View style={styles.stack}>
-        <Label>YOUR SPACE</Label>
-        <Text accessibilityRole="header" style={styles.screenTitle}>A preview, on your terms.</Text>
-        <Text style={styles.body}>Explore the product before creating an account.</Text>
-      </View>
-      <Card>
-        <SectionHeading>Preview settings</SectionHeading>
-        <DetailRow label="Selected concept" value={selectedPlan?.name ?? 'None selected'} />
-        <DetailRow label="Account" value="No account created" />
-        <DetailRow label="Subscription" value="None" />
-        <DetailRow label="Payments" value="Unavailable" />
-        <DetailRow label="App version" value="0.1.0 preview" />
-        <Button secondary onPress={reset}>Reset this preview</Button>
-      </Card>
-      <View style={styles.grid}>
-        <View style={styles.gridCell}>
-          <Card>
-            <Label>YOUR PRIVACY</Label>
-            <Text style={styles.cardHeading}>No personal details needed.</Text>
-            <Text style={styles.body}>This preview has no sign-up form, analytics, identity upload or payment collection. Your plan choice is kept only in app memory.</Text>
-          </Card>
-        </View>
-        <View style={styles.gridCell}>
-          <Card>
-            <Label>WHAT COMES LATER</Label>
-            <Text style={styles.cardHeading}>One place for your mobile life.</Text>
-            <Text style={styles.body}>Identity, billing, usage and support can be connected after network, regulatory and provider agreements are confirmed.</Text>
-          </Card>
-        </View>
-      </View>
-      <Text style={styles.small}>{liveActionAvailability('activate-sim').reason} {liveActionAvailability('collect-payment').reason}</Text>
-    </>
-  );
-}
-
-function PreviewApp() {
-  const [state, dispatch] = useReducer(previewReducer, INITIAL_PREVIEW);
+function MobileAccount({ openPreview }: { openPreview: () => void }) {
   const insets = useSafeAreaInsets();
-  const navigate = (screen: ScreenId) => dispatch({ type: 'navigate', screen });
-
+  const [tab, setTab] = useState<Tab>("Home"),
+    [storageKey, setStorageKey] = useState<string | null>(null),
+    [credential, setCredential] = useState<Credential | null>(null),
+    [account, setAccount] = useState<Account | null>(null);
+  const [authMode, setAuthMode] = useState<"lab" | "onesa" | null>(null),
+    [ssoAvailable, setSsoAvailable] = useState(false),
+    [loading, setLoading] = useState(true),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [cached, setCached] = useState<Record<string, unknown> | null>(null),
+    [lastFetched, setLastFetched] = useState("");
+  const [username, setUsername] = useState(""),
+    [password, setPassword] = useState(""),
+    [displayName, setDisplayName] = useState(""),
+    [area, setArea] = useState(""),
+    [deviceModel, setDeviceModel] = useState(""),
+    [planId, setPlanId] = useState("everyday"),
+    [simFormat, setSimFormat] = useState("physical"),
+    [consent, setConsent] = useState(false);
+  const [category, setCategory] = useState("other"),
+    [subject, setSubject] = useState(""),
+    [message, setMessage] = useState(""),
+    [replyId, setReplyId] = useState<string | null>(null),
+    [reply, setReply] = useState(""),
+    [requestType, setRequestType] = useState("sim_replacement"),
+    [requestDetail, setRequestDetail] = useState("");
+  const current = useRef<Credential | null>(null),
+    requestKeys = useRef(new Map<string, string>()),
+    callbackCodes = useRef(new Set<string>()),
+    generation = useRef(0);
+  const base = configuration.base;
+  const clearLocal = useCallback(async () => {
+    generation.current++;
+    current.current = null;
+    setCredential(null);
+    setAccount(null);
+    setCached(null);
+    setLastFetched("");
+    requestKeys.current.clear();
+    if (storageKey)
+      await Promise.all([
+        SecureStore.deleteItemAsync(storageKey),
+        SecureStore.deleteItemAsync(storageKey + ".cache"),
+        SecureStore.deleteItemAsync(storageKey + ".flow"),
+      ]);
+  }, [storageKey]);
+  const saveCredential = useCallback(
+    async (value: Credential) => {
+      if (!storageKey || !base)
+        throw Error("The account service is not configured.");
+      if (
+        !/^[A-Za-z0-9_-]{43}$/.test(value.token) ||
+        !value.user?.subject ||
+        !Number.isFinite(value.user.expiresAt) ||
+        value.user.expiresAt * 1000 <= Date.now()
+      )
+        throw Error("The service returned an invalid session.");
+      generation.current++;
+      await SecureStore.deleteItemAsync(storageKey + ".cache");
+      await SecureStore.setItemAsync(storageKey, JSON.stringify(value), {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+      current.current = value;
+      setCredential(value);
+      setCached(null);
+      setAccount(null);
+      setPassword("");
+      setError("");
+    },
+    [storageKey, base],
+  );
+  const refresh = useCallback(
+    async (value: Credential | null = current.current) => {
+      if (!base || !value) return;
+      const run = generation.current;
+      setLoading(true);
+      try {
+        const data = await request<Account>(base, "/v1/me", {
+          token: value.token,
+        });
+        if (
+          run !== generation.current ||
+          current.current?.token !== value.token
+        )
+          return;
+        if (data.profile?.subject !== value.user.subject)
+          throw Error("The account response did not match this session.");
+        setAccount(data);
+        setLastFetched(new Date().toISOString());
+        setError("");
+        const snapshot = compactCache(data);
+        setCached(snapshot as Record<string, unknown>);
+        if (storageKey)
+          await SecureStore.setItemAsync(
+            storageKey + ".cache",
+            JSON.stringify(snapshot),
+            { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY },
+          );
+      } catch (e) {
+        if (run !== generation.current) return;
+        if (e instanceof ApiError && e.status === 401) await clearLocal();
+        setError(
+          e instanceof Error ? e.message : "Unable to refresh your account.",
+        );
+      } finally {
+        if (run === generation.current) setLoading(false);
+      }
+    },
+    [base, storageKey, clearLocal],
+  );
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      if (!base) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const hash = await Crypto.digestStringAsync(
+            Crypto.CryptoDigestAlgorithm.SHA256,
+            base,
+          ),
+          key = "onesa.mobile.v1." + hash.slice(0, 24);
+        if (!alive) return;
+        setStorageKey(key);
+        const [stored, previous, session] = await Promise.all([
+          SecureStore.getItemAsync(key),
+          SecureStore.getItemAsync(key + ".cache"),
+          request<{ authMode: "lab" | "onesa"; ssoAvailable: boolean }>(
+            base,
+            "/v1/session",
+          ).catch(() => null),
+        ]);
+        if (!alive) return;
+        if (session) {
+          setAuthMode(session.authMode);
+          setSsoAvailable(session.ssoAvailable);
+        }
+        if (stored) {
+          const value = JSON.parse(stored) as Credential;
+          if (
+            value.user?.expiresAt * 1000 > Date.now() &&
+            /^[A-Za-z0-9_-]{43}$/.test(value.token)
+          ) {
+            current.current = value;
+            setCredential(value);
+            if (previous) {
+              const parsed = JSON.parse(previous);
+              if (parsed.subject === value.user.subject) setCached(parsed);
+            }
+          } else
+            await Promise.all([
+              SecureStore.deleteItemAsync(key),
+              SecureStore.deleteItemAsync(key + ".cache"),
+            ]);
+        }
+        if (!session)
+          setError(
+            "The account service is unavailable. Saved information may be out of date.",
+          );
+      } catch {
+        if (alive)
+          setError(
+            "Secure account storage could not be opened. Please try again.",
+          );
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+      generation.current++;
+    };
+  }, [base]);
+  useEffect(() => {
+    if (credential && storageKey) void refresh(credential);
+  }, [credential, storageKey, refresh]);
+  const run = async (action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await action();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "The operation could not be completed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const completeNative = useCallback(
+    async (url: string) => {
+      if (!base || !storageKey) return;
+      const callbackCode = new URL(url).searchParams.get("code");
+      if (callbackCode && callbackCodes.current.has(callbackCode)) return;
+      const raw = await SecureStore.getItemAsync(storageKey + ".flow");
+      if (!raw) throw Error("Start sign-in again on this device.");
+      const flow = JSON.parse(raw) as {
+        state: string;
+        verifier: string;
+        expires: number;
+      };
+      if (flow.expires < Date.now())
+        throw Error("This sign-in expired. Start again.");
+      const result = callbackParameters(url, flow.state);
+      if (callbackCodes.current.has(result.code)) return;
+      callbackCodes.current.add(result.code);
+      try {
+        const issued = await request<{
+          token: string;
+          user: Credential["user"];
+        }>(base, "/v1/auth/onesa/native/exchange", {
+          method: "POST",
+          body: { ...result, verifier: flow.verifier },
+        });
+        await saveCredential(issued);
+        await SecureStore.deleteItemAsync(storageKey + ".flow");
+        setTab("Home");
+      } catch (e) {
+        callbackCodes.current.delete(result.code);
+        throw e;
+      }
+    },
+    [base, storageKey, saveCredential],
+  );
+  useEffect(() => {
+    if (!storageKey) return;
+    const handler = ({ url }: { url: string }) => {
+      if (url.startsWith("onesamobile://auth/callback"))
+        void completeNative(url).catch((e) =>
+          setError(e instanceof Error ? e.message : "Sign-in failed."),
+        );
+    };
+    const listener = Linking.addEventListener("url", handler);
+    void Linking.getInitialURL().then((url) => {
+      if (url) handler({ url });
+    });
+    return () => listener.remove();
+  }, [storageKey, completeNative]);
+  const signIn = () =>
+    run(async () => {
+      if (!base) return;
+      const result = await request<{ token: string; user: Credential["user"] }>(
+        base,
+        "/v1/session/login",
+        {
+          method: "POST",
+          body: {
+            username,
+            password,
+            surface: "customer",
+            transport: "bearer",
+          },
+        },
+      );
+      await saveCredential(result);
+      setTab("Home");
+    });
+  const signInOnesa = () =>
+    run(async () => {
+      if (!base || !storageKey) return;
+      const state = base64Url(await Crypto.getRandomBytesAsync(32)),
+        verifier = base64Url(await Crypto.getRandomBytesAsync(32)),
+        challenge = (
+          await Crypto.digestStringAsync(
+            Crypto.CryptoDigestAlgorithm.SHA256,
+            verifier,
+            { encoding: Crypto.CryptoEncoding.BASE64 },
+          )
+        )
+          .replaceAll("+", "-")
+          .replaceAll("/", "_")
+          .replaceAll("=", "");
+      await SecureStore.setItemAsync(
+        storageKey + ".flow",
+        JSON.stringify({ state, verifier, expires: Date.now() + 600000 }),
+        { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY },
+      );
+      const url = new URL(base + "/v1/auth/onesa/start");
+      url.searchParams.set("surface", "customer");
+      url.searchParams.set("codeChallenge", challenge);
+      url.searchParams.set("state", state);
+      const result = await WebBrowser.openAuthSessionAsync(
+        url.href,
+        "onesamobile://auth/callback",
+      );
+      if (result.type === "success") await completeNative(result.url);
+      else setNotice("Sign-in cancelled. No account change was made.");
+    });
+  const signOut = () =>
+    run(async () => {
+      const previous = current.current;
+      await clearLocal();
+      setTab("Home");
+      if (previous && base) {
+        try {
+          await request(base, "/v1/session/logout", {
+            method: "POST",
+            token: previous.token,
+          });
+          setNotice("Signed out on this device.");
+        } catch {
+          setNotice(
+            "Signed out on this device. The service could not confirm remote session revocation.",
+          );
+        }
+      }
+    });
+  const mutate = async (
+    path: string,
+    body: unknown,
+    success: string,
+    method: "POST" | "PATCH" = "POST",
+  ) => {
+    const user = current.current;
+    if (!base || !user) throw Error("Sign in first.");
+    const signature = method + path + JSON.stringify(body);
+    let key = requestKeys.current.get(signature);
+    if (!key) {
+      key = Crypto.randomUUID();
+      requestKeys.current.set(signature, key);
+    }
+    try {
+      await request(base, path, { token: user.token, method, body, key });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) await clearLocal();
+      else if (e instanceof ApiError && e.status === 409) await refresh(user);
+      throw e;
+    }
+    requestKeys.current.delete(signature);
+    if (current.current?.token !== user.token) return;
+    await refresh(user);
+    setNotice(success);
+  };
+  const shareDocument = (item?: Item) =>
+    run(async () => {
+      const user = current.current;
+      if (!user || !base) return;
+      if (!(await Sharing.isAvailableAsync()))
+        throw Error("Document sharing is unavailable on this device.");
+      const file = new File(
+        Paths.cache,
+        "onesa-mobile-" + Crypto.randomUUID() + (item ? ".pdf" : ".json"),
+      );
+      try {
+        if (item) {
+          if (!/^[a-f0-9-]{36}$/.test(item.id))
+            throw Error("Invalid document reference.");
+          await File.downloadFileAsync(
+            base + "/v1/documents/" + item.id + ".pdf",
+            file,
+            { headers: { Authorization: "Bearer " + user.token } },
+          );
+        } else {
+          await File.downloadFileAsync(base + "/v1/me/export", file, {
+            headers: { Authorization: "Bearer " + user.token },
+          });
+        }
+        await Sharing.shareAsync(file.uri, {
+          mimeType: item ? "application/pdf" : "application/json",
+          dialogTitle: item
+            ? "Share your test receipt"
+            : "Export your account records",
+        });
+      } finally {
+        if (file.exists) file.delete();
+      }
+    });
+  const loadMore = (kind: "tickets" | "ledger" | "requests") =>
+    run(async () => {
+      const user = current.current,
+        cursor = account?.cursors?.[kind];
+      if (!base || !user || !cursor) return;
+      const page = await request<{
+        items: Item[];
+        nextCursor: string | null;
+        total: number;
+      }>(base, "/v1/me/records/" + kind, {
+        token: user.token,
+        query: { cursor, limit: 50 },
+      });
+      if (current.current?.token !== user.token) return;
+      setAccount((previous) =>
+        previous
+          ? {
+              ...previous,
+              [kind]: [
+                ...new Map(
+                  [...previous[kind], ...page.items].map((item) => [
+                    item.id,
+                    item,
+                  ]),
+                ).values(),
+              ],
+              cursors: { ...previous.cursors, [kind]: page.nextCursor },
+              counts: { ...previous.counts, [kind]: page.total },
+            }
+          : previous,
+      );
+    });
+  const application =
+    account?.applications.find((a) => a.state !== "declined") ??
+    account?.applications[0];
+  const beginCorrection = () => {
+    if (!application) return;
+    setDisplayName(String(application.displayName));
+    setArea(String(application.area));
+    setDeviceModel(String(application.deviceModel));
+    setPlanId(String(application.planId));
+    setSimFormat(String(application.simFormat));
+    setConsent(false);
+    setTab("Application");
+  };
+  const submitApplication = () =>
+    run(async () => {
+      if (!consent) throw Error("Confirm the pilot consent before submitting.");
+      const input = {
+        displayName,
+        area,
+        deviceModel,
+        planId,
+        simFormat,
+        consentToPilot: true,
+      };
+      const existing =
+        application &&
+        ["review_required", "information_required"].includes(
+          String(application.state),
+        );
+      await mutate(
+        existing ? "/v1/applications/" + application.id : "/v1/applications",
+        existing ? { ...input, revision: application.revision } : input,
+        "Your pilot application was saved. Mobile service remains unavailable.",
+        existing ? "PATCH" : "POST",
+      );
+      setTab("Home");
+    });
+  const canEdit =
+    !!account &&
+    (!application ||
+      ["review_required", "information_required", "declined"].includes(
+        String(application.state),
+      ));
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
       <View style={[styles.frame, styles.header]}>
         <View style={styles.wordmark} accessibilityLabel="Onesa Mobile">
-          <View style={styles.brandMark} accessible={false} />
+          <BrandMark />
           <View>
             <Text style={styles.brand}>onesa</Text>
             <Text style={styles.brandQualifier}>mobile</Text>
           </View>
         </View>
-        <Text style={styles.headerTag}>ZIMBABWE</Text>
+        <Text style={styles.headerTag}>
+          {credential ? "MY ACCOUNT" : "WELCOME"}
+        </Text>
       </View>
       <View style={styles.demoBanner}>
         <View style={styles.frame}>
-          <Text style={styles.demoText}>Development demo · No mobile service activated</Text>
+          <Text style={styles.demoText}>
+            {authMode === "lab" || credential?.user.source === "lab"
+              ? "Hardware pilot lab · no commercial mobile service"
+              : "Service preparation · availability subject to approved partners"}
+          </Text>
         </View>
       </View>
       <ScrollView
-        key={state.screen}
+        key={tab}
         style={styles.scroll}
         contentContainerStyle={[styles.frame, styles.content]}
+        keyboardShouldPersistTaps="handled"
         contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
       >
-        {state.screen === 'home' && <HomeScreen selectedPlanId={state.selectedPlanId} navigate={navigate} />}
-        {state.screen === 'plans' && <PlansScreen selectedPlanId={state.selectedPlanId} selectPlan={(planId) => dispatch({ type: 'select-plan', planId })} />}
-        {state.screen === 'network' && <NetworkScreen />}
-        {state.screen === 'account' && <AccountScreen selectedPlanId={state.selectedPlanId} reset={() => dispatch({ type: 'reset' })} />}
+        {error ? (
+          <View accessibilityRole="alert" style={local.error}>
+            <Text style={local.errorText}>{error}</Text>
+          </View>
+        ) : null}
+        {notice ? (
+          <Text accessibilityLiveRegion="polite" style={local.notice}>
+            {notice}
+          </Text>
+        ) : null}
+        {busy || loading ? (
+          <ActivityIndicator
+            accessibilityLabel="Loading account"
+            color={colors.forest}
+          />
+        ) : null}
+        {!credential ? (
+          <>
+            <SectionHeading>Your mobile account</SectionHeading>
+            <Card>
+              <Text style={styles.body}>
+                See your application, get help and keep your account records in
+                one place.
+              </Text>
+              {configuration.error ? (
+                <Text style={styles.body}>{configuration.error}</Text>
+              ) : null}
+              {!base ? (
+                <Text style={styles.body}>
+                  Account access is not configured for this build. You can
+                  explore the product preview.
+                </Text>
+              ) : authMode === "lab" ? (
+                <>
+                  <Tag>ISOLATED LAB SIGN-IN</Tag>
+                  <Text style={styles.small}>
+                    Use an administrator-issued test customer account. Keep real
+                    identity documents and payment details out of the lab.
+                  </Text>
+                  <Field
+                    label="Lab username"
+                    value={username}
+                    onChange={setUsername}
+                  />
+                  <Field
+                    label="Lab password"
+                    value={password}
+                    onChange={setPassword}
+                    password
+                  />
+                  <Button
+                    onPress={signIn}
+                    disabled={busy || !username || !password}
+                  >
+                    Sign in to the lab
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onPress={signInOnesa}
+                    disabled={busy || !ssoAvailable}
+                  >
+                    Continue with Onesa
+                  </Button>
+                  <Text style={styles.small}>
+                    Registration, password recovery and account verification
+                    take place in the shared Onesa sign-in service.
+                  </Text>
+                  {!ssoAvailable ? (
+                    <Text style={styles.small}>
+                      Account sign-in is awaiting configuration.
+                    </Text>
+                  ) : null}
+                </>
+              )}
+              <Button secondary onPress={openPreview}>
+                Explore without signing in
+              </Button>
+            </Card>
+          </>
+        ) : (
+          <>
+            {tab === "Home" ? (
+              <>
+                <SectionHeading>
+                  Hello, {credential.user.displayName}
+                </SectionHeading>
+                <Card>
+                  <View style={styles.cardTitleRow}>
+                    <Text style={styles.cardHeading}>Your service</Text>
+                    <Tag tone="amber">NOT PROVISIONED</Tag>
+                  </View>
+                  <DetailRow
+                    label="Application"
+                    value={
+                      application
+                        ? human(application.state)
+                        : account
+                          ? "Not submitted"
+                          : "Waiting for refresh"
+                    }
+                  />
+                  <DetailRow
+                    label="Plan concept"
+                    value={
+                      application
+                        ? human(application.planId)
+                        : account
+                          ? "Not selected"
+                          : "Waiting for refresh"
+                    }
+                  />
+                  <DetailRow label="Usage" value="Available after activation" />
+                  <Text style={styles.small}>
+                    {lastFetched
+                      ? "Account checked " +
+                        new Date(lastFetched).toLocaleString()
+                      : cached
+                        ? "Saved account information from " +
+                          new Date(String(cached.savedAt)).toLocaleString() +
+                          ". Reconnect to refresh."
+                        : "Waiting for the account service."}
+                  </Text>
+                  <Button
+                    secondary
+                    onPress={() => void run(() => refresh())}
+                    disabled={busy}
+                  >
+                    Refresh account
+                  </Button>
+                </Card>
+                <Card>
+                  <SectionHeading>Next step</SectionHeading>
+                  <Text style={styles.body}>
+                    {!account
+                      ? "Reconnect and refresh your account to see the latest next step."
+                      : !application
+                        ? "Submit a pilot application to record your device and SIM preference."
+                        : application.state === "information_required"
+                          ? String(
+                              application.reviewNote ??
+                                "Update the information requested by the team.",
+                            )
+                          : application.state === "awaiting_host"
+                            ? "Your pilot review is recorded. Activation requires an authorized host connection."
+                            : application.state === "declined"
+                              ? String(
+                                  application.reviewNote ??
+                                    "The pilot application was declined. You can ask support or submit another application.",
+                                )
+                              : "The team will review your pilot application."}
+                  </Text>
+                  {canEdit ? (
+                    <Button
+                      onPress={
+                        application
+                          ? beginCorrection
+                          : () => setTab("Application")
+                      }
+                    >
+                      {application
+                        ? "Review your details"
+                        : "Start pilot application"}
+                    </Button>
+                  ) : (
+                    <Button onPress={() => setTab("Help")}>
+                      Contact support
+                    </Button>
+                  )}
+                </Card>
+                <Card>
+                  <SectionHeading>
+                    Connectivity, clearly explained
+                  </SectionHeading>
+                  <Text style={styles.body}>
+                    Direct-to-cell connects an eligible handset through an
+                    authorized satellite mobile network. A Starlink dish
+                    provides a separate Wi-Fi path. This app does not detect or
+                    switch your phone onto a satellite.
+                  </Text>
+                  <Text style={styles.small}>
+                    Messaging, data and calls require separate device and
+                    service qualification.
+                  </Text>
+                </Card>
+              </>
+            ) : null}
+            {tab === "Application" ? (
+              <>
+                <SectionHeading>Pilot application</SectionHeading>
+                <Text style={styles.body}>
+                  Plan concepts are not approved offers for sale. Submitting
+                  this form does not activate a SIM or verify registration.
+                </Text>
+                {!canEdit ? (
+                  <Card>
+                    <DetailRow
+                      label="Status"
+                      value={human(application?.state)}
+                    />
+                    <Text style={styles.body}>
+                      Contact support to request a change while the application
+                      is with the host review queue.
+                    </Text>
+                    <Button onPress={() => setTab("Help")}>Ask for help</Button>
+                  </Card>
+                ) : (
+                  <Card>
+                    <Field
+                      label="Test display name"
+                      value={displayName}
+                      onChange={setDisplayName}
+                    />
+                    <Field label="Pilot area" value={area} onChange={setArea} />
+                    <Field
+                      label="Device model"
+                      value={deviceModel}
+                      onChange={setDeviceModel}
+                    />
+                    <Choice
+                      label="Plan concept"
+                      options={plans}
+                      value={planId}
+                      onChange={setPlanId}
+                    />
+                    <Choice
+                      label="SIM preference"
+                      options={[
+                        ["physical", "Physical SIM"],
+                        ["esim", "eSIM"],
+                      ]}
+                      value={simFormat}
+                      onChange={setSimFormat}
+                    />
+                    <View style={local.consent}>
+                      <Switch
+                        accessibilityLabel="I understand this is a pilot application"
+                        value={consent}
+                        onValueChange={setConsent}
+                        trackColor={{ true: colors.green }}
+                      />
+                      <Text style={[styles.body, { flex: 1 }]}>
+                        I understand this pilot form does not purchase or
+                        activate mobile service.
+                      </Text>
+                    </View>
+                    <Button
+                      onPress={submitApplication}
+                      disabled={
+                        busy ||
+                        !consent ||
+                        !displayName.trim() ||
+                        !area.trim() ||
+                        !deviceModel.trim()
+                      }
+                    >
+                      Save pilot application
+                    </Button>
+                  </Card>
+                )}
+              </>
+            ) : null}
+            {tab === "Help" ? (
+              <>
+                <SectionHeading>How can we help?</SectionHeading>
+                <Card>
+                  <Choice
+                    label="Category"
+                    options={[
+                      ["registration", "Application"],
+                      ["sim", "SIM"],
+                      ["coverage", "Coverage"],
+                      ["billing", "Billing"],
+                      ["other", "Other"],
+                    ]}
+                    value={category}
+                    onChange={setCategory}
+                  />
+                  <Field
+                    label="Subject"
+                    value={subject}
+                    onChange={setSubject}
+                  />
+                  <Field
+                    label="Message"
+                    value={message}
+                    onChange={setMessage}
+                    multiline
+                  />
+                  <Button
+                    disabled={busy || !subject.trim() || !message.trim()}
+                    onPress={() =>
+                      void run(async () => {
+                        await mutate(
+                          "/v1/support/tickets",
+                          { category, subject, message },
+                          "Your support case was saved.",
+                        );
+                        setSubject("");
+                        setMessage("");
+                      })
+                    }
+                  >
+                    Send support request
+                  </Button>
+                </Card>
+                <SectionHeading>Your cases</SectionHeading>
+                {!account?.tickets.length ? (
+                  <Text style={styles.body}>
+                    {account
+                      ? "You have no saved support cases."
+                      : "Refresh your account to load support cases."}
+                  </Text>
+                ) : (
+                  account.tickets.map((ticket) => (
+                    <Card key={ticket.id}>
+                      <View style={styles.cardTitleRow}>
+                        <Text style={styles.cardHeading}>
+                          {String(ticket.subject)}
+                        </Text>
+                        <Tag>{human(ticket.status)}</Tag>
+                      </View>
+                      <Text style={styles.body}>{String(ticket.message)}</Text>
+                      {Array.isArray(ticket.notes)
+                        ? (
+                            ticket.notes as {
+                              text: string;
+                              authorRole: string;
+                              at: string;
+                            }[]
+                          ).map((note, index) => (
+                            <View key={index} style={local.reply}>
+                              <Text style={styles.strongBody}>
+                                {human(note.authorRole)}
+                              </Text>
+                              <Text style={styles.body}>{note.text}</Text>
+                            </View>
+                          ))
+                        : null}
+                      {replyId === ticket.id ? (
+                        <>
+                          <Field
+                            label="Your reply"
+                            value={reply}
+                            onChange={setReply}
+                            multiline
+                          />
+                          <Button
+                            disabled={busy || !reply.trim()}
+                            onPress={() =>
+                              void run(async () => {
+                                await mutate(
+                                  "/v1/support/tickets/" +
+                                    ticket.id +
+                                    "/replies",
+                                  { revision: ticket.revision, message: reply },
+                                  "Your reply was saved.",
+                                );
+                                setReply("");
+                                setReplyId(null);
+                              })
+                            }
+                          >
+                            Send reply
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          secondary
+                          onPress={() => {
+                            setReplyId(ticket.id);
+                            setReply("");
+                          }}
+                        >
+                          Reply to this case
+                        </Button>
+                      )}
+                    </Card>
+                  ))
+                )}
+                {account?.cursors?.tickets ? (
+                  <Button
+                    secondary
+                    disabled={busy}
+                    onPress={() => loadMore("tickets")}
+                  >
+                    Load older cases
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            {tab === "Account" ? (
+              <>
+                <SectionHeading>Account and records</SectionHeading>
+                <Card>
+                  <DetailRow
+                    label="Account"
+                    value={credential.user.displayName}
+                  />
+                  <DetailRow
+                    label="Session"
+                    value={
+                      "Expires " +
+                      new Date(
+                        credential.user.expiresAt * 1000,
+                      ).toLocaleTimeString()
+                    }
+                  />
+                  <Text style={styles.small}>
+                    Automatic background refresh is off. Documents download only
+                    when you request them.
+                  </Text>
+                  <Button
+                    secondary
+                    onPress={() => shareDocument()}
+                    disabled={busy}
+                  >
+                    Export my account records
+                  </Button>
+                  <Button secondary onPress={signOut} disabled={busy}>
+                    Sign out
+                  </Button>
+                </Card>
+                <SectionHeading>Test receipts</SectionHeading>
+                <Text style={styles.body}>
+                  Lab records do not represent a charge or a tax invoice.
+                </Text>
+                {!account?.ledger.length ? (
+                  <Text style={styles.small}>
+                    No test receipts have been recorded.
+                  </Text>
+                ) : (
+                  account.ledger.map((entry) => (
+                    <Card key={entry.id}>
+                      <DetailRow
+                        label={String(entry.reference)}
+                        value={
+                          "USD " + (Number(entry.amountMinor) / 100).toFixed(2)
+                        }
+                      />
+                      <DetailRow label="State" value={human(entry.state)} />
+                      <Button
+                        secondary
+                        onPress={() => shareDocument(entry)}
+                        disabled={busy}
+                      >
+                        Download and share test PDF
+                      </Button>
+                    </Card>
+                  ))
+                )}
+                {account?.cursors?.ledger ? (
+                  <Button
+                    secondary
+                    disabled={busy}
+                    onPress={() => loadMore("ledger")}
+                  >
+                    Load older receipts
+                  </Button>
+                ) : null}
+                <Card>
+                  <SectionHeading>Account requests</SectionHeading>
+                  <Choice
+                    label="Request type"
+                    options={[
+                      ["sim_replacement", "SIM replacement"],
+                      ["number_porting", "Number transfer"],
+                      ["data_correction", "Correct my data"],
+                      ["account_closure", "Close account"],
+                    ]}
+                    value={requestType}
+                    onChange={setRequestType}
+                  />
+                  <Field
+                    label="Request details"
+                    value={requestDetail}
+                    onChange={setRequestDetail}
+                    multiline
+                  />
+                  <Button
+                    disabled={busy || !requestDetail.trim()}
+                    onPress={() =>
+                      void run(async () => {
+                        await mutate(
+                          "/v1/account/requests",
+                          { type: requestType, detail: requestDetail },
+                          "Your request is with the team. No automatic account or SIM change was made.",
+                        );
+                        setRequestDetail("");
+                      })
+                    }
+                  >
+                    Submit account request
+                  </Button>
+                </Card>
+                {account?.requests.map((item) => (
+                  <Card key={item.id}>
+                    <DetailRow
+                      label={human(item.type)}
+                      value={human(item.status)}
+                    />
+                    <Text style={styles.body}>
+                      {String(item.responseNote ?? item.detail)}
+                    </Text>
+                  </Card>
+                ))}
+                {account?.cursors?.requests ? (
+                  <Button
+                    secondary
+                    disabled={busy}
+                    onPress={() => loadMore("requests")}
+                  >
+                    Load older requests
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </>
+        )}
       </ScrollView>
-      <View style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-        <View style={[styles.frame, styles.navInner]}>
-          {tabs.map((tab) => (
-            <Pressable
-              key={tab.id}
-              accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: state.screen === tab.id }}
-              onPress={() => navigate(tab.id)}
-              style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
-            >
-              <View style={[styles.navIndicator, state.screen === tab.id && styles.navIndicatorActive]} />
-              <Text style={[styles.navText, state.screen === tab.id && styles.navTextActive]}>{tab.label}</Text>
-            </Pressable>
-          ))}
+      {credential ? (
+        <View
+          style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 8) }]}
+        >
+          <View style={[styles.frame, styles.navInner]}>
+            {tabs.map((name) => (
+              <Pressable
+                key={name}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === name }}
+                onPress={() => setTab(name)}
+                style={styles.navItem}
+              >
+                <View
+                  style={[
+                    styles.navIndicator,
+                    tab === name && styles.navIndicatorActive,
+                  ]}
+                />
+                <Text
+                  style={[styles.navText, tab === name && styles.navTextActive]}
+                >
+                  {name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
+      ) : null}
     </SafeAreaView>
   );
 }
-
 export default function App() {
+  const [preview, setPreview] = useState(false);
   return (
     <SafeAreaProvider>
-      <PreviewApp />
+      {preview ? (
+        <View style={{ flex: 1 }}>
+          <SafeAreaView edges={["top"]}>
+            <Button secondary onPress={() => setPreview(false)}>
+              Return to account access
+            </Button>
+          </SafeAreaView>
+          <PreviewApp />
+        </View>
+      ) : (
+        <MobileAccount openPreview={() => setPreview(true)} />
+      )}
     </SafeAreaProvider>
   );
 }
+const local = StyleSheet.create({
+  field: { gap: 6 },
+  input: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 11,
+    fontSize: 16,
+    color: colors.ink,
+    backgroundColor: colors.white,
+  },
+  textarea: { minHeight: 96 },
+  choices: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  choice: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    justifyContent: "center",
+  },
+  selected: { backgroundColor: colors.pale, borderColor: colors.forest },
+  consent: { flexDirection: "row", alignItems: "center", gap: 10 },
+  error: {
+    padding: 12,
+    borderLeftWidth: 3,
+    borderColor: "#AC342C",
+    backgroundColor: "#FFF1EE",
+  },
+  errorText: { color: "#8C241F", fontSize: 14, lineHeight: 21 },
+  notice: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.ink,
+    padding: 12,
+    backgroundColor: colors.pale,
+  },
+  reply: {
+    borderLeftWidth: 2,
+    borderColor: colors.border,
+    paddingLeft: 10,
+    gap: 3,
+  },
+});

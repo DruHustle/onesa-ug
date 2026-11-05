@@ -1,115 +1,64 @@
-# Onesa Mobile native preview
+# Onesa Mobile native app
 
-A compact React Native / Expo foundation for **iPhone, iPad and Android**. This is a development preview of the proposed Onesa Mobile customer experience in Zimbabwe. It is not a working mobile operator or a satellite connection application.
+Independent Expo / React Native customer app for **iPhone, iPad and Android**, with generated native projects and an authenticated API connection. The preview bundle identifiers remain `eu.onesa.mobile.preview` so lab builds are distinct from any future commercial app.
 
-## What works
+## Implemented journeys
 
-- Four native screens: Home, Plans, Network and Account.
-- Local plan-concept selection, retained while switching tabs, and a reset action.
-- Clear explanations of terrestrial mobile, direct phone-to-satellite service and Starlink broadband through Wi-Fi.
-- A persistent development label, inactive service states and no invented coverage or network readings.
-- Responsive compact layouts, system font scaling, safe-area handling, accessible button/tab labels and tablet-width limits.
-- Branded app icons and splash screens, real generated Xcode and Android projects, and an iPad-capable iOS target (`TARGETED_DEVICE_FAMILY = "1,2"`).
+- Home: actual application state, next action, explicit account-refresh age and unprovisioned service status.
+- Application: pilot details, device/SIM preference, consent and corrections requested by the team.
+- Help: support cases, staff replies and customer follow-up, with bounded older-record pages.
+- Account: own requests/status, protected test PDFs, complete JSON export and sign-out.
+- Optional Explore preview: the earlier Home/Plans/Network/Account concept experience remains clearly fictional.
 
-Prices and allowances are deliberately unset until wholesale terms are known. Selecting a concept creates no order or subscription. All application data is local demonstration content; there is no application API connection, analytics, login, KYC collection, billing, payment collection, SIM provisioning or network control. Development tooling may connect to the local Metro server and Expo tooling; the privacy statements in the UI refer to application features.
+No app action attaches a phone to a satellite, verifies subscriber registration, activates a SIM, moves money or creates a tax invoice. The app is not currently qualified for a carrier's constrained satellite app list. Direct-to-cell, terrestrial access and dish-based Wi-Fi remain separate explanations and test paths.
 
-The app neither detects satellite transport nor opts into constrained satellite data. A future satellite-compatible version will require device/carrier qualification, relevant Android declarations and Apple entitlements, and actual field testing. No such approval is implied here.
+## Configure and run
 
-## Layout
-
-| Path | Purpose |
-| --- | --- |
-| `App.tsx` | Native navigation and four preview screens |
-| `src/ui.tsx` | Small visual components and the forest/mint theme |
-| `src/domain.ts` | Local concepts, presentation state and blocked live actions |
-| `src/domain.test.ts` | Preview isolation and reset checks |
-| `app.json` | App identifiers, tablet support, permissions and generation configuration |
-| `plugins/withPreviewSigning.cjs` | Reproducible Android signing configuration: per-developer debug key, unsigned release |
-| `assets/` | Original geometric Onesa preview icons |
-| `ios/` | Generated Xcode project and CocoaPods configuration |
-| `android/` | Generated Android project and Gradle wrapper |
-
-This package owns its dependencies and does not import components, runtime code or dependencies from the website or backend. An API contract can be introduced later without creating a shared runtime package.
-
-## Run the preview
-
-Use **Node.js 24 LTS** (at least 24.3, below 25) and npm. From this directory:
+Use Node 24.22.1 and the locked Expo 58 toolchain:
 
 ```sh
 npm ci
-npm start
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.20:4000 npm start
 ```
 
-Use an Expo Go version compatible with the pinned Expo SDK for a quick device preview, or use a local native development build. The lockfile pins the dependency graph. Expo SDK 58 compatibility is the baseline; a mismatched Expo Go version may require a development build.
+Replace the example address with the deliberately exposed lab API. Loopback on a phone refers to the phone; use a reachable private LAN address, or `10.0.2.2` for an Android emulator reaching its host. Production builds reject cleartext HTTP and need an HTTPS origin or HTTPS gateway URL ending in `/api`. No API address means account access is unconfigured and the concept preview remains available.
 
-### iPhone and iPad
+The only public build variable is the API address. **Never embed an OIDC client secret, encryption key or provider credential in an Expo public variable.** Server configuration and secrets stay on the API.
 
-On a Mac with a compatible Xcode, iOS Simulator and CocoaPods installation:
+Local customer accounts use administrator-issued lab credentials. Central registration/recovery occurs in the shared Onesa browser flow when configured. Staff operations remain a protected web workspace, not a native credential shortcut.
 
-```sh
-npm ci
-npm run ios
-```
+## Session and connectivity behavior
 
-Choose an iPhone or iPad simulator. Both use the same `ios/` project. Signing a physical-device build requires your own Apple developer configuration. No signing identity is included.
+Onesa sign-in uses the system browser and a native PKCE challenge. The callback has exactly the registered custom scheme/host/path and a one-time handoff code/state; it never carries a bearer token. Pending verifier/state is device-bound and expires. Session tokens are stored in Expo SecureStore with device-local, unlocked-only access, scoped to a hash of the API origin.
 
-### Android
+The offline cache stores only account display metadata and a small application-status summary. It excludes support conversations, payment history and identity documents. Cache age is shown; mutations are explicit and not silently queued. API requests time out, reject redirects and retain an idempotency key for an identical retry. Sign-out clears the local token/cache immediately and reports failure to confirm server revocation without pretending the device is still signed in.
 
-With Android Studio, the corresponding Android SDK/JDK and an emulator or authorised development device configured:
+PDF and account exports download only on request to temporary app storage, use the native share sheet and are removed from that temporary location afterward. A recipient or share destination may retain its own copy. No application analytics or background polling is configured.
 
-```sh
-npm ci
-npm run android
-```
-
-The Android toolchain uses the developer machine's standard debug signing configuration. Keystores are not committed. Release builds are intentionally unsigned; configure private release signing separately before distribution. The bundle/package identifiers end in `.preview` to keep this development app separate from any future customer app.
-
-## Validate and regenerate
+## Native build and verification
 
 ```sh
 npm run typecheck
 npm test
 npm run export
-```
-
-`npm run verify` runs all three. The export command bundles the iOS and Android JavaScript with Metro and emits platform assets under ignored `dist/`. It does **not** compile an IPA, APK or AAB.
-
-Native projects are checked in so that the repository has real platform projects. Treat `app.json` and `plugins/` as their configuration source; update them before regenerating:
-
-```sh
 npm run prebuild
 ```
 
-Regeneration can rewrite native configuration. Review and preserve any intentional native changes before running it. The custom signing plugin fails explicitly if Expo changes the expected Gradle template, so signing behaviour must be reviewed during SDK upgrades.
+`npm run verify` runs typecheck, tests and both platform JavaScript exports. `prebuild` regenerates native files from `app.json` and `plugins/`; review its diff. SecureStore, WebBrowser and Sharing plugins are included. iPhone and iPad share the generated iOS target.
 
-## Verification status
+On macOS with compatible Xcode/CocoaPods, run `npm run ios`. With the pinned Android SDK/JDK and an emulator or authorized device, run `npm run android`. The root native workflow compiles Android debug and an unsigned iOS simulator target; consult the exact run for results. JavaScript export, compiler success, signed distribution and physical-device acceptance are separate evidence levels.
 
-Verified during foundation creation:
+The Android signing plugin uses each development machine's normal private debug key and keeps release builds unsigned. No keystore, Apple signing identity or provisioning profile is committed. Production distribution needs the owner's signing/developer configuration.
 
-- TypeScript compilation without emitting files.
-- Focused automated checks that plan choices do not enable live actions, reset clears preview state, and satellite service stays explicitly unavailable.
-- Expo native project generation for both iOS and Android.
-- Metro production JavaScript export for both platforms.
-- Generated iOS project includes iPhone and iPad; generated Android permissions remove microphone, camera, location and legacy storage access.
+## Source map
 
-**Not yet verified:** compilation with Xcode or the Android SDK, simulator or physical-device behaviour, VoiceOver/TalkBack, signed builds, store submission, real operator integration or satellite operation. Native binary builds and device checks are the next validation step before any distribution.
+| Path | Purpose |
+| --- | --- |
+| `App.tsx` | Customer journeys, native browser sign-in, secure storage and document sharing |
+| `src/api.ts` | Independent HTTP client, URL/callback validation and minimized cache contract |
+| `src/PreviewApp.tsx`, `src/domain.ts` | Isolated concept preview and local state |
+| `src/ui.tsx` | Forest/mint components, readable typography, accessible target sizes |
+| `app.json`, `plugins/` | Native generation, package IDs, permissions and signing rules |
+| `ios/`, `android/` | Generated native projects |
 
-## Integration sequence
-
-1. Confirm the regulatory model, licensed host and commercial scope.
-2. Agree the authenticated API contract for Onesa identity, accounts, catalogues and readiness states.
-3. Replace local concept data with the backend catalogue, including stale/offline states and bounded retry.
-4. Add approved subscriber registration, account recovery and SIM/eSIM fulfilment using the host's supported workflows.
-5. Add payment reconciliation, usage and invoices with server-side enforcement.
-6. Qualify optional satellite capabilities independently for each market, plan, device and service.
-
-The app must never infer live service from a user's selected plan or from an environment toggle. The current live-action boundary returns unavailable for every activation, payment and satellite action.
-
-## Platform references
-
-- [Expo project workflow](https://docs.expo.dev/workflow/overview/)
-- [Expo config plugins](https://docs.expo.dev/config-plugins/plugins/)
-- [Android app signing](https://developer.android.com/studio/publish/app-signing)
-- [Android constrained satellite networks](https://developer.android.com/develop/connectivity/satellite/constrained-networks)
-
-The generated platform build files originate from the official Expo SDK 58 bare template and React Native toolchain. Keep dependency licence notices and review them before distribution.
+The project does not request camera, microphone, location or legacy external storage. Review generated manifests and actual OS prompts after every plugin update. Test secure storage, callbacks, sharing, text scaling, VoiceOver/TalkBack, intermittent data and recovery on the physical matrix before release. [Validation](../../docs/VALIDATION.md) records completed evidence; [hardware acceptance](../../docs/HARDWARE_PILOT.md) defines the remaining device work.

@@ -4,12 +4,15 @@ import App from "./App";
 import "./styles.css";
 
 const InternalApp = lazy(() => import("./internal/InternalApp"));
-const isInternalPreview = window.location.pathname === '/internal' || window.location.pathname.startsWith('/internal/');
+const WorkspaceApp = lazy(() => import("./workspace/WorkspaceApp"));
+const path = window.location.pathname;
+const isInternalPreview = path === '/preview/internal' || path.startsWith('/preview/internal/');
+const workspaceSurface = path === '/internal' || path.startsWith('/internal/') ? 'staff' : path === '/account' || path.startsWith('/account/') ? 'customer' : null;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Suspense fallback={<p style={{padding:24}}>Opening Onesa Mobile…</p>}>
-      {isInternalPreview ? <InternalApp /> : <App />}
+      {workspaceSurface ? <WorkspaceApp surface={workspaceSurface}/> : isInternalPreview ? <InternalApp /> : <App />}
     </Suspense>
   </React.StrictMode>,
 );

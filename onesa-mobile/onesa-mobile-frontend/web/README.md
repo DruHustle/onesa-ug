@@ -1,31 +1,35 @@
 # Onesa Mobile web
 
-Responsive concept website and customer-account demo. All plans are proposed; all balances are fictional. No identity document, payment or subscriber information is collected. Nothing activates a SIM or satellite service.
+Public concept website and separate authenticated customer/staff workspaces. Built with React, TypeScript and Vite; the package has no backend source imports.
 
 ## Run
-
-Use Node.js 24 LTS. From this directory:
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open http://localhost:5173. `npm run build` runs TypeScript checks and creates `dist/`; `npm test` verifies that a successful API response cannot be displayed as live carrier readiness. `npm run preview` serves a production build locally.
+Use Node 24.22.1. Open `http://localhost:5173`. Start the backend on loopback port 4000 for account/staff operations; Vite proxies `/api`. From the product root, `npm run dev` starts both independent processes after both packages' dependencies are installed. A production gateway must serve the same-origin `/api` proxy; use the reviewed runtime configuration.
 
-The demo works without the API. For the Help screen's development connection check, run the backend on port 4000. The Vite development server proxies `/api` to it; production hosting needs an explicit same-origin reverse proxy if this check is retained.
+| Route | Behavior |
+| --- | --- |
+| `/` | Public concept plans, connectivity explanations, FAQs and account/staff entry points |
+| `/account/` | Protected pilot application, support/replies, account requests, test PDFs and complete export |
+| `/internal/` | Staff MFA sign-in and permission-filtered hardware, readiness, customer support, test billing and audit workflows |
+| `/#demo` | Explicitly fictional customer preview, independent of authentication |
+| `/preview/internal/` | Preserved fictional company preview; browser-local changes have no business effect |
 
-## What works
+The production workspaces use cookies, anti-CSRF tokens, server permissions, current revisions and retained per-payload retry keys. They show pending, empty, error and stale/conflict states without inventing network measurements or payment success. Collection cursors expose older records. Sensitive approval/refund failures require reauthentication when the API says the original proof is too old.
 
-- Responsive concept page, connectivity-path explorer, plan selection and FAQs.
-- Compact account demo with overview, proposed plans, billing explanation and readiness help.
-- Keyboard navigation, visible focus, reduced-motion support and status announcements.
-- A bounded, read-only API readiness check with a clear unavailable state.
+Lab credentials come from the private backend bootstrap file, not from constants in the website. Staff need an authenticator code. Central identity is exposed only when configured. Public code never contains a client secret, bearer token or real subscriber fixture.
 
-## Internal operations
+The layout uses readable text, visible focus, 44 px controls, compact mobile cards, full staff navigation and bounded table scrolling. These design rules still require assistive-technology and device acceptance. All plan prices and commercial allowances remain unset.
 
-`/internal/` loads a separate operations interface from `src/internal/`. All records and actions are synthetic local demonstrations. The public website does not link to this route. Its absence from public navigation is not access control: staff authentication, backend authorization, MFA and durable audit records must be implemented before real company/customer data is connected. A proposed production separation uses `mobile.onesa.eu` for public/customer experiences and `ops.mobile.onesa.eu` for staff; neither hostname is configured by this starter.
+## Verify
 
-## Before customer use
+```sh
+npm test
+npm run build
+```
 
-Replace demo fixtures through documented backend endpoints. Integrate approved identity, provisioning, billing and support workflows. Add end-to-end acceptance coverage for those live flows and validate device-specific accessibility. This starter is not a complete telecom self-service portal.
+Tests cover readiness honesty, preview isolation, retry-key behavior and the workspace contracts. Browser visual checks use a local ignored `.validation/` harness with synthetic component fixtures; this harness is excluded from the build/deployment. Real HTTP integration and security tests live in the backend package. Browser component checks are not evidence of hosted SSO or device-network success.

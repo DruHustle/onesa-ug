@@ -4,3 +4,14 @@ test
 .env.*
 coverage
 *.log
+var
+backups
+**/private
+**/private-recovery
+**/restored
+*.sqlite
+*.sqlite-*
+*.authkey
+**/*.key
+**/*.omb
+*-credentials.json

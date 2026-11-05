@@ -163,7 +163,16 @@ export default function InternalApp() {
     <header className="ops-header"><div className="ops-brand"><span className="ops-brand-mark" aria-hidden="true"><i /><i /><i /></span><span>onesa <small>mobile</small></span><span className="ops-brand-divider" /><strong>Operations</strong></div><div className="ops-header-actions"><a href="/">Customer website <span aria-hidden="true">→</span></a><button className="ops-button ops-button-light" onClick={reset}>Reset demo</button></div></header>
     <div className="ops-banner"><span aria-hidden="true" />Internal operations preview · synthetic records · staff authentication pending</div>
     <div className="ops-layout">
-      <aside className="ops-sidebar"><nav aria-label="Operations navigation">{views.map((item) => <button key={item.id} aria-current={view === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span aria-hidden="true">{item.symbol}</span>{item.name}</button>)}</nav><div className="ops-sidebar-note"><Badge>DEVELOPMENT</Badge><p>Local demonstration data.<br />No live operator connections.</p></div></aside>
+      <aside className="ops-sidebar">
+        <label className="ops-section-picker">
+          <span>Section</span>
+          <select aria-label="Operations section" aria-controls="ops-main" value={view} onChange={(event) => setView(event.target.value as ViewId)}>
+            {views.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <nav aria-label="Operations navigation">{views.map((item) => <button key={item.id} aria-current={view === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span aria-hidden="true">{item.symbol}</span>{item.name}</button>)}</nav>
+        <div className="ops-sidebar-note"><Badge>DEVELOPMENT</Badge><p>Local demonstration data.<br />No live operator connections.</p></div>
+      </aside>
       <main id="ops-main" className="ops-main" tabIndex={-1}>
         <div className="ops-page-heading"><div><span className="ops-eyebrow">COMPANY WORKSPACE</span><h1 ref={headingRef} tabIndex={-1}>{current.name}</h1><p>{current.description}</p></div><Badge>Preview session</Badge></div>
         <div className="ops-session-update" role="status" aria-live="polite">{state.audit[0] ? `${state.audit[0].action}: ${state.audit[0].detail}` : 'Explore the queues below. All changes stay in this browser session.'}</div>

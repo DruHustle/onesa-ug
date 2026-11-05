@@ -1,11 +1,13 @@
-import { createAppServer } from "./app.ts";
-import { loadConfig } from "./config.ts";
+import { createPlatformServer } from "./platform/http.ts";
+import { loadPlatformConfig } from "./platform/config.ts";
 
-const config = loadConfig();
-const server = createAppServer(config);
+const config = loadPlatformConfig();
+const { server } = createPlatformServer(config);
 
 server.listen(config.port, config.host, () => {
-  console.info(`Onesa Mobile demo API listening on port ${config.port}. Telecom activation and payments are unavailable.`);
+  console.info(
+    `Onesa Mobile ${config.mode} control plane listening on port ${config.port}. Commercial telecom integrations are not commissioned.`,
+  );
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {
@@ -23,7 +25,9 @@ function shutdown(): void {
     process.exitCode = 1;
   }, 5_000);
   deadline.unref();
-  server.close(() => { clearTimeout(deadline); });
+  server.close(() => {
+    clearTimeout(deadline);
+  });
   server.closeIdleConnections();
 }
 

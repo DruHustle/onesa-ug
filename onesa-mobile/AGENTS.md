@@ -1,11 +1,11 @@
 # Onesa Mobile project
 
-This repository is the Onesa Mobile development foundation. The project aims to provide a simple Zimbabwean mobile service with a future satellite capability through authorized partners.
+This product directory contains the Onesa Mobile hardware pilot and operations platform. The project aims to provide a simple Zimbabwean mobile service with a future satellite capability through authorized partners.
 
 ## Structure
 
 - Website: `onesa-mobile-frontend/web/`.
-- Public/customer UI and internal operations are distinct surfaces. The current `/internal/` interface is synthetic and unauthenticated, not a live staff system.
+- Public/customer UI and internal operations are distinct surfaces. `/account/` and `/internal/` are protected persistent workspaces; synthetic previews are isolated at `/#demo` and `/preview/internal/`.
 - Native iPhone, iPad and Android app: `onesa-mobile-frontend/mobile/`, including real generated `ios/` and `android/` projects.
 - API: `onesa-mobile-backend/`.
 - Product decisions and research: `docs/`.
@@ -16,7 +16,7 @@ Canonical repository: `DruHustle/onesa-ug`, product directory `onesa-mobile/`. G
 
 ## Product integrity
 
-The current release is a development preview. Every fixture must remain clearly fictional. Proposed plans have no approved price or allowance. Live onboarding, SIM provisioning, payments and satellite access have not been integrated. A configuration flag must never turn a mock adapter into an apparent live service.
+The current release is a prelaunch hardware/software pilot. Every fixture must remain clearly fictional. Proposed plans have no approved price or allowance. Live onboarding, SIM provisioning, payments and satellite access have not been integrated. A configuration flag must never turn a mock adapter into an apparent live service.
 
 Network access requires provider and regulatory authorization. Do not invent carrier endpoints, Starlink wholesale APIs, Zimbabwe satellite availability, universal device compatibility or emergency functionality. Mobile network attachment is controlled by the network and device, not by an app switch. Preserve the distinction between identity login, subscriber registration, SIM activation and satellite eligibility.
 

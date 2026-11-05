@@ -226,6 +226,9 @@ export default function App() {
             <a href="#plans" onClick={() => setScreen("explore")}>
               Our idea
             </a>
+            <a className="account-link" href="/account/">
+              My account
+            </a>
             <button
               className="button small light"
               onClick={() => navigate(screen === "demo" ? "explore" : "demo")}
@@ -237,9 +240,12 @@ export default function App() {
       </header>
       <div className="preview-bar">
         <div className="shell">
-          <span className="status-dot" /> Development preview{" "}
-          <span className="separator">·</span> Plans and network access are
-          proposed. No service is being sold.
+          <span className="status-dot" />
+          {screen === "demo" ? "Customer demo" : "Development preview"}{" "}
+          <span className="separator">·</span>{" "}
+          {screen === "demo"
+            ? "Fictional account. No mobile service is active."
+            : "Plans and network access are proposed. No service is being sold."}
         </div>
       </div>
       <main id="main" tabIndex={-1}>
@@ -478,7 +484,7 @@ export default function App() {
           <section className="shell workspace">
             <div className="workspace-heading">
               <div>
-                <p className="eyebrow">My Onesa · development demo</p>
+                <p className="eyebrow">My Onesa</p>
                 <h1 ref={titleRef} tabIndex={-1}>
                   Your mobile, at a glance.
                 </h1>
@@ -534,7 +540,7 @@ export default function App() {
                           <Arrow />
                         </span>
                         <p className="eyebrow">Network readiness</p>
-                        <h2>The next connection starts with a partner.</h2>
+                        <h2>Service availability</h2>
                         <dl>
                           <div>
                             <dt>Cellular service</dt>
@@ -709,6 +715,7 @@ export default function App() {
                       <button
                         className="button light"
                         disabled={checking}
+                        aria-busy={checking}
                         onClick={checkApi}
                       >
                         {checking ? "Checking…" : "Check development API"}
@@ -746,6 +753,7 @@ export default function App() {
             <br />
             Development preview · no affiliation with Starlink is claimed.
           </p>
+          <a href="/internal/">Staff sign-in</a>
           <a
             href="https://github.com/DruHustle/onesa-ug/tree/main/onesa-mobile"
             target="_blank"
