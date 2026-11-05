@@ -22,12 +22,12 @@ Project settings select the web root; `vercel.json` intentionally contains no `r
 
 | Receipt | Observed result |
 | --- | --- |
-| Source | [`3a9683212a16478f0f511e174ea16f2118fe2631`](https://github.com/DruHustle/onesa-ug/commit/3a9683212a16478f0f511e174ea16f2118fe2631) |
-| Production deployment | `dpl_FLwXmBuSaz3akMLm1dcj3inqMY7f` — **READY**, Git source matches the commit above |
-| Deployment URL | [onesa-mobile-nga4zew9y-druhustles-projects.vercel.app](https://onesa-mobile-nga4zew9y-druhustles-projects.vercel.app) |
-| Source qualification | [Run 42114100792](https://github.com/DruHustle/onesa-ug/actions/runs/42114100792) — **all five jobs passed** |
+| Source | [`337142d97cf0b5478494c6b28a73c5fd75ae7383`](https://github.com/DruHustle/onesa-ug/commit/337142d97cf0b5478494c6b28a73c5fd75ae7383) |
+| Production deployment | `dpl_9pMTeAEjs9NA6bSZxmnQgih9WvmD` — **READY**, Git source matches the commit above |
+| Deployment URL | [onesa-mobile-6rhk7k53s-druhustles-projects.vercel.app](https://onesa-mobile-6rhk7k53s-druhustles-projects.vercel.app) |
+| Source qualification | [Run 42129021936](https://github.com/DruHustle/onesa-ug/actions/runs/42129021936) — **all six jobs passed** |
 
-Authenticated hosted **GET** requests against that deployment verified:
+Observed on **5 November 2026 at 23:23 UTC**. Authenticated hosted **GET** requests against that deployment verified:
 
 | Paths | Response |
 | --- | --- |

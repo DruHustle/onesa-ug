@@ -2,6 +2,42 @@
 
 Date: **5 November 2026**. Scope: the persistent Onesa Mobile hardware-pilot and customer/staff control plane, its native clients, and the additive Company Portal identity integration. This is software qualification with synthetic records. It is not evidence of an operating mobile network or commissioned equipment.
 
+## Current hosted qualification — source `337142d`
+
+[Qualified application source](https://github.com/DruHustle/onesa-ug/commit/337142d97cf0b5478494c6b28a73c5fd75ae7383) passed **all six jobs** in [qualification run 42129021936](https://github.com/DruHustle/onesa-ug/actions/runs/42129021936) on `337142d`. Final job conclusions and bounded test/compiler output were inspected. This supersedes pending hosted statements from the local second-review checkpoint; historical receipts below remain tied to their own source.
+
+| Job | Observed result |
+| --- | --- |
+| API types and HTTP contracts | TypeScript; **98 tests passed**, zero failures/skips. |
+| Public, customer and staff web | TypeScript, production build; **23 tests passed**, zero failures/skips. |
+| Native logic and JavaScript | TypeScript and both iOS/Android exports; **25 tests passed**, zero failures/skips. |
+| Runtime and recovery | **9 tests passed**, zero failures/skips, including actual Compose merge/source selection; container build, protected routes, restart persistence and encrypted recovery passed. |
+| Portal identity | **35 tests passed**, zero failures/skips, against disposable actual PostgreSQL. No live migration was run. |
+| Authenticated Chromium journeys | **20 journey/check groups**, **31 layout observations**, Chromium **151.0.7922.34**. The API/gateway and all accounts were disposable synthetic test resources. |
+
+The API, web, native and recovery suites contain **155 passing tests**; the **35 Portal cases** and **20 browser groups** are reported separately. Repeated runs are not added together. Native compilation is a different gate, recorded below.
+
+### Browser evidence and visual inspection
+
+The passing browser run exercised real customer application/support/reply/request/export writes, hardware site/asset/receipt and all seven commissioning checks, rejection of a manual pass without authority, acceptance with four matching independently reviewed synthetic evidence revisions, customer denial of staff access, service retry, sign-out, keyboard FAQ/skip navigation and a committed mutation delivered after client expiry. No external browser request or runtime error was observed.
+
+Layout checks cover seven surfaces at **320, 390, 768 and 1440 CSS pixels**, plus twice-computed-size text on public, customer and hardware screens. Text overrides are restored before later journeys. The release owner visually inspected the retained public/customer phone screens, hardware phone/desktop screens and trial-result phone screen. This is focused Chromium qualification, not WCAG certification, physical-device testing or subscriber research.
+
+The downloaded [browser artifact](https://github.com/DruHustle/onesa-ug/actions/runs/42129021936/artifacts/13461663540) is **3,405,227 bytes**, archive SHA-256 `1c37872c0196c486efe320d519fb8ce9a2155220a84148193c141baa6be424b9`, expiring **12 November 2026, 23:23:24 UTC**. Its checksum was verified before bounded extraction. The [report and five inspected screenshots](validation/337142d/README.md) are preserved in the repository independently of artifact retention.
+
+The preceding run on `e30427c` failed because its trial-site locator also matched the test-asset hint. Its screenshots exposed compressed commissioning words/site badges. The next source `3e050bb` passed all six jobs; screenshot inspection then caught a mobile FAQ spacing issue and text-size overrides retained by the test harness. Both were corrected in `337142d`, whose complete run and ordinary-typography screenshots are recorded here. Failed or partial runs are not counted as passing evidence.
+
+### Current native compiler artifacts
+
+[Native compilation run 42126218304](https://github.com/DruHustle/onesa-ug/actions/runs/42126218304) passed both Android job `127590990208` and iOS job `127590990816` on source **`e30427cdfb727b62622916cad572eeef13983a63`**. The native application directory and native compile workflow have **no Git diff** between that source and `337142d`. Web/test/report follow-ups do not claim a newer native compilation.
+
+| Artifact | GitHub archive size | Archive SHA-256 | Retention expiry (UTC) |
+| --- | ---: | --- | --- |
+| [Android arm64 debug APK](https://github.com/DruHustle/onesa-ug/actions/runs/42126218304/artifacts/13462120800) | 47,909,070 bytes | `08a02397ebca879c1d26bb857233f8b8dfb5641b17ea2e7ff6ff19c3a3c812a7` | 12 November 2026, 23:05:45 |
+| [Unsigned iPhone/iPad simulator app](https://github.com/DruHustle/onesa-ug/actions/runs/42126218304/artifacts/13460638650) | 34,481,158 bytes | `6f7252fda0ad699a0dd7770c979b6509b8ba08ea5429509c2b4e23ea17b8639d` | 12 November 2026, 23:08:00 |
+
+These are GitHub archive digests, not extracted APK/app checksums. Job conclusions and artifact metadata establish compilation; exact iOS tool versions were not independently extracted from its full log. Both outputs use Debug configuration and need Metro with matching source. The Android output is for arm64 test devices. The unsigned iOS output runs in the simulator and cannot be installed on a physical iPhone/iPad. Neither is a signed store release or a physical radio observation. Use the [Android USB bench procedure](HARDWARE_PILOT.md#first-android-usb-bench-session).
+
 ## Second-review local qualification — 5 November 2026
 
 These checks were rerun on the integrated second-review worktree before publication. They supersede the baseline local counts below. Hosted CI and deployment receipts are separate exact-source observations.
@@ -11,10 +47,10 @@ These checks were rerun on the integrated second-review worktree before publicat
 | Mobile API | `npm run check`: TypeScript and **98 tests passed** | Includes 13 hardware/configuration cases, the delayed central-authorization/logout regression, six filesystem-security cases, real HTTP authorization/ownership and OpenAPI freshness. |
 | Web | `npm test` and `npm run build`: **23 tests passed**, TypeScript and production bundle passed | Includes obsolete mutation success/errors, private download boundaries, retry/paging and hosted holding-handler routes. |
 | Native | `npm run verify`: TypeScript, **25 tests passed**, iOS and Android JavaScript exports passed | Includes discovery, expiry, account ownership/shape, edit eligibility and stale-read ordering, plus existing delayed-session/storage/share tests. These are not native compiler or physical-device results. |
-| Recovery | `node --test scripts/tests/*.test.mjs`: **8 passed, 1 skipped** | Real encrypted database recovery and explicit recovery-mode guards pass. Actual Compose merging is skipped because Docker is unavailable locally; hosted runtime CI must execute it. |
+| Recovery | `node --test scripts/tests/*.test.mjs`: **8 passed, 1 skipped** | Real encrypted database recovery and explicit recovery-mode guards pass. Actual Compose merging is skipped because Docker is unavailable locally; hosted runtime CI executed it successfully in the current receipt above. |
 | Browser | `npm run test:browser`: launch blocked locally | Chromium was refused its singleton socket by the executor before any page loaded. No local authenticated browser result or new screenshot is claimed. The dedicated GitHub job executes the same synthetic loopback journeys and retains their report/screenshots. |
 
-Total: **154 passing local tests**, with one explicitly skipped Docker case. Repeat runs are not added together. The browser harness exercises real customer writes/export, hardware receipt and all seven checks, denied/accepted scoped trial recording, role denial, connection recovery, sign-out and a committed mutation delivered after client expiry. It also measures 320/390/768/1440-pixel layout and enlarged text; these are test intentions until a successful hosted report is retained.
+Total: **154 passing local tests**, with one explicitly skipped Docker case. Repeat runs are not added together. The browser harness exercises real customer writes/export, hardware receipt and all seven checks, denied/accepted scoped trial recording, role denial, connection recovery, sign-out and a committed mutation delivered after client expiry. It also measures 320/390/768/1440-pixel layout and enlarged text; the successful hosted report above now records their execution.
 
 The second-review findings and physical dependencies are in the [resolution register](reviews/RESOLUTION_REGISTER.md). The new [physical bench guide](PHYSICAL_BENCH.md) starts with an existing Mac and Android phone over USB. No actual equipment, operator entitlement, radio service or production identity was established by these checks.
 
