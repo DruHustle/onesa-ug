@@ -13,6 +13,8 @@ from typing import Any, BinaryIO, TextIO
 import httpx
 
 from app.consumer import CompletionError, Connection, json_response
+from app.mcp_context import METHODS as CONTEXT_METHODS
+from app.mcp_context import Context, ContextError
 
 PROTOCOL_VERSION = "2025-11-25"
 MAX_LINE = 65536
@@ -45,10 +47,14 @@ class Server:
         connection: Connection,
         allowed: set[str],
         transport: httpx.AsyncBaseTransport | None = None,
+        *,
+        resources: set[str] | None = None,
+        prompts: set[str] | None = None,
     ) -> None:
         if connection.provider != "onesa" or not allowed <= SCHEMAS.keys():
             raise ValueError("MCP requires an Onesa identity and known read-only permissions")
-        self.connection, self.allowed, self.transport = connection, allowed, transport
+        self.connection, self.allowed, self.transport = connection, frozenset(allowed), transport
+        self.context = Context(connection, resources or set(), prompts or set(), transport)
         self.initialized = False
         self.ready = False
 
@@ -86,13 +92,18 @@ class Server:
             self.initialized = True
             result: dict[str, Any] = {
                 "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "onesa-read-only-tools", "version": "1.0.0"},
+                "capabilities": {"tools": {"listChanged": False}, **self.context.capabilities()},
+                "serverInfo": {"name": "onesa-read-only-tools", "version": "1.1.0"},
             }
         elif method == "ping":
             result = {}
         elif not self.ready:
             return error(identifier, -32002, "Initialize the MCP session first")
+        elif method in CONTEXT_METHODS:
+            try:
+                result = await self.context.dispatch(method, params)
+            except ContextError as refused:
+                return error(identifier, refused.code, refused.message)
         else:
             if method not in {"tools/list", "tools/call"}:
                 return error(identifier, -32601, "Method not found")
@@ -212,7 +223,23 @@ def main() -> None:
             for name in os.environ.get("ONESA_MCP_ALLOWED_TOOLS", "").split(",")
             if name.strip()
         }
-        asyncio.run(run(Server(connection, allowed), sys.stdin.buffer, sys.stdout))
+        resources = {
+            uri.strip()
+            for uri in os.environ.get("ONESA_MCP_ALLOWED_RESOURCES", "").split(",")
+            if uri.strip()
+        }
+        prompts = {
+            name.strip()
+            for name in os.environ.get("ONESA_MCP_ALLOWED_PROMPTS", "").split(",")
+            if name.strip()
+        }
+        asyncio.run(
+            run(
+                Server(connection, allowed, resources=resources, prompts=prompts),
+                sys.stdin.buffer,
+                sys.stdout,
+            )
+        )
     except (ValueError, OSError, httpx.HTTPError):
         print("MCP bridge unavailable; check approved local configuration", file=sys.stderr)
         raise SystemExit(1) from None

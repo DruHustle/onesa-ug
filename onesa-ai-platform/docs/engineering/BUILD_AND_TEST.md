@@ -308,7 +308,7 @@ and latest-decision reads occur under the same immediate SQLite write transactio
 as the single-use claim; source changes do not commission this optional extension.
 
 Consumer interoperability checks are in `tests/test_consumer.py` and
-`tests/test_mcp_stdio.py`. They cover unchanged consumer business code with Onesa
+`tests/test_mcp_stdio.py` and `tests/test_mcp_context.py`. They cover unchanged consumer business code with Onesa
 and compatible provider transports, portable history/provenance, credential separation,
 strict completion/failure boundaries, response/input limits, cancellation and MCP
 discovery/explicit permissions. Route fixtures without PostgreSQL simulate admission
@@ -316,6 +316,12 @@ and identity; the separate database test verifies actual sessions, CSRF, shared 
 and absence of stored conversations/messages. Run both with the existing backend
 `pytest -q` command and the isolated `_test` database. A skipped database case is
 not an authenticated integration PASS. No live provider or physical tool is used.
+The context tests additionally use the actual API and PostgreSQL to prove enrolled
+document ownership, cross-user refusal, deletion and session revocation. Separate
+adverse transport tests cover URI/parameter refusal before transmission, immutable
+scope lists, redacted malformed responses, cancellation and prompt injection remaining
+untrusted data without tool or model invocation. These tests do not substitute for
+a commissioned service identity, an external MCP client or hosted acceptance.
 
 Release-unit fixtures pin a disposable commissioning registry and keep its keys,
 policy and database inside their temporary directory. Root test execution uses a

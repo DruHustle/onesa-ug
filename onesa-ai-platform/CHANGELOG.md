@@ -6,6 +6,12 @@
 
 ## Unreleased
 
+- Source candidate: add explicitly scoped MCP model/Knowledge resources and a
+  bounded text-summary prompt, with fresh identity/ownership checks on discovery
+  and reads. Preserve empty defaults, exact document scopes, embedding metadata,
+  cancellation and redacted failures. No hosted activation, new provider processing,
+  service-identity commissioning or completed external-client acceptance is implied.
+
 - Source correction: reject unsupported Onesa model IDs and invalid header/cookie
   credentials before consumer transmission. Preserve supplied backend and request
   provenance, and reject contradictory mock/real metadata. The independently
