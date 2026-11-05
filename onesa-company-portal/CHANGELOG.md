@@ -1,5 +1,10 @@
 # Changelog
 
+- Add a versioned Onesa email presentation for new account and operations messages,
+  retaining plain alternatives and original bytes for earlier delivery attempts.
+  Mobile/dark rendering and delivery-version regressions are covered locally;
+  deployment and mailbox-client acceptance remain separate release requirements.
+
 ## Unreleased — Shared sending domain
 
 - Authorize `it-infrastructure@onesa.eu` for infrastructure notifications. Keep

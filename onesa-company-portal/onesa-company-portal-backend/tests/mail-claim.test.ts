@@ -18,20 +18,23 @@ test('actual PostgreSQL claims freeze presentation across retries, interruption 
   const insert=async(attempts=0)=>{const id=randomUUID();await first.query('INSERT INTO jobs(id,attempts,payload) VALUES($1,$2,$3)',[id,attempts,payload]);return id;};
   const fresh=await insert();
   await first.query('BEGIN');const claimed=await claimMailJob(first);
-  assert.equal(claimed.id,fresh);assert.equal(claimed.attempts,1);assert.equal(claimed.payload.mailPresentation,'branded-v1');
+  assert.equal(claimed.id,fresh);assert.equal(claimed.attempts,1);assert.equal(claimed.payload.mailPresentation,'branded-v2');
   // A simultaneous worker sees the real held lock and cannot claim the same job.
   await second.query('BEGIN');assert.equal(await claimMailJob(second),undefined);await second.query('COMMIT');
   await first.query('COMMIT');
-  assert.deepEqual(claimed.payload,{...payload,mailPresentation:'branded-v1'});
+  assert.deepEqual(claimed.payload,{...payload,mailPresentation:'branded-v2'});
   // Simulate recovery after a committed claim and process interruption. Only the
   // named synthetic job is requeued; the durable version must survive a new client.
   await first.query("UPDATE jobs SET status='pending',locked_at=NULL WHERE id=$1",[fresh]);
   const restarted=await pool.connect();
-  try{await restarted.query(`SET search_path TO ${schema}`);const retry=await claimMailJob(restarted);assert.equal(retry.id,fresh);assert.equal(retry.attempts,2);assert.equal(retry.payload.mailPresentation,'branded-v1');}finally{restarted.release();}
+  try{await restarted.query(`SET search_path TO ${schema}`);const retry=await claimMailJob(restarted);assert.equal(retry.id,fresh);assert.equal(retry.attempts,2);assert.equal(retry.payload.mailPresentation,'branded-v2');}finally{restarted.release();}
+  await first.query('TRUNCATE jobs');const oldBranded=await insert(1);
+  await first.query(`UPDATE jobs SET payload=jsonb_set(payload,'{mailPresentation}','"branded-v1"'::jsonb) WHERE id=$1`,[oldBranded]);
+  assert.equal((await claimMailJob(first)).payload.mailPresentation,'branded-v1','Already attempted v1 jobs retain their exact renderer');
   await first.query('TRUNCATE jobs');const legacy=await insert(1);const old=await claimMailJob(first);
   assert.equal(old.id,legacy);assert.equal(old.attempts,2);assert.equal(old.payload.mailPresentation,undefined);assert.deepEqual(old.payload,payload);
-  await first.query('TRUNCATE jobs');const interrupted=await insert();await first.query('BEGIN');assert.equal((await claimMailJob(first)).payload.mailPresentation,'branded-v1');await first.query('ROLLBACK');
-  const recovered=await claimMailJob(second);assert.equal(recovered.id,interrupted);assert.equal(recovered.attempts,1);assert.equal(recovered.payload.mailPresentation,'branded-v1');
+  await first.query('TRUNCATE jobs');const interrupted=await insert();await first.query('BEGIN');assert.equal((await claimMailJob(first)).payload.mailPresentation,'branded-v2');await first.query('ROLLBACK');
+  const recovered=await claimMailJob(second);assert.equal(recovered.id,interrupted);assert.equal(recovered.attempts,1);assert.equal(recovered.payload.mailPresentation,'branded-v2');
   await first.query('TRUNCATE jobs');await insert(5);assert.equal(await claimMailJob(first),undefined);
   // A committed attempt may already have been accepted externally. A worker
   // restart after the provider's 24-hour deduplication window cannot resend it.
