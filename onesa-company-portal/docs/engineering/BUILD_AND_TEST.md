@@ -1,5 +1,40 @@
 # Separate application builds and tests
 
+## ARM64 runtime candidate build
+
+`infra/oracle/runtime_builds/build.py` rebuilds a pinned, containerd-only K3s
+candidate in an unprivileged Linux ARM64 Docker builder. The lock binds upstream
+archives, module locks, compiler packages, runtime payload and expected executable
+hashes. It collects original dependency license notices and fails on missing
+notices, changed sources or different output bytes. At least 24 GiB of free local
+space is required; source/module downloads need HTTPS access. The final builds
+and vendor-client extraction run without network access.
+
+From this product directory:
+
+```sh
+python3 -m unittest discover -s infra/oracle/runtime_builds -p 'test_*.py'
+python3 infra/oracle/runtime_builds/build.py \
+  --output /absolute/new/runtime-build \
+  --cache /absolute/private/runtime-module-cache
+```
+
+An existing exact builder can be supplied with `--builder-image sha256:...`;
+architecture and compiler-package hashes are still checked. `--retained-inputs`
+accepts a directory containing the three component `.archive` files,
+`vendor-k3s-arm64`, and the two chart filenames from the lock. Their original
+hashes remain mandatory. Preserve `build-result.json`, `build.log`, the lock,
+source inputs and `licenses/` with the candidate.
+
+The recipe runs selected upstream tests. Its containerd test-only fixture separates
+the file-size and line-size limits and adds explicit oversized-line rejection;
+production Go source hashes and module locks must remain unchanged. These checks
+do not cover a running cluster or all upstream tests. The result remains
+`BUILT_NOT_INSTALL_QUALIFIED`: no installation, publication, owner-policy update or
+deployment authorization occurs. Security assessment, independent review, disabled
+embedded registry and vendor add-ons, real workload/network/storage acceptance,
+Portainer compatibility and VM recovery remain separate requirements.
+
 ## NVIDIA reference asset gallery
 
 The product index and Drone product page contain three browser derivatives from

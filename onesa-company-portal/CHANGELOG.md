@@ -1,5 +1,11 @@
 # Changelog
 
+- Add a build-only ARM64 K3s runtime recipe with pinned source archives, dependency
+  locks, compiler packages and executable hashes. Retain upstream license notices
+  and selected runtime tests, with bounded archive extraction and source-integrity
+  guards. The recipe grants no installation or deployment authority; cluster,
+  workload and recovery qualification remain separate.
+
 - Add a versioned Onesa email presentation for new account and operations messages,
   retaining plain alternatives and original bytes for earlier delivery attempts.
   Mobile/dark rendering and delivery-version regressions are covered locally;
