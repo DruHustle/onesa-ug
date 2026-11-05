@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
-  testDir: "./drone/web/tests",
+  testDir: "./tests",
   testMatch: "**/*.spec.ts",
   timeout: 90000,
   expect: { timeout: 10000 },
@@ -13,7 +13,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "../.venv311/bin/python ../scripts/browser_fixture.py",
+      command: "../../../.venv311/bin/python ../../../scripts/browser_fixture.py",
       url: "http://127.0.0.1:8400/api/v1/health",
       reuseExistingServer: false,
       timeout: 30000,
