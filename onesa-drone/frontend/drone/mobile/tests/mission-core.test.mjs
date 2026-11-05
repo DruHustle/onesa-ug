@@ -21,7 +21,7 @@ test("mission purposes include wildlife, security, crop and medical use without 
 });
 test("coordinate input validates range, blanks and nonnumbers", () => {
   assert.deepEqual(waypoint("-17.1234567", "31.0000001"), { lat: -17.123457, lon: 31 });
-  for (const [value, axis] of [["", "lat"], ["NaN", "lon"], ["Infinity", "lat"], [181, "lon"], [90, "lat"]]) {
+  for (const [value, axis] of [["", "lat"], ["   ", "lon"], ["NaN", "lon"], ["Infinity", "lat"], [181, "lon"], [90, "lat"]]) {
     assert.throws(() => coordinate(value, axis), RangeError);
   }
 });

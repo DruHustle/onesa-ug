@@ -27,7 +27,8 @@ export const DEMO_ROUTE = Object.freeze([
 
 export function coordinate(value, axis) {
   if (axis !== "lat" && axis !== "lon") throw new TypeError("Unknown coordinate axis");
-  if (value === "" || value === null || value === undefined ||
+  if ((typeof value === "string" && !/^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/.test(value.trim())) ||
+      value === "" || value === null || value === undefined ||
       (typeof value !== "number" && typeof value !== "string")) {
     throw new RangeError("Enter a " + (axis === "lat" ? "latitude" : "longitude"));
   }
