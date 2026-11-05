@@ -4,6 +4,7 @@ import argparse
 import datetime
 import hashlib
 import hmac
+import html
 import importlib.util
 import json
 import math
@@ -31,7 +32,7 @@ SCANNER_FALLBACK_SECONDS = 4
 NOTIFICATION_SCOPE = "production-and-shared-v1"
 # Provider keys last 24 hours; leave an hour before manual reconciliation is needed.
 PENDING_RETRY_SECONDS = 23 * 60 * 60
-MAIL_ENVELOPE_VERSION = 1
+MAIL_ENVELOPE_VERSION = 2
 MAIL_BODY_MAX_BYTES = 32768
 MAIL_PRODUCTS = frozenset({"portal", "ai", "robot"})
 # Historical recipients remain valid so retained immutable attempts can be
@@ -971,6 +972,25 @@ def notification_product(alerts, metrics, kind, recovered_backends, prior_incide
     return next(iter(products)) if len(products) == 1 else None
 
 
+def operations_email_html_v1(subject, text, kind, simulation, product):
+    """New envelopes only. Retained v1/plain or v2/HTML bytes are never re-rendered."""
+    escape = html.escape
+    title = "Notification routing check" if simulation else {
+        "recovery": "Service recovered", "update": "Incident update",
+        "reminder": "An incident still needs attention", "alert": "Service needs attention",
+    }.get(kind, "Infrastructure notification")
+    badge = "Controlled test" if simulation else "Recovered" if kind == "recovery" else "Action required"
+    color, background = ("#1d5275", "#eaf4fa") if simulation else ("#14552d", "#e6f5ec") if kind == "recovery" else ("#684110", "#fff0d6")
+    name = {"portal": "Onesa Portal", "ai": "Onesa AI", "robot": "Onesa Robot", "drone": "Onesa Drone"}.get(product, "Onesa Infrastructure")
+    # Body and event classification are already produced by the existing monitor.
+    # HTML adds hierarchy; it cannot change recipient, event identity or observations.
+    rows = "".join('<p class="copy" style="margin:0 0 12px;color:#10263e;font-size:14px;line-height:23px;overflow-wrap:anywhere;word-break:break-word;">' + escape(line) + '</p>' for line in text.splitlines() if line)
+    return f'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>{escape(subject)}</title><style>table{{border-collapse:collapse}}@media(max-width:480px){{.outer{{padding:20px 10px!important}}.pad{{padding:26px 24px!important}}h1{{font-size:29px!important}}}}@media(prefers-color-scheme:dark){{.canvas{{background-color:#0b1523!important}}.card{{background-color:#14243a!important}}.copy,h1{{color:#e5edf6!important}}.muted{{color:#b4c4d6!important}}.panel{{background-color:#0b1523!important;border-color:#557a9e!important}}}}</style></head>
+<body class="canvas" style="margin:0;background-color:#edf2f7;font-family:Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{escape(title)} · {escape(name)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="outer" align="center" style="padding:40px 16px;">
+<!--[if mso]><table role="presentation" width="600" align="center"><tr><td><![endif]--><table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;table-layout:fixed;background-color:#fff;border:1px solid #dae1e9;border-radius:12px;overflow:hidden;"><tr><td class="pad" bgcolor="#10263e" style="padding:28px 36px;background-color:#10263e;border-bottom:4px solid #2366d1;"><p style="margin:0;color:#fff;font-size:22px;font-weight:bold;letter-spacing:3px;">ONESA</p><p style="margin:12px 0 0;color:#b4c4d6;font-size:13px;line-height:20px;">{escape(name)}</p></td></tr><tr><td class="pad" style="padding:34px 36px;overflow-wrap:anywhere;word-break:break-word;"><p class="muted" style="margin:0 0 14px;color:#56677b;font-size:11px;letter-spacing:1.8px;font-weight:bold;">INFRASTRUCTURE &amp; OPERATIONS</p><h1 style="margin:0 0 20px;color:#10263e;font-size:34px;line-height:1.16;letter-spacing:-0.7px;">{escape(title)}</h1><p style="margin:0 0 24px;"><span style="display:inline-block;padding:7px 11px;border-radius:4px;font-size:12px;line-height:18px;font-weight:bold;color:{color};background-color:{background};">{escape(badge)}</span></p><div class="panel" style="padding:20px;background-color:#f5f7fa;border-left:3px solid #2366d1;">{rows}</div></td></tr><tr><td class="pad panel" style="padding:22px 36px;border-top:1px solid #dae1e9;"><p class="muted" style="margin:0 0 6px;color:#56677b;font-size:11px;line-height:18px;font-weight:bold;">Onesa Infrastructure</p><p class="muted" style="margin:0;color:#56677b;font-size:11px;line-height:18px;">Sent to the configured infrastructure notification mailbox. Keep the event reference when investigating this message.</p></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>'''
+
+
 def mail_credential_fingerprint(values):
     key = values.get("RESEND_API_KEY")
     if (
@@ -996,7 +1016,7 @@ def validated_mail_envelope(envelope, reference, kind, simulation=False):
     body = envelope["body"]
     if (
         type(envelope["version"]) is not int
-        or envelope["version"] != MAIL_ENVELOPE_VERSION
+        or envelope["version"] not in {1, MAIL_ENVELOPE_VERSION}
         or envelope["reference"] != reference
         or str(uuid.UUID(reference)) != reference
         or kind not in NOTIFICATION_KINDS
@@ -1017,7 +1037,8 @@ def validated_mail_envelope(envelope, reference, kind, simulation=False):
     data = json.loads(body, object_pairs_hook=unique_mail_object)
     if (
         not isinstance(data, dict)
-        or set(data) != {"from", "to", "reply_to", "subject", "text"}
+        or set(data) != ({"from", "to", "reply_to", "subject", "text"} | ({"html"} if envelope["version"] == 2 else set()))
+        or (envelope["version"] == 2 and (not isinstance(data.get("html"), str) or not data["html"].startswith("<!doctype html>")))
         or not isinstance(data["to"], list)
         or len(data["to"]) != 1
         or not isinstance(data["to"][0], str)
@@ -1125,6 +1146,7 @@ def prepare_notification_request(
         + "\nReference: "
         + reference,
     }
+    data["html"] = operations_email_html_v1(subject, data["text"], kind, simulation, product)
     body = json.dumps(data)
     envelope = {
         "version": MAIL_ENVELOPE_VERSION,
