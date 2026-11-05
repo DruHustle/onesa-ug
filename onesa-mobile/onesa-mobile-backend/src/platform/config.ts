@@ -18,6 +18,8 @@ export interface PlatformConfig extends ServerConfig {
 export function loadPlatformConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): PlatformConfig {
+  if (env.NODE_ENV === "production" && !env.APP_MODE)
+    throw Error("Set APP_MODE explicitly for a production process. Lab authentication must never be selected by omission.");
   const base = loadConfig({
       ...env,
       CORS_ALLOWED_ORIGINS:

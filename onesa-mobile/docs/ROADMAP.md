@@ -14,7 +14,7 @@ Updated **5 November 2026**. The implemented hardware/software pilot is distinct
 | 8. Satellite qualification | Written Zimbabwe entitlement, exact device/service scope and constrained-network approval | Actual attachment/transport evidence and separate messaging/data/app-voice/native-voice acceptance |
 | 9. Controlled service launch | Small approved cohort, published limits, incident ownership and rollback/remedy | Regulatory/commercial release approval and monitored performance before expansion |
 
-The first bench uses an existing authorized internet path. A Starlink dish is optional for a separate IP test. Purchasing a dish does not unlock stage 8. [Hardware runbook and bill of materials](HARDWARE_PILOT.md).
+The first bench uses an existing authorized internet path and can begin with a Mac-to-Android USB session. A Starlink dish is optional for a separate IP test. Purchasing a dish does not unlock stage 8. [Physical wiring and first-session pack](PHYSICAL_BENCH.md), [hardware runbook and bill of materials](HARDWARE_PILOT.md).
 
 ## Software already implemented
 
@@ -28,4 +28,4 @@ For satellite access, agree country/operator/plan/device/software/service scope.
 
 ## External prerequisites
 
-No equipment has been bought or commissioned; no host or Starlink agreement, regulator application, licence, merchant account, live identity client, real SIM profile, telephone number, public domain, production deployment or store release has been created by the repository change. Actual execution needs the pilot site/custodian, existing device/router inventory, power/internet details, procurement budget, provider contacts and appropriate credentials through secure channels.
+No equipment has been bought or commissioned; no host or Starlink agreement, regulator application, licence, merchant account, live identity client, real SIM profile, telephone number or store release has been created by the repository change. The public website is deployed with `mobile.onesa.eu` attached; DNS and persistent backend commissioning are tracked in the [deployment guide](DEPLOYMENT.md). Actual physical execution needs the pilot site/custodian, existing device/router inventory, power/internet details, procurement budget, provider contacts and appropriate credentials through secure channels.

@@ -180,6 +180,28 @@ test("central sign-out destroys local capability immediately and reports actual 
     assert.equal(await fixture.auth.authenticate({ authorization: "Bearer " + issued.token }), null);
   });
 });
+test("a delayed Portal assertion cannot authorize a locally revoked session", async () => {
+  await mockProvider("operations", async (fixture) => {
+    const start = await fixture.start();
+    const issued = await fixture.auth.completeOnesa({ url: start.callback, flowCookie: start.flowCookie });
+    const headers = { authorization: "Bearer " + issued.token };
+    let release!: () => void, inspected!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { inspected = resolve; });
+    globalThis.fetch = async (input, options) => {
+      const response = await fixture.fetch(input, options);
+      if (String(input) === issuer + "/session") { inspected(); await held; }
+      return response;
+    };
+    const pending = fixture.auth.authenticate(headers);
+    await started;
+    try {
+      assert.deepEqual(await fixture.auth.logoutPresented(headers, {}), { centralRevocation: "confirmed" });
+    } finally { release(); }
+    assert.equal(await pending, null, "a positive assertion started before logout must not revive a deleted capability");
+    assert.equal(await fixture.auth.authenticate(headers), null);
+  });
+});
 test("Portal inspection enforces response size and timeout transport options", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async (_input, options) => {

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +12,7 @@ import {
   Text,
   TextInput,
   View,
+  type ScrollViewInstance,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -42,6 +46,7 @@ import {
   type Credential,
   type Item,
 } from "./src/api";
+import { AccountReadTracker, canEditPilotApplication, isAccountSnapshot, isSessionDiscovery, sessionRemainingMs } from "./src/account-state";
 import {
   BrandMark,
   Button,
@@ -92,12 +97,16 @@ function Field({
   onChange,
   multiline = false,
   password = false,
+  disabled = false,
+  maxLength,
 }: {
   label: string;
   value: string;
   onChange: (s: string) => void;
   multiline?: boolean;
   password?: boolean;
+  disabled?: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={local.field}>
@@ -108,10 +117,12 @@ function Field({
         onChangeText={onChange}
         style={[local.input, multiline && local.textarea]}
         secureTextEntry={password}
+        editable={!disabled}
+        accessibilityState={{ disabled }}
         autoCapitalize="none"
         autoCorrect={!password}
         multiline={multiline}
-        maxLength={multiline ? 1200 : password ? 256 : 100}
+        maxLength={maxLength ?? (multiline ? 1200 : password ? 256 : 100)}
         textAlignVertical={multiline ? "top" : "center"}
       />
     </View>
@@ -122,11 +133,13 @@ function Choice({
   options,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   options: readonly (readonly [string, string])[];
   value: string;
   onChange: (s: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <View style={local.field}>
@@ -136,8 +149,9 @@ function Choice({
           <Pressable
             key={id}
             onPress={() => onChange(id)}
+            disabled={disabled}
             accessibilityRole="radio"
-            accessibilityState={{ checked: value === id }}
+            accessibilityState={{ checked: value === id, disabled }}
             style={[local.choice, value === id && local.selected]}
           >
             <Text style={styles.strongBody}>{title}</Text>
@@ -160,7 +174,9 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [cached, setCached] = useState<Record<string, unknown> | null>(null),
-    [lastFetched, setLastFetched] = useState("");
+    [lastFetched, setLastFetched] = useState(""),
+    [stale, setStale] = useState(false),
+    [discoveryUnavailable, setDiscoveryUnavailable] = useState(false);
   const [cleanupRequired, setCleanupRequired] = useState(false),
     [clearingStorage, setClearingStorage] = useState(false),
     [storageRetry, setStorageRetry] = useState(0);
@@ -184,15 +200,20 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     callbackCodes = useRef(new Set<string>()),
     actionLock = useRef<symbol | null>(null),
     cleanupPending = useRef(false),
-    cleanupFlight = useRef<Promise<SessionOperation> | null>(null);
+    cleanupFlight = useRef<Promise<SessionOperation> | null>(null),
+    applicationDraftId = useRef<string | null>(null),
+    scroll = useRef<ScrollViewInstance | null>(null);
   const [boundary] = useState(() => new SessionBoundary());
+  const [accountReads] = useState(() => new AccountReadTracker());
   const base = configuration.base;
   const resetPrivateState = useCallback(() => {
+    accountReads.invalidate();
     current.current = null;
     setCredential(null);
     setAccount(null);
     setCached(null);
     setLastFetched("");
+    setStale(false);
     setLoading(false);
     setUsername("");
     setPassword("");
@@ -214,7 +235,8 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     setTab("Home");
     requestKeys.current.clear();
     callbackCodes.current.clear();
-  }, []);
+    applicationDraftId.current = null;
+  }, [accountReads]);
   const clearLocal = useCallback(async () => {
     if (cleanupFlight.current) return cleanupFlight.current;
     const cleared = boundary.invalidate();
@@ -299,7 +321,14 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     ) => {
       operation.assertCurrent();
       if (!base || !value || current.current?.token !== value.token) return;
+      if (sessionRemainingMs(value) === 0) {
+        const cleared = await clearLocal();
+        if (cleared.isCurrent()) setNotice("Your session has ended. Sign in again to continue.");
+        return;
+      }
+      const read = accountReads.begin();
       setLoading(true);
+      setStale(true);
       try {
         const data = await inSession(operation, () =>
           request<Account>(base, "/v1/me", {
@@ -308,28 +337,39 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
           }),
         );
         operation.assertCurrent();
+        if (!read.isCurrent()) return;
         if (current.current?.token !== value.token)
           throw new StaleSessionError();
-        if (data.profile?.subject !== value.user.subject)
-          throw Error("The account response did not match this session.");
+        if (!isAccountSnapshot(data, value.user.subject))
+          throw Error("The account response could not be verified. Retry the account refresh.");
         setAccount((previous) =>
-          operation.isCurrent() && current.current?.token === value.token
+          operation.isCurrent() && read.isCurrent() && current.current?.token === value.token
             ? data
             : previous,
         );
         setLastFetched(new Date().toISOString());
+        read.accept();
+        setStale(false);
         setError("");
         const snapshot = compactCache(data);
         setCached(snapshot as Record<string, unknown>);
-        if (storageKey)
-          await privateStorage.write(
-            operation,
-            storageKey + ".cache",
-            JSON.stringify(snapshot),
-          );
+        if (storageKey) {
+          try {
+            await privateStorage.write(operation, storageKey + ".cache", JSON.stringify(snapshot));
+          } catch (e) {
+            if (!operation.isCurrent() || !read.isCurrent()) return;
+            if (e instanceof StorageCleanupRequiredError) {
+              cleanupPending.current = true;
+              setCleanupRequired(true);
+            }
+            setError("Your account was refreshed, but the protected offline copy could not be updated. Your current records are shown below.");
+          }
+        }
       } catch (e) {
-        if (!operation.isCurrent() || e instanceof StaleSessionError) return;
-        if (e instanceof ApiError && e.status === 401) {
+        if (!operation.isCurrent() || !read.isCurrent() || e instanceof StaleSessionError) return;
+        read.fail();
+        setStale(true);
+        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
           const cleared = await clearLocal();
           if (!cleared.isCurrent()) return;
         }
@@ -337,11 +377,33 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
           e instanceof Error ? e.message : "Unable to refresh your account.",
         );
       } finally {
-        if (operation.isCurrent()) setLoading(false);
+        if (operation.isCurrent() && read.isCurrent()) setLoading(false);
       }
     },
-    [base, storageKey, clearLocal, boundary],
+    [base, storageKey, clearLocal, boundary, accountReads],
   );
+  useEffect(() => {
+    if (!credential) return;
+    const token = credential.token;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () => {
+      if (timer) clearTimeout(timer);
+      const value = current.current;
+      if (!value || value.token !== token) return;
+      const remaining = sessionRemainingMs(value);
+      if (remaining === 0) {
+        void clearLocal().then(cleared => {
+          if (cleared.isCurrent()) setNotice("Your session has ended. Sign in again to continue.");
+        }).catch(() => undefined);
+      } else timer = setTimeout(check, Math.min(remaining, 2147483647));
+    };
+    check();
+    const listener = AppState.addEventListener("change", state => { if (state === "active") check(); });
+    return () => { if (timer) clearTimeout(timer); listener.remove(); };
+  }, [credential, clearLocal]);
+  useEffect(() => {
+    if (error) scroll.current?.scrollTo({ y: 0, animated: true });
+  }, [error]);
   useEffect(() => {
     const operation = boundary.activate();
     resetPrivateState();
@@ -350,6 +412,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     setStorageKey(null);
     setAuthMode(null);
     setSsoAvailable(false);
+    setDiscoveryUnavailable(false);
     setLoading(true);
     void (async () => {
       if (!base) {
@@ -363,21 +426,26 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
           key = "onesa.mobile.v1." + hash.slice(0, 24);
         operation.assertCurrent();
         setStorageKey(key);
-        const [[stored, previous], session] = await inSession(operation, () =>
+        let discoveryProblem = "";
+        const [[stored, previous], discovered] = await inSession(operation, () =>
           Promise.all([
             privateStorage.read(operation, [
               key,
               key + ".cache",
               key + ".flow",
             ]),
-            request<{ authMode: "lab" | "onesa"; ssoAvailable: boolean }>(
+            request<unknown>(
               base,
               "/v1/session",
               { signal: operation.signal },
-            ).catch(() => null),
+            ).catch(e => {
+              discoveryProblem = e instanceof Error ? e.message : "The account service could not be reached.";
+              return null;
+            }),
           ]),
         );
         operation.assertCurrent();
+        const session = isSessionDiscovery(discovered) ? discovered : null;
         cleanupPending.current = false;
         setCleanupRequired(false);
         if (session) {
@@ -403,12 +471,15 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
             );
           operation.assertCurrent();
         }
-        if (!session)
+        if (!session) {
+          setDiscoveryUnavailable(true);
           setError(
-            "The account service is unavailable. Saved information may be out of date.",
+            discoveryProblem || "The sign-in service returned an unreadable response. Retry the connection.",
           );
+        }
       } catch (e) {
         if (operation.isCurrent()) {
+          setDiscoveryUnavailable(true);
           if (e instanceof StorageCleanupRequiredError) {
             cleanupPending.current = true;
             setCleanupRequired(true);
@@ -437,6 +508,13 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     async (action: (operation: SessionOperation) => Promise<void>) => {
       if (actionLock.current || cleanupPending.current || !boundary.isActive)
         return;
+      if (current.current && sessionRemainingMs(current.current) === 0) {
+        try {
+          const cleared = await clearLocal();
+          if (cleared.isCurrent()) setNotice("Your session has ended. Sign in again to continue.");
+        } catch { /* clearLocal exposes its protected-storage recovery action. */ }
+        return;
+      }
       const operation = boundary.capture();
       const lock = Symbol("account action");
       actionLock.current = lock;
@@ -464,7 +542,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
         }
       }
     },
-    [boundary],
+    [boundary, clearLocal],
   );
   const completeNative = useCallback(
     async (url: string, operation: SessionOperation) => {
@@ -625,6 +703,8 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     operation.assertCurrent();
     const user = current.current;
     if (!base || !user) throw Error("Sign in first.");
+    if (!accountReads.isFresh)
+      throw Error("Refresh your account and review the current records before saving. Your draft is still here.");
     const signature = method + path + JSON.stringify(body);
     let key = requestKeys.current.get(signature);
     if (!key) {
@@ -648,6 +728,8 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
         if (cleared.isCurrent()) setError(e.message);
       } else if (e instanceof ApiError && e.status === 409)
         await refresh(user, operation);
+      else if (e instanceof ApiError && (e.status === 0 || e.status >= 500))
+        throw Error("The save could not be confirmed. Keep your entries unchanged and retry; the same request reference will recover its result without creating a duplicate.");
       throw e;
     }
     operation.assertCurrent();
@@ -736,6 +818,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
     account?.applications[0];
   const beginCorrection = () => {
     if (!application) return;
+    applicationDraftId.current = application.id;
     setDisplayName(String(application.displayName));
     setArea(String(application.area));
     setDeviceModel(String(application.deviceModel));
@@ -770,12 +853,12 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
       operation.assertCurrent();
       setTab("Home");
     });
-  const canEdit =
-    !!account &&
-    (!application ||
-      ["review_required", "information_required", "declined"].includes(
-        String(application.state),
-      ));
+  const canEdit = canEditPilotApplication(account, application, credential);
+  const writesBlocked = busy || loading || stale || !account || cleanupRequired;
+  const changeTab = (next: Tab) => {
+    if (next === "Application" && application && canEdit && applicationDraftId.current !== application.id) beginCorrection();
+    else setTab(next);
+  };
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
@@ -800,15 +883,18 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
           </Text>
         </View>
       </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={insets.top}>
       <ScrollView
         key={tab}
+        ref={scroll}
         style={styles.scroll}
         contentContainerStyle={[styles.frame, styles.content]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentInsetAdjustmentBehavior="automatic"
       >
         {error ? (
-          <View accessibilityRole="alert" style={local.error}>
+          <View accessibilityRole="alert" accessibilityLiveRegion="assertive" style={local.error}>
             <Text style={local.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -840,6 +926,13 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
             {notice}
           </Text>
         ) : null}
+        {credential && stale ? (
+          <Card>
+            <Tag tone="amber">{loading ? "REFRESHING RECORDS" : "REFRESH REQUIRED"}</Tag>
+            <Text style={styles.body}>{account ? "Previously loaded records may be out of date. Refresh and review them before saving; your draft entries are kept." : "Account records have not been loaded for this session. Refresh to continue."}</Text>
+            <Button secondary disabled={busy || loading || cleanupRequired} onPress={() => void run(operation => refresh(current.current, operation))}>{loading ? "Refreshing…" : "Refresh account"}</Button>
+          </Card>
+        ) : null}
         {busy || loading ? (
           <ActivityIndicator
             accessibilityLabel="Loading account"
@@ -862,6 +955,13 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   Account access is not configured for this build. You can
                   explore the product preview.
                 </Text>
+              ) : discoveryUnavailable ? (
+                <>
+                  <Text style={styles.body}>Account access could not be checked. Retry the connection when you are ready.</Text>
+                  <Button disabled={busy || loading || cleanupRequired} onPress={() => setStorageRetry(value => value + 1)}>Retry connection</Button>
+                </>
+              ) : loading && authMode === null ? (
+                <Text style={styles.body}>Checking the account service…</Text>
               ) : authMode === "lab" ? (
                 <>
                   <Tag>ISOLATED LAB SIGN-IN</Tag>
@@ -873,12 +973,15 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                     label="Lab username"
                     value={username}
                     onChange={setUsername}
+                    disabled={busy}
+                    maxLength={254}
                   />
                   <Field
                     label="Lab password"
                     value={password}
                     onChange={setPassword}
                     password
+                    disabled={busy}
                   />
                   <Button
                     onPress={signIn}
@@ -947,7 +1050,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                           : "Waiting for refresh"
                     }
                   />
-                  <DetailRow label="Usage" value="Available after activation" />
+                  <DetailRow label="Usage" value="No host measurements" />
                   <Text style={styles.small}>
                     {lastFetched
                       ? "Account checked " +
@@ -965,7 +1068,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                         refresh(current.current, operation),
                       )
                     }
-                    disabled={busy}
+                    disabled={busy || loading || cleanupRequired}
                   >
                     Refresh account
                   </Button>
@@ -975,6 +1078,8 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   <Text style={styles.body}>
                     {!account
                       ? "Reconnect and refresh your account to see the latest next step."
+                      : !application && account.status.mode !== "lab"
+                        ? "Applications are not open for commercial service. You can ask the team about availability."
                       : !application
                         ? "Submit a pilot application to record your device and SIM preference."
                         : application.state === "information_required"
@@ -993,11 +1098,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                   </Text>
                   {canEdit ? (
                     <Button
-                      onPress={
-                        application
-                          ? beginCorrection
-                          : () => setTab("Application")
-                      }
+                      onPress={() => changeTab("Application")}
                     >
                       {application
                         ? "Review your details"
@@ -1035,13 +1136,9 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                 </Text>
                 {!canEdit ? (
                   <Card>
-                    <DetailRow
-                      label="Status"
-                      value={human(application?.state)}
-                    />
+                    <DetailRow label="Status" value={!account ? "Refresh required" : account.status.mode !== "lab" ? "Applications are not open" : human(application?.state)} />
                     <Text style={styles.body}>
-                      Contact support to request a change while the application
-                      is with the host review queue.
+                      {!account ? "Refresh your account to see its current application status." : account.status.mode !== "lab" ? "Pilot applications are only available in the isolated lab. Commercial registration is not open. Ask the team about availability." : "Contact support to request a change while the application is with the host review queue."}
                     </Text>
                     <Button onPress={() => setTab("Help")}>Ask for help</Button>
                   </Card>
@@ -1051,18 +1148,22 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                       label="Test display name"
                       value={displayName}
                       onChange={setDisplayName}
+                      disabled={busy}
+                      maxLength={80}
                     />
-                    <Field label="Pilot area" value={area} onChange={setArea} />
+                    <Field label="Pilot area" value={area} onChange={setArea} disabled={busy} />
                     <Field
                       label="Device model"
                       value={deviceModel}
                       onChange={setDeviceModel}
+                      disabled={busy}
                     />
                     <Choice
                       label="Plan concept"
                       options={plans}
                       value={planId}
                       onChange={setPlanId}
+                      disabled={busy}
                     />
                     <Choice
                       label="SIM preference"
@@ -1072,12 +1173,14 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                       ]}
                       value={simFormat}
                       onChange={setSimFormat}
+                      disabled={busy}
                     />
                     <View style={local.consent}>
                       <Switch
                         accessibilityLabel="I understand this is a pilot application"
                         value={consent}
                         onValueChange={setConsent}
+                        disabled={busy}
                         trackColor={{ true: colors.green }}
                       />
                       <Text style={[styles.body, { flex: 1 }]}>
@@ -1088,7 +1191,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                     <Button
                       onPress={submitApplication}
                       disabled={
-                        busy ||
+                        writesBlocked ||
                         !consent ||
                         !displayName.trim() ||
                         !area.trim() ||
@@ -1116,20 +1219,23 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                     ]}
                     value={category}
                     onChange={setCategory}
+                    disabled={busy}
                   />
                   <Field
                     label="Subject"
                     value={subject}
                     onChange={setSubject}
+                    disabled={busy}
                   />
                   <Field
                     label="Message"
                     value={message}
                     onChange={setMessage}
                     multiline
+                    disabled={busy}
                   />
                   <Button
-                    disabled={busy || !subject.trim() || !message.trim()}
+                    disabled={writesBlocked || !subject.trim() || !message.trim()}
                     onPress={() =>
                       void run(async (operation) => {
                         await mutate(
@@ -1187,9 +1293,10 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                             value={reply}
                             onChange={setReply}
                             multiline
+                            disabled={busy}
                           />
                           <Button
-                            disabled={busy || !reply.trim()}
+                            disabled={writesBlocked || !reply.trim()}
                             onPress={() =>
                               void run(async (operation) => {
                                 await mutate(
@@ -1272,7 +1379,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                 </Text>
                 {!account?.ledger.length ? (
                   <Text style={styles.small}>
-                    No test receipts have been recorded.
+                    {account ? "No test receipts have been recorded." : "Refresh your account to load test receipts."}
                   </Text>
                 ) : (
                   account.ledger.map((entry) => (
@@ -1315,15 +1422,17 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                     ]}
                     value={requestType}
                     onChange={setRequestType}
+                    disabled={busy}
                   />
                   <Field
                     label="Request details"
                     value={requestDetail}
                     onChange={setRequestDetail}
                     multiline
+                    disabled={busy}
                   />
                   <Button
-                    disabled={busy || !requestDetail.trim()}
+                    disabled={writesBlocked || !requestDetail.trim()}
                     onPress={() =>
                       void run(async (operation) => {
                         await mutate(
@@ -1365,6 +1474,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
           </>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
       {credential ? (
         <View
           style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 8) }]}
@@ -1375,7 +1485,7 @@ function MobileAccount({ openPreview }: { openPreview: () => void }) {
                 key={name}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: tab === name }}
-                onPress={() => setTab(name)}
+                onPress={() => changeTab(name)}
                 style={styles.navItem}
               >
                 <View
@@ -1421,7 +1531,7 @@ const local = StyleSheet.create({
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.controlBorder,
     borderRadius: 8,
     padding: 11,
     fontSize: 16,
@@ -1435,7 +1545,7 @@ const local = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.controlBorder,
     borderRadius: 8,
     justifyContent: "center",
   },

@@ -20,7 +20,9 @@ The public website exposes no account records. `/account/` and `/internal/` load
 
 The lab gateway and API have a private container network, loopback host publication, restricted capabilities and one durable volume. The API has no provider egress. The web gateway also joins an ordinary ingress bridge so Docker can publish the loopback port; its upstream remains the private API. The production overlay requires a different volume, real HTTPS ingress, explicit identity/secrets and an approved deployment environment. [Runtime guide](../infra/runtime/README.md).
 
-Proposed future domains `mobile.onesa.eu` and `ops.mobile.onesa.eu` remain unconfigured. A later staff-origin split needs its own exact callback/cookie/origin design; the current implementation deliberately uses a single Mobile confidential identity client with separate customer/staff surfaces, server role enforcement and staff MFA. Do not describe the proposed split as deployed.
+The prelaunch web build is deployed to Vercel, and `mobile.onesa.eu` is attached with ownership verified. Its Cloudflare DNS record remains absent at the current receipt, so custom-domain serving and certificate readiness are pending. Hosted API routes deliberately return `503 BACKEND_NOT_CONNECTED` until the persistent API and Mobile identity client are commissioned. This hosted holding response is separate from the working local pilot topology above. [Deployment receipt and DNS target](DEPLOYMENT.md).
+
+`ops.mobile.onesa.eu` remains a future option. A later staff-origin split needs its own exact callback/cookie/origin design; the current implementation uses a single Mobile confidential identity client with separate customer/staff surfaces, server role enforcement and staff MFA. That split is not deployed.
 
 ## Telecom topology to contract and qualify
 
@@ -48,7 +50,7 @@ Starlink's mobile architecture integrates with operators in a roaming-style arra
 | API | Node 24.22.1 native HTTP, Zod, OpenID client and PDFKit | Bounded JSON input, explicit methods, exact origins, request limits |
 | Persistence | SQLite WAL; one local durable database, one API replica | Pilot sizing only; not a high-availability multi-instance carrier ledger |
 | Authentication state | Hashed local capabilities, encrypted upstream tokens/TOTP, source authentication time | Production must use central identity; generated lab key never becomes a production key |
-| Recovery | Online SQLite backup, authenticated encryption and verified restore | Correct separate key required; restored local identities require controlled reissue |
+| Recovery | Online SQLite backup, authenticated encryption and verified restore; explicit existing source volume and matching mode | Correct separate key required; restored local identities require controlled reissue; no overlay-order default to lab storage |
 | Provider effects | Explicit unavailable routes | No activation, settlement or RF operation can be enabled by a flag |
 
 Node 24.22.1 documents `node:sqlite` as Stability 1.2 (release candidate). The runtime is pinned for qualification and recovery is tested; this does not justify silent runtime upgrades or horizontal scaling of a shared WAL file. For a commercial multi-instance system, choose and qualify the approved transactional store and migration under actual capacity/availability requirements. [Node runtime documentation](https://nodejs.org/download/release/v24.22.1/docs/api/sqlite.html).
@@ -57,7 +59,9 @@ Node 24.22.1 documents `node:sqlite` as Stability 1.2 (release candidate). The r
 
 The domain store maintains sites, assets, trials, scoped evidence, pilot applications, support cases, test ledger entries and account requests. Each record has an immutable UUID, owner subject, positive revision and timestamps. Domain updates, audit records and idempotent outcomes commit atomically. An identical per-actor retry key returns the recorded result; a changed input/operation returns conflict. Current revisions prevent lost updates.
 
-Inventory is a manual record. Seven required commissioning checks determine readiness; a failed check persists across unrelated passes. Firmware and approval changes invalidate relevant checks while retaining compact history. Bulk pages omit history; authorized detail reads include it. Passing observations require a commissioned asset. Completed observations are immutable and identify manual versus simulated evidence. No record claims live telemetry.
+Inventory is a manual record. Seven required commissioning checks determine readiness; a failed check persists across unrelated passes. A declared physical fault invalidates all checks and retains its fault marker until all seven have been requalified; selecting a received state cannot clear it. Serial reference, firmware, nameplate-power and approval changes invalidate relevant checks while retaining compact history. Unknown power is explicitly unknown, and a nameplate rating is distinct from measured draw or battery endurance. Non-applicable checks require an equipment-appropriate exception and a recorded reason. Bulk pages omit history; authorized detail reads include it.
+
+Passing manual observations require commissioned equipment, an exact device/test scope and criteria recorded before the observation. The operator selects current independently accepted evidence for the exact country, host, connectivity path and scope; direct-to-cell requires the additional satellite authorization and entitlement records and an Android phone or iPhone asset. Results capture immutable equipment configuration, commissioning state and evidence-revision snapshots. The protected asset history retains its individual checks. Observation order is compared at the form's explicit second precision. Completed observations cannot be overwritten and identify manual versus simulated sources. An accepted record is an internal evidence assessment; no record executes radio commands or claims live telemetry.
 
 Readiness evidence is scoped by country, operator, access path and device scope, with expiry and a separate accepting reviewer. Counts span recorded scopes and do not imply universal approval. Even accepted evidence cannot activate service.
 
@@ -71,7 +75,7 @@ Company Portal access tokens are opaque. Mobile uses confidential OIDC Authoriza
 
 The additive Portal migration 015 and related account/admin UI enable the Mobile product only when configured. Existing AI/Drone/Robot consumers retain their three-product claims vocabulary. The Mobile client receives its expanded vocabulary. This source change does not create a live client, access grant or deployment; follow the Portal release process separately.
 
-Web cookies are HttpOnly, Secure under HTTPS and checked with exact Origin plus CSRF on mutation. Native sessions use bearer transport and device secure storage. Native browser handoff carries only a short-lived single-use code bound to the app's state/verifier. Logout can destroy the local session during an upstream outage without authorizing any business request.
+Web cookies are HttpOnly, Secure under HTTPS and checked with exact Origin plus CSRF on mutation. Native sessions use bearer transport and device secure storage. Native browser handoff carries only a short-lived single-use code bound to the app's state/verifier. Logout can destroy the local session during an upstream outage without authorizing any business request. Central authorization rechecks retain the local capability's revocation boundary, including concurrent logout. Web and native operations discard completed responses belonging to a session that has since changed or expired. Local SQLite database, WAL, SHM and key paths enforce private ownership/modes and reject links; host disk encryption and independent audit custody remain separate deployment responsibilities. [Security review](reviews/SECURITY_REVIEW.md), [UI/UX review](reviews/TELECOM_UX_REVIEW.md).
 
 ## Roles
 

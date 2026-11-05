@@ -9,6 +9,7 @@ export const colors = {
   muted: "#5C716A",
   background: "#F8F9F5",
   border: "#DAE3DA",
+  controlBorder: "#718A78",
   white: "#FFFFFF",
   pale: "#E9F7EF",
   amber: "#9A5D00",

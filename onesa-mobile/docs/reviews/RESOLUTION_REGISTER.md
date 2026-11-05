@@ -6,6 +6,20 @@ Five specialist agent reviews were assigned: principal telecommunications engine
 
 **Status meanings:** “Implemented” means the software/document change exists and has the cited local checks. “Hosted qualification” requires an observed CI result. “External acceptance” requires evidence from actual equipment, authorities, operators, providers or deployment owners. No internal checkbox closes an external dependency. See [validation](../VALIDATION.md) for exact-source results.
 
+## Second specialist review — 5 November 2026
+
+This pass reviewed the deployed website source, persistent API, native account app and physical commissioning workflow. The tables below this section retain the first review as history. The current integrated local result is **154 passing tests** across the API, web, native logic and recovery suites, with one actual Docker configuration case deferred to hosted CI. Browser and native compiler receipts must identify their tested commit; an earlier result does not qualify changed code.
+
+| Specialist / findings | Implemented correction | Verification and remaining acceptance |
+| --- | --- | --- |
+| Principal telecom — TEL-13–18 | Manual passing trials require a prior scoped plan, matching equipment and current independently reviewed authority; D2C requires a handset and satellite authorization/entitlement. Unknown rated power is nullable, corrections invalidate its check, and N/A is restricted and explained. Added the USB-first physical bench, wiring, measured-power worksheet and refreshed POTRAZ/partner matrix. | Thirteen hardware/configuration regressions pass, including the principal engineer's declared-fault cases. Planning template retains 14 **not-run** acceptance cases and 12 **unverified** gates. Actual documents, devices and radio observations remain external acceptance. |
+| Senior graphics — GFX-10–16 | Corrected the phone account-link contrast, interactive borders, dark-card focus ring, small captions, FAQ target ownership and narrow-layout wrapping. The native implementation applies the higher-contrast control token. | Source/color calculations, web build and native exports pass. Automated browser layout observations are a separate hosted gate; physical text scaling and assistive technology remain device acceptance. |
+| Senior telecom UX — UX-11–18 | Added native discovery retry, expiry cleanup, stale-read protection, owner/shape validation and usable correction drafts. Web mutations now belong to a session generation, API form errors receive focus, production application copy is accurate and older trial evidence is reachable. | Web **23** and native **25** tests pass; both builds/exports pass. Delayed-response regressions cover old success/error work across identity changes. Physical keyboard, foreground/background, VoiceOver and TalkBack checks remain. |
+| Cybersecurity — SEC-02-01, SEC-02-02 and explicit production mode | Re-check the local capability after delayed central authorization, prepare private SQLite/sidecar files before opening them, reject unsafe file/directory links and refuse a production process that omits `APP_MODE`. | API **98** tests pass, including the reproduced logout race and six filesystem regressions. This is source/protocol qualification, not a deployed penetration test or real identity commissioning. |
+| Principal engineering — PE-02-11–15 | A declared fault invalidates all seven checks and cannot be cleared by an unrelated pass or receipt edit. Recovery requires an explicitly selected existing volume and matching lab/production mode. Observation times use consistent second precision. Added isolated real-UI browser journeys and corrected the domain/deployment architecture. | Fault regressions and **8** recovery tests pass locally. Actual Compose merge and Chromium journeys are hosted CI gates; local Docker is absent and Chromium could not launch because the executor refused its singleton socket. |
+
+The software fixes above do not commission equipment or enable a provider. The public website and attached domain have a separate [deployment receipt](../DEPLOYMENT.md); DNS, the persistent production API and Mobile identity remain distinct from a successful web build.
+
 ## Principal telecommunications engineering
 
 Source: [telecom review](TELECOM_REVIEW.md). Live provider actions remain unavailable.
@@ -59,7 +73,7 @@ Source: [telecom UX review](TELECOM_UX_REVIEW.md).
 
 ## Cybersecurity engineering
 
-Source: [security review](SECURITY_REVIEW.md) and [threat model](../THREAT_MODEL.md). No fail-open authorization defect was identified in the inspected source scope. This is not a penetration test of a deployed system.
+Source: [security review](SECURITY_REVIEW.md) and [threat model](../THREAT_MODEL.md). The second review reproduced and fixed a delayed authorization race after local sign-out and private database sidecar exposure. The following earlier controls remain in place; they are not a penetration test of a deployed system.
 
 | Finding group | Implemented control/evidence | Remaining acceptance |
 | --- | --- | --- |
@@ -81,7 +95,7 @@ Source: [principal engineering review](PRINCIPAL_ENGINEERING_REVIEW.md).
 
 | Finding | Implemented resolution | Evidence / remaining scope |
 | --- | --- | --- |
-| PE-01 — incomplete image | Locked runtime dependencies installed in non-root image | Container build/start/restart/recovery passed on final application source `3af4282`; no hosted production deployment |
+| PE-01 — incomplete image | Locked runtime dependencies installed in non-root image | Container build/start/restart/recovery passed on earlier application source `3af4282`; the production API is not commissioned. Website hosting is recorded separately. |
 | PE-02 — hidden failed check | Any failed required check remains dominant | Domain regression passed |
 | PE-03 — stale evidence | Firmware/serial/approval changes invalidate checks and retain history; receipt cannot hide failure | Domain/HTTP regressions passed |
 | PE-04 — truncated records | Scoped cursor pages, SQL totals/readiness, full export and retained loaded ranges | Multi-page HTTP and web merge tests passed |

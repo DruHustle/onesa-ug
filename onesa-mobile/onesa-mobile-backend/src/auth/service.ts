@@ -240,6 +240,13 @@ export class AuthService {
       if (!this.identity || !row.onesa_access_token) throw new AuthError(503, "AUTH_PROVIDER_UNAVAILABLE");
       principal = await this.identity.inspect(unseal(row.onesa_access_token, this.store.key));
       if (!principal || principal.subject !== row.subject || principal.authenticatedAt !== row.authenticated_at) { this.store.deleteSession(row.id); return null; }
+      // Inspection is asynchronous. Logout or expiry may have destroyed the local
+      // capability while Portal was responding; its older assertion cannot revive it.
+      const current = this.store.sessionByHash(row.token_hash);
+      if (!current || current.id !== row.id || current.expires_at <= nowSeconds()) {
+        if (current?.id === row.id) this.store.deleteSession(row.id);
+        return null;
+      }
     }
     if (!surfaceMatches(principal.role, row.surface) || (isStaff(principal.role) && !principal.mfa)) { this.store.deleteSession(row.id); return null; }
     return { ...principal, expiresAt: Math.min(row.expires_at, principal.expiresAt), id: row.id, csrfToken: row.csrf, transport };

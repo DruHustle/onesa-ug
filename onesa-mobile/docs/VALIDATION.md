@@ -2,7 +2,25 @@
 
 Date: **5 November 2026**. Scope: the persistent Onesa Mobile hardware-pilot and customer/staff control plane, its native clients, and the additive Company Portal identity integration. This is software qualification with synthetic records. It is not evidence of an operating mobile network or commissioned equipment.
 
-## Local results
+## Second-review local qualification — 5 November 2026
+
+These checks were rerun on the integrated second-review worktree before publication. They supersede the baseline local counts below. Hosted CI and deployment receipts are separate exact-source observations.
+
+| Area | Command / observed result | Scope |
+| --- | --- | --- |
+| Mobile API | `npm run check`: TypeScript and **98 tests passed** | Includes 13 hardware/configuration cases, the delayed central-authorization/logout regression, six filesystem-security cases, real HTTP authorization/ownership and OpenAPI freshness. |
+| Web | `npm test` and `npm run build`: **23 tests passed**, TypeScript and production bundle passed | Includes obsolete mutation success/errors, private download boundaries, retry/paging and hosted holding-handler routes. |
+| Native | `npm run verify`: TypeScript, **25 tests passed**, iOS and Android JavaScript exports passed | Includes discovery, expiry, account ownership/shape, edit eligibility and stale-read ordering, plus existing delayed-session/storage/share tests. These are not native compiler or physical-device results. |
+| Recovery | `node --test scripts/tests/*.test.mjs`: **8 passed, 1 skipped** | Real encrypted database recovery and explicit recovery-mode guards pass. Actual Compose merging is skipped because Docker is unavailable locally; hosted runtime CI must execute it. |
+| Browser | `npm run test:browser`: launch blocked locally | Chromium was refused its singleton socket by the executor before any page loaded. No local authenticated browser result or new screenshot is claimed. The dedicated GitHub job executes the same synthetic loopback journeys and retains their report/screenshots. |
+
+Total: **154 passing local tests**, with one explicitly skipped Docker case. Repeat runs are not added together. The browser harness exercises real customer writes/export, hardware receipt and all seven checks, denied/accepted scoped trial recording, role denial, connection recovery, sign-out and a committed mutation delivered after client expiry. It also measures 320/390/768/1440-pixel layout and enlarged text; these are test intentions until a successful hosted report is retained.
+
+The second-review findings and physical dependencies are in the [resolution register](reviews/RESOLUTION_REGISTER.md). The new [physical bench guide](PHYSICAL_BENCH.md) starts with an existing Mac and Android phone over USB. No actual equipment, operator entitlement, radio service or production identity was established by these checks.
+
+## Earlier local qualification — source `3af4282`
+
+The results in this baseline section and the historical hosted receipts below describe that earlier source revision. Later website deployment and the second specialist review are separate qualification events; do not apply an older native artifact or test count to changed source.
 
 | Area | Observed result | What the check establishes |
 | --- | --- | --- |
@@ -35,7 +53,7 @@ Client lifecycle regressions deliberately delay reads, old 401 responses, login 
 
 These are synthetic protocol tests. They do not establish a configured live Portal, carrier or payment provider.
 
-## Browser and visual review
+## Earlier browser and visual review
 
 Reviewed the actual public page and customer/staff sign-in routes in Chromium at phone and desktop sizes. Corrected a hidden mobile account link and a workspace footer contrast/style collision. At the inspected 360px frame, document width remained within available CSS width after the scrollbar.
 
@@ -58,7 +76,7 @@ Two workflows provide exact-source gates:
 
 Initial source: [`f95059f4`](https://github.com/DruHustle/onesa-ug/commit/f95059f4e1bb711b00057acf7233b431686f8336). [Qualification run](https://github.com/DruHustle/onesa-ug/actions/runs/42076695029): web, API and native JavaScript passed; **35 Portal identity tests passed against actual PostgreSQL**, including the existing concurrent-flow cases. Container images built and became healthy, but the first smoke test found an unpublished gateway port caused by its internal-only network. The gateway now has a separate ingress bridge; the API remains internal-only. [Native run](https://github.com/DruHustle/onesa-ug/actions/runs/42076694933): Android found an SDK-manager PATH error before compilation, which is corrected to the exact installed tool path. The follow-up [qualification run on `c84fa102`](https://github.com/DruHustle/onesa-ug/actions/runs/42077694265) passed all five jobs. Both native jobs also passed on that revision in [run 42077694246](https://github.com/DruHustle/onesa-ug/actions/runs/42077694246). Failed initial jobs are not counted as successful evidence.
 
-### Final source qualification
+### Baseline source qualification
 
 Qualified application source: [`3af428298835db7987c15a18a73133429e45d4ea`](https://github.com/DruHustle/onesa-ug/commit/3af428298835db7987c15a18a73133429e45d4ea). This includes the final guarded session/storage/download lifecycles and private-draft cleanup. A later documentation-only commit may record these receipts without changing the compiled application source.
 
@@ -82,7 +100,7 @@ The runtime job recorded these local Docker image IDs. They identify the tested 
 
 The observed base images were Node `24.22.1-alpine` at `sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53` and NGINX unprivileged `stable-alpine` at `sha256:44e74ca483234093081138b6d7b6f561d55557756a2deefc3a5056148defeb99`. A future rebuild must requalify moving upstream image tags.
 
-### Final native artifacts
+### Baseline native artifacts
 
 [Native run 42080127515](https://github.com/DruHustle/onesa-ug/actions/runs/42080127515) completed successfully on the same source `3af428298835db7987c15a18a73133429e45d4ea`. Android job `127430692599` and iOS job `127430693000` both passed. Together with the five qualification jobs, **all seven hosted jobs passed**. Artifact metadata was inspected directly and identifies that exact source revision.
 
@@ -99,6 +117,6 @@ Both outputs use Debug configuration and require Metro with the matching applica
 
 ## Physical and commercial acceptance
 
-No site, router, UPS, phone, SIM, eSIM or terminal was commissioned. No real subscriber, payment, number, tax invoice or emergency call was created. No live Portal migration, production service, DNS change, partner outreach, regulatory submission or app-store release occurred.
+No site, router, UPS, phone, SIM, eSIM or terminal was commissioned. No real subscriber, payment, number, tax invoice or emergency call was created. The public website has a Vercel production deployment and domain attachment, recorded in [deployment evidence](DEPLOYMENT.md); its DNS connection and persistent customer/staff backend remain separate requirements. No live Portal migration, customer/staff backend deployment, DNS publication, partner outreach, regulatory submission or app-store release is established by these software tests.
 
 The [hardware runbook](HARDWARE_PILOT.md) defines 14 acceptance cases. The [regulatory matrix](REGULATORY_MATRIX.md) and [resolution register](reviews/RESOLUTION_REGISTER.md) identify external evidence. Physical installs, provider sandbox/reconciliation, approved hosting, identity/TLS/key custody, operational recovery, licensing and host/satellite entitlement remain necessary before real service.

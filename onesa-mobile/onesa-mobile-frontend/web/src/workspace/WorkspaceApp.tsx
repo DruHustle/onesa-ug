@@ -5,6 +5,7 @@ import { CustomerAccount, CustomerApplication, CustomerHelp, CustomerHome, Custo
 import { Hardware, Trials } from './Hardware';
 import { Applications, Audit, Billing, ReadinessWorkspace, StaffHome, Support } from './Staff';
 import { createSessionDownloadScope, humanize, makeRetryKeys, mergeRecordPage } from './helpers.mjs';
+import { createSessionOperationScope, StaleWorkspaceOperationError } from './session-operations.mjs';
 import type { Collection, CustomerData, Item, Session, StaffData, Surface, WorkspaceContext } from './types';
 import './workspace.css';
 
@@ -12,7 +13,7 @@ type WorkspaceData = CustomerData | StaffData;
 interface RecordPage { items: {id:string;revision?:number}[]; total:number; nextCursor:string|null }
 const collectionNames:Record<Collection,string>={sites:'Sites',assets:'Equipment',trials:'Trials',gates:'Evidence',applications:'Applications',tickets:'Support cases',ledger:'Test ledger entries',requests:'Account requests',billingAccounts:'Billing application choices',audit:'Audit actions'};
 const collectionKeys=Object.keys(collectionNames) as Collection[];
-const sectionCollections:Record<string,Collection[]>={home:[],hardware:['sites','assets'],trials:['sites','assets','trials'],readiness:['gates'],applications:['applications'],support:['tickets','requests'],billing:['ledger','billingAccounts'],audit:['audit'],application:['applications'],payments:['ledger'],help:['tickets'],account:['requests']};
+const sectionCollections:Record<string,Collection[]>={home:[],hardware:['sites','assets'],trials:['sites','assets','trials','gates'],readiness:['gates'],applications:['applications'],support:['tickets','requests'],billing:['ledger','billingAccounts'],audit:['audit'],application:['applications'],payments:['ledger'],help:['tickets'],account:['requests']};
 function collectionRows(data:WorkspaceData,kind:Collection):{id:string;revision?:number}[] {
   const value=(data as unknown as Record<string,unknown>)[kind];return Array.isArray(value)?value:[];
 }
@@ -65,17 +66,19 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
   const loadedData=useRef<WorkspaceData|null>(null),pageControllers=useRef(new Map<Collection,AbortController>());
   const retryKeys=useRef(makeRetryKeys()),heading=useRef<HTMLHeadingElement|null>(null),focusHeading=useRef(false);
   const downloadScope=useRef(createSessionDownloadScope());
+  const operationScope=useRef(createSessionOperationScope());
 
   const publishData=useCallback((next:WorkspaceData|null)=>{loadedData.current=next;setData(next);},[]);
   const acceptSession = useCallback((next: Session) => {
     const previous=sessionRef.current;
-    if(previous?.authenticated!==next.authenticated||previous?.user?.subject!==next.user?.subject||previous?.user?.role!==next.user?.role||previous?.user?.source!==next.user?.source||previous?.csrfToken!==next.csrfToken)downloadScope.current.invalidate();
-    if(sessionRef.current?.user?.subject!==next.user?.subject||sessionRef.current?.user?.role!==next.user?.role){publishData(null);setLoadedAt(null);retryKeys.current.clear();}
+    const changed=previous?.authenticated!==next.authenticated||previous?.user?.subject!==next.user?.subject||previous?.user?.role!==next.user?.role||previous?.user?.source!==next.user?.source||previous?.csrfToken!==next.csrfToken;
+    if(changed){downloadScope.current.invalidate();operationScope.current.invalidate();publishData(null);setLoadedAt(null);setNotice(null);setPageError(null);retryKeys.current.clear();}
     sessionRef.current=next;setSession(next);
     if(!next.authenticated){publishData(null);setLoadedAt(null);retryKeys.current.clear();}
   },[publishData]);
   const expireSession = useCallback(() => {
     downloadScope.current.invalidate();
+    operationScope.current.invalidate();
     controller.current?.abort();for(const pending of pageControllers.current.values())pending.abort();pageControllers.current.clear();requestSequence.current++;
     setRefreshing(false);setLoadingPages({});
     const known=sessionRef.current;
@@ -125,7 +128,7 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
   },[surface,acceptSession,expireSession,publishData]);
 
   useEffect(()=>{
-    const cancelDownloads=()=>downloadScope.current.invalidate();
+    const cancelDownloads=()=>{downloadScope.current.invalidate();operationScope.current.invalidate();};
     window.addEventListener('pagehide',cancelDownloads);void refresh();
     return()=>{window.removeEventListener('pagehide',cancelDownloads);cancelDownloads();controller.current?.abort();for(const pending of pageControllers.current.values())pending.abort();requestSequence.current++;};
   },[refresh]);
@@ -198,20 +201,24 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
     if(operationInProgress.current)throw new Error('Wait for the current action to finish.');
     if(stale||refreshing)throw new Error('Refresh the workspace and review the current record before saving.');
     const current=sessionRef.current;if(!current?.authenticated||!current.csrfToken)throw new Error('Sign in again to continue.');
+    const csrfToken=current.csrfToken;
     const attempt=retryKeys.current.get(method+' '+path,input);
+    const operation=operationScope.current.begin();
     operationInProgress.current=true;setBusy(true);setNotice(null);setPageError(null);
     try {
-      const result=await api<Item>(path,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':current.csrfToken,'Idempotency-Key':attempt.key},body:JSON.stringify(input)});
+      const result=await operation.wait(()=>api<Item>(path,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken,'Idempotency-Key':attempt.key},body:JSON.stringify(input),signal:operation.signal}));
+      operation.assertCurrent();
       if(typeof result?.id!=='string')throw new ApiError(0,'RESPONSE_UNREADABLE','The save response could not be verified. Retry the same action to recover its result.');
       retryKeys.current.confirmed(attempt.fingerprint);setNotice(success);
       // The write is confirmed. A failed follow-up read must never re-submit it.
-      await refresh();return result;
+      await refresh();operation.assertCurrent();return result;
     } catch(error) {
+      if(!operation.isCurrent()||error instanceof StaleWorkspaceOperationError)throw new StaleWorkspaceOperationError();
       if(error instanceof ApiError&&error.status===401)expireSession();
       if(error instanceof ApiError&&error.code==='REVISION_CONFLICT')setStale(true);
       if(error instanceof ApiError&&(error.code==='CONNECTION_UNCERTAIN'||error.code==='RESPONSE_UNREADABLE'))throw new Error('The save result is uncertain. Keep this form open and retry without changing its entries. The same request reference will recover the result without creating a duplicate.');
       throw error;
-    } finally {operationInProgress.current=false;setBusy(false);}
+    } finally {operation.finish();operationInProgress.current=false;setBusy(false);}
   }
   async function download(path:string,name:string) {
     if(operationInProgress.current)throw new Error('Wait for the current action to finish.');
@@ -268,6 +275,8 @@ export default function WorkspaceApp({surface}:{surface:Surface}) {
 function Loading({label}:{label:string}) {return <div className="mw-loading" role="status"><span className="mw-loading-dot" aria-hidden="true"/><p>{label}</p></div>;}
 function SignIn({session,surface,busy,login}:{session:Session;surface:Surface;busy:boolean;login:(username:string,password:string,totp:string)=>Promise<void>}) {
   const [error,setError]=useState<string|null>(null),[sending,setSending]=useState(false);
+  const errorTarget=useRef<HTMLParagraphElement|null>(null);
+  useEffect(()=>{if(error)errorTarget.current?.focus();},[error]);
   async function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();if(busy||sending)return;
     const values=new FormData(event.currentTarget);setError(null);setSending(true);
@@ -282,7 +291,7 @@ function SignIn({session,surface,busy,login}:{session:Session;surface:Surface;bu
         <label htmlFor="mw-password"><span>Lab password</span><input id="mw-password" name="password" type="password" autoComplete="current-password" required maxLength={256}/></label>
         {surface==='staff'&&<label htmlFor="mw-totp"><span>Authenticator code</span><input id="mw-totp" name="totp" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required/><small>Enter the six-digit code from your authenticator.</small></label>}
         <button className="mw-button" type="submit" aria-busy={busy||sending}>{busy||sending?'Signing in…':'Sign in to pilot'}</button>
-      </fieldset>{error&&<p className="mw-form-error" role="alert">{error}</p>}</form><p className="mw-secondary">Need a pilot account or credential reset? Contact the person who invited you to the pilot.</p></>:!session.ssoAvailable&&<Info tone="pending">Central Onesa sign-in is not configured for this workspace yet. Contact your Onesa administrator.</Info>}
+      </fieldset>{error&&<p className="mw-form-error" role="alert" ref={errorTarget} tabIndex={-1}>{error}</p>}</form><p className="mw-secondary">Need a pilot account or credential reset? Contact the person who invited you to the pilot.</p></>:!session.ssoAvailable&&<Info tone="pending">Central Onesa sign-in is not configured for this workspace yet. Contact your Onesa administrator.</Info>}
     </Panel>
   </div>;
 }

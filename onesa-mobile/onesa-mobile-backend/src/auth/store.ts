@@ -1,8 +1,9 @@
-import { chmodSync, existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync, lstatSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { chmodSync, existsSync, readFileSync, writeFileSync, lstatSync } from "node:fs";
+import { resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { digest } from "./crypto.ts";
+import { prepareDatabaseFiles } from "./database-files.ts";
 import { AuthError, type AuthConfig, type AuthSource, type Role, type Surface } from "./types.ts";
 
 export interface LabUser {
@@ -27,11 +28,7 @@ export class AuthStore {
   constructor(config: AuthConfig) {
     const inMemory = config.databasePath === ":memory:";
     const path = inMemory ? ":memory:" : resolve(config.databasePath);
-    if (!inMemory) {
-      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-      if (existsSync(path) && lstatSync(path).isSymbolicLink()) throw new Error("Authentication database cannot be a symlink.");
-      const file = openSync(path, "a", 0o600); closeSync(file); chmodSync(path, 0o600);
-    }
+    if (!inMemory) prepareDatabaseFiles(path);
     if (config.encryptionKey !== undefined) {
       if (!/^[a-f0-9]{64}$/i.test(config.encryptionKey)) throw new Error("AUTH_ENCRYPTION_KEY must be 64 hexadecimal characters.");
       this.key = Buffer.from(config.encryptionKey, "hex");

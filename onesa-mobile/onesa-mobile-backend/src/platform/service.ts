@@ -270,6 +270,8 @@ export class Platform {
       const item = this.store.insert("assets", actor.subject, {
         ...data,
         state: "planned",
+        powerRatingRecorded: data.powerWatts !== null,
+        faultReported: false,
         checks,
         telemetry: null,
         connectivityState: "unobserved",
@@ -297,6 +299,10 @@ export class Platform {
       const { revision, ...patch } = data,
         checks = { ...(item.checks as Record<string, { result: string }>) };
       const changed: string[] = [];
+      const legacyDeclaredFault = item.faultReported === undefined && item.state === "faulty" && !Object.values(checks).some(check => check.result === "fail");
+      const newDeclaredFault = data.state === "faulty" || legacyDeclaredFault;
+      const faultReported = newDeclaredFault || item.faultReported === true;
+      if (newDeclaredFault) changed.push(...commissioningKeys);
       if (
         data.serialReference !== undefined &&
         data.serialReference !== item.serialReference
@@ -309,6 +315,8 @@ export class Platform {
         );
       if (data.firmware !== undefined && data.firmware !== item.firmware)
         changed.push("firmware", "connectivity", "recovery");
+      if (data.powerWatts !== undefined && (data.powerWatts !== item.powerWatts || item.powerRatingRecorded !== (data.powerWatts !== null)))
+        changed.push("power");
       if (
         data.typeApprovalRef !== undefined &&
         data.typeApprovalRef !== item.typeApprovalRef
@@ -323,6 +331,8 @@ export class Platform {
           previousFirmware: item.firmware,
           previousTypeApprovalRef: item.typeApprovalRef ?? null,
           previousSerialReference: item.serialReference ?? null,
+          previousPowerWatts: item.powerWatts ?? null,
+          declaredFault: newDeclaredFault,
           by: actor.subject,
           at: new Date().toISOString(),
         });
@@ -336,7 +346,7 @@ export class Platform {
         );
       let state = patch.state ?? item.state;
       if (state !== "retired" && state !== "planned")
-        state = Object.values(checks).some((c) => c.result === "fail")
+        state = faultReported || Object.values(checks).some((c) => c.result === "fail")
           ? "faulty"
           : changed.length
             ? "received"
@@ -349,6 +359,8 @@ export class Platform {
         );
       const result = this.store.update(item, revision, {
         ...patch,
+        ...(data.powerWatts !== undefined ? { powerRatingRecorded: data.powerWatts !== null } : {}),
+        faultReported,
         checks,
         state,
         commissioningHistory: history,
@@ -387,8 +399,17 @@ export class Platform {
           "CHECK_REQUIRED",
           "This check cannot be marked not applicable.",
         );
+      if (data.result === "not_applicable") {
+        if (!["test_sim", "ups", "other"].includes(String(item.assetType)))
+          throw new DomainError(400, "CHECK_REQUIRED", "Firmware, connectivity and recovery must be checked for this equipment type.");
+        if (!data.note)
+          throw new DomainError(400, "CHECK_REASON_REQUIRED", "Explain why this check does not apply to this exact item.");
+      }
+      const existingChecks = item.checks as Record<string, {result: string}>;
+      const legacyDeclaredFault = item.faultReported === undefined && item.state === "faulty" && !Object.values(existingChecks).some(check => check.result === "fail");
+      const declaredFault = item.faultReported === true || legacyDeclaredFault;
       const checks = {
-        ...(item.checks as Record<string, unknown>),
+        ...(legacyDeclaredFault ? Object.fromEntries(commissioningKeys.map(check => [check, {result: "not_run"}])) : existingChecks),
         [data.check]: {
           result: data.result,
           evidenceRef: data.evidenceRef,
@@ -405,14 +426,14 @@ export class Platform {
       const hasFailure = commissioningKeys.some(
         (k) => (checks[k] as { result: string }).result === "fail",
       );
-      const state = hasFailure
+      const state = hasFailure || (declaredFault && !complete)
         ? "faulty"
         : complete
           ? "commissioned"
           : "received";
       const history = [
         ...((item.commissioningHistory ?? []) as unknown[]),
-        { check: data.check, ...(checks[data.check] as object) },
+        { check: data.check, ...(checks[data.check] as object), ...(legacyDeclaredFault ? {legacyFaultRequalification: true} : {}), ...(declaredFault && complete ? {declaredFaultCleared: true} : {}) },
       ];
       if (history.length > 200)
         throw new DomainError(
@@ -423,6 +444,7 @@ export class Platform {
       const result = this.store.update(item, data.revision, {
         checks,
         state,
+        faultReported: declaredFault && !complete,
         commissioningHistory: history,
       });
       this.store.audit(actor, "asset.check_recorded", id);
@@ -443,17 +465,22 @@ export class Platform {
         );
       if (
         data.path === "direct_to_cell" &&
-        !["android_phone", "iphone", "test_sim"].includes(
+        !["android_phone", "iphone"].includes(
           String(asset.assetType),
         )
       )
         throw new DomainError(
           400,
           "INVALID_CONNECTIVITY_PATH",
-          "A dish or Wi-Fi router does not establish handset direct-to-cell service.",
+          "Choose the actual Android phone or iPhone under test. A SIM, dish or Wi-Fi router is not a handset.",
         );
       const item = this.store.insert("trials", actor.subject, {
         ...data,
+        plannedAsset: {
+          id: asset.id, assetType: asset.assetType, manufacturer: asset.manufacturer,
+          model: asset.model, firmware: asset.firmware, serialReference: asset.serialReference ?? null,
+          typeApprovalRef: asset.typeApprovalRef ?? null,
+        },
         state: "planned",
         result: null,
         networkActionExecuted: false,
@@ -484,18 +511,62 @@ export class Platform {
           "FUTURE_OBSERVATION",
           "An observation cannot be in the future.",
         );
-      if (
-        data.result === "pass" &&
-        this.store.get("assets", String(item.assetId)).state !== "commissioned"
-      )
+      const asset = this.store.get("assets", String(item.assetId));
+      if (data.result === "pass" && asset.state !== "commissioned")
         throw new DomainError(
           409,
           "ASSET_NOT_COMMISSIONED",
           "Complete asset commissioning before accepting a passing field result.",
         );
+      let authorizationEvidence: Record<string, unknown>[] = [];
+      if (data.result === "pass" && data.source === "manual_field_record") {
+        if (!item.deviceScope || !item.acceptanceCriteria || !data.authorizationRef)
+          throw new DomainError(409, "TRIAL_AUTHORIZATION_REQUIRED", "Plan an exact device scope and pass criteria, then reference the approved test plan before recording a passing manual observation. Replan older trials missing this scope.");
+        // Operator forms record seconds. Compare at that declared precision so
+        // a same-second observation is not rejected because the plan has milliseconds.
+        if (Math.floor(Date.parse(data.observedAt) / 1000) < Math.floor(Date.parse(item.createdAt) / 1000))
+          throw new DomainError(409, "TRIAL_PLAN_AFTER_OBSERVATION", "A passing manual observation must follow the plan and its agreed pass criteria. Retrospective notes can be recorded without claiming a passed planned test.");
+        const plannedAsset = item.plannedAsset as Record<string, unknown> | undefined;
+        if (!plannedAsset || ["id", "assetType", "manufacturer", "model", "firmware", "serialReference", "typeApprovalRef"].some(field => (plannedAsset[field] ?? null) !== (asset[field] ?? null)))
+          throw new DomainError(409, "TRIAL_CONFIGURATION_CHANGED", "The equipment configuration changed after planning. Plan a new trial for the current item and review its exact authorization scope.");
+        if (item.path === "direct_to_cell" && !["android_phone", "iphone"].includes(String(asset.assetType)))
+          throw new DomainError(409, "INVALID_CONNECTIVITY_PATH", "A passing direct-to-cell trial must identify the actual handset.");
+        const required = item.path === "direct_to_cell"
+          ? ["host_agreement", "equipment_approval", "satellite_authorization", "satellite_entitlement"]
+          : ["host_agreement", "equipment_approval"];
+        if (!data.evidenceIds?.length)
+          throw new DomainError(409, "TRIAL_AUTHORIZATION_REQUIRED", "Link accepted evidence for this operator, access path and exact device scope.");
+        const evidence = data.evidenceIds.map(id => this.store.get("gates", id));
+        for (const entry of evidence) {
+          if (entry.state !== "accepted" || !entry.reviewedBy || entry.reviewedBy === entry.submittedBy)
+            throw new DomainError(409, "TRIAL_EVIDENCE_NOT_ACCEPTED", "Every linked evidence record needs a current independent acceptance.");
+          if (entry.country !== "ZW" || entry.operator !== item.operator || entry.service !== item.path || entry.deviceScope !== item.deviceScope)
+            throw new DomainError(409, "TRIAL_EVIDENCE_SCOPE", "Evidence must match Zimbabwe, the operator, the access path and the exact device scope on the trial.");
+          const issued = Date.parse(String(entry.issuedAt)), expires = Date.parse(String(entry.expiresAt)), observed = Date.parse(data.observedAt);
+          if (!Number.isFinite(issued) || !Number.isFinite(expires) || issued > observed || expires <= observed || expires <= Date.now())
+            throw new DomainError(409, "TRIAL_EVIDENCE_EXPIRED", "Evidence must have been issued by the observation date and remain valid both then and now.");
+        }
+        if (required.some(gate => !evidence.some(entry => entry.gate === gate)))
+          throw new DomainError(409, "TRIAL_AUTHORIZATION_REQUIRED", "Missing accepted evidence: " + required.filter(gate => !evidence.some(entry => entry.gate === gate)).join(", ") + ".");
+        authorizationEvidence = evidence.map(entry => ({
+          id: entry.id, revision: entry.revision, gate: entry.gate,
+          country: entry.country, operator: entry.operator, service: entry.service, deviceScope: entry.deviceScope,
+          evidenceRef: entry.evidenceRef, issuer: entry.issuer, issuedAt: entry.issuedAt, expiresAt: entry.expiresAt,
+          reviewedBy: entry.reviewedBy, reviewedAt: entry.reviewedAt,
+        }));
+      } else if (data.evidenceIds?.length || data.authorizationRef) {
+        throw new DomainError(400, "TRIAL_EVIDENCE_NOT_APPLICABLE", "Authorization evidence is linked only to a passing manual observation. Describe blocked, failed or simulated outcomes in the observation.");
+      }
       const { revision, ...observation } = data;
       const result = this.store.update(item, revision, {
         ...observation,
+        assetSnapshot: {
+          id: asset.id, revision: asset.revision, tag: asset.tag, assetType: asset.assetType,
+          manufacturer: asset.manufacturer, model: asset.model, firmware: asset.firmware,
+          typeApprovalRef: asset.typeApprovalRef ?? null, state: asset.state,
+        },
+        authorizationEvidence,
+        authorizationAssessment: data.source === "lab_simulator" ? "simulation_only" : data.result === "pass" ? "internal_evidence_review" : "not_assessed",
         state: "completed",
         recordedBy: actor.subject,
         networkActionExecuted: false,

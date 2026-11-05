@@ -8,7 +8,36 @@ The appropriate first deployable unit is a single-instance hardware-pilot contro
 
 The runtime and recovery work closes concrete software gaps while preserving this boundary. Commercial launch still depends on actual operator/satellite contracts, licensing, subscriber-registration processes, qualified hardware, production infrastructure and end-to-end acceptance. An empty adapter or a configuration flag is not completion of those dependencies.
 
-## Findings and remediation
+## Second independent review
+
+The second pass reviews the integrated telecom, security, visual and UX corrections, concentrating on physical-hardware evidence, runtime recovery and meaningful browser verification. The findings below supersede earlier checkpoint statements where noted. They are software review findings; the physical bench, operator approval and native-device acceptance remain separate work.
+
+| ID | Severity | Reproduced gap | Correction and current evidence |
+| --- | --- | --- | --- |
+| PE-02-11 | High | Declaring an already commissioned asset faulty could be undone by passing an unrelated label check. A received-state update also needed to preserve a declared physical fault. | The platform owner invalidates all checks on fault declaration and retains `faultReported` until all seven are requalified. Legacy faulty rows receive the same treatment. The original fault/label sequence was independently reproduced; the integrated hardware suite now includes both new-record and legacy regressions. |
+| PE-02-12 | High | The recovery overlay always mounted the lab volume. Combining it with production could back up or restore the wrong source while appearing to use the production configuration. | Recovery now requires the exact existing external volume and an explicit mode. Its entrypoint rejects a different command mode before database access. Local recovery/guard suite: **8 passed, 1 skipped**. The skipped test checks the actual Docker Compose merge and missing-selection failure; Docker is unavailable locally and hosted runtime CI is pending for these changes. |
+| PE-02-13 | Medium | The manual-observation form used minute precision while the backend compared against a millisecond plan timestamp. A valid immediate observation could be rejected as preceding its plan. | The control explicitly accepts seconds, explains its time basis and compares plan order at that same second precision. The backend retains the future-time bound and rejects an observation one second before the plan. Regression is in the integrated hardware suite. |
+| PE-02-14 | Qualification | Previous web unit tests and bundle builds did not establish real customer/staff form journeys, responsive layouts or safe handling of a completed response delivered after client expiry. | Added a pinned, development-only Playwright harness and a scoped **Synthetic customer and hardware browser journeys** CI job. It starts only its own loopback API/gateway with disposable synthetic data. Local Chromium was denied a required OS socket before any page opened; **browser execution, screenshots and rendering results are pending hosted CI**. No bypass or passing browser claim is made. |
+| PE-02-15 | Documentation | Architecture still described `mobile.onesa.eu` as wholly unconfigured after Vercel attachment, obscuring the remaining DNS/backend work. | Architecture now separates the deployed prelaunch web build and verified domain attachment from missing Cloudflare DNS, pending custom-domain serving and the deliberate hosted API `503`. The existing deployment receipt is the source of those observations. |
+
+The browser harness exercises public connectivity explanations and a keyboard FAQ; customer application/support/reply/request/export; staff site and asset registration, focused duplicate-input error, receipt and all seven commissioning checks; a refused evidence-free manual pass followed by a pass referencing four matching accepted synthetic evidence revisions; customer-to-staff denial; service retry; sign-out; and a completed response released after client session expiry. It checks page reflow and visible form-control bounds/targets at **320, 390, 768 and 1440 pixels**, captures 390/1440 screenshots, and separately perturbs text to twice its computed size. This text check is not browser zoom or native accessibility certification.
+
+The harness never accepts an external target. It blocks non-loopback browser requests, keeps generated sign-in values in memory, removes its disposable database, and uploads only explicitly selected synthetic PNG/JSON artifacts. Fixture evidence is submitted and independently accepted through the domain service to arrange the test; the result-entry journey uses the real UI/API. This setup does not establish a licence, provider agreement, radio observation or physical hardware result.
+
+The integrated source checkpoint reported by the lead reviewer passes backend TypeScript and **98 tests**, web **23 tests plus production build**, and native **25 tests plus both JavaScript exports**. This reviewer independently reran the web production build, the **8 passing recovery/entrypoint tests**, JavaScript syntax and scoped whitespace checks. Actual Docker merging/runtime and browser execution await the new hosted run. Earlier source `3af4282` CI receipts below remain historical and do not qualify these new changes.
+
+Run the new checks from `onesa-mobile/`:
+
+```sh
+node --test scripts/tests/*.test.mjs
+npm ci --ignore-scripts --no-audit --no-fund
+npx --no-install playwright install --with-deps chromium
+npm run test:browser
+```
+
+Install backend/web dependencies independently and build the web package before the last command. A preinstalled development Chromium can be selected with `MOBILE_BROWSER_EXECUTABLE`; its version is recorded in the report. The hosted job installs the browser matching the pinned Playwright package. Root workflow `onesa-mobile-ci.yml` owns both **Container restart and encrypted recovery** and **Synthetic customer and hardware browser journeys**. Capture the eventual exact-source job receipts in [VALIDATION.md](../VALIDATION.md), and inspect the resulting screenshots before closing PE-02-14.
+
+## First-review findings and remediation
 
 | ID | Severity | Finding and impact | Remediation and evidence |
 | --- | --- | --- | --- |
@@ -39,7 +68,7 @@ The Mobile auth review covered `src/auth/service.ts`, `onesa.ts`, `store.ts` and
 
 Local opaque bearer values are stored as hashes. Provider tokens, PKCE verifiers and TOTP seeds are encrypted. Cookie mutations require an exact allowed Origin and CSRF token. Ambiguous credentials are rejected. Local role changes or disabling an identity invalidate sessions; production refuses lab identities, unconfigured central sign-in and missing external key custody. Native handoff codes are short-lived, single use and bound to native state and PKCE. Logout can destroy the local capability even if the central provider is unavailable.
 
-No fail-open authorization defect was identified in this reviewed implementation. This is source-and-test review with synthetic identity exchanges, not a penetration test of deployed infrastructure. Host security, issuance/change of central staff grants, external secret custody, TLS ingress and recovery administration remain separate privileged boundaries.
+At the first review checkpoint no fail-open authorization defect had been identified. That statement is superseded by the second security review: **SEC-02-01** reproduced a delayed central authorization result continuing after local logout, and the implementation now rechecks the local capability after the provider response. Its regression is retained in the integrated suite. See the [security review](SECURITY_REVIEW.md) for that race and SQLite file/sidecar corrections. This remains source-and-test review with synthetic identity exchanges, not a penetration test of deployed infrastructure. Host security, issuance/change of central staff grants, external secret custody, TLS ingress and recovery administration remain separate privileged boundaries.
 
 ## Runtime and recovery changes
 
@@ -68,6 +97,8 @@ The detailed commands and scope are in [the runtime/recovery guide](../../infra/
 
 ## Primary technical references
 
+- [Compose external-volume declarations](https://docs.docker.com/reference/compose-file/volumes/) and [required interpolation](https://docs.docker.com/reference/compose-file/interpolation/).
+- [Playwright library](https://playwright.dev/docs/library) and [controlled browser time](https://playwright.dev/docs/clock).
 - [Node.js 24.22.1 SQLite](https://nodejs.org/download/release/v24.22.1/docs/api/sqlite.html): online backup and the release-candidate status of this Node API.
 - [Official NGINX unprivileged image](https://github.com/nginx/docker-nginx-unprivileged): non-root port/temp-path behavior and moving image tags.
 - [Docker Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/) and [merge rules](https://docs.docker.com/reference/compose-file/merge/).

@@ -88,14 +88,21 @@ node scripts/backup.mjs --mode lab --database onesa-mobile-backend/var/onesa-mob
 
 An output directory is created with mode 0700 if absent; an existing output directory must already be owner-only. Archives and key files use mode 0600. Existing archives are never overwritten. Choose a new archive name per run.
 
-For the Compose lab, use the isolated maintenance image. Prepare absolute `MOBILE_RECOVERY_DIRECTORY` and `MOBILE_RECOVERY_KEY_FILE` environment variables pointing to an existing protected archive directory and key file. The directory must be owned by UID 1000 and mode 0700; the key must be readable by UID 1000 and mode 0600. Docker Desktop and native Linux mount permissions differ, so verify access without making the key world-readable. The bind mounts refuse to create missing host paths.
+For Compose, use the isolated maintenance image. Prepare absolute `MOBILE_RECOVERY_DIRECTORY` and `MOBILE_RECOVERY_KEY_FILE` environment variables pointing to an existing protected archive directory and key file. The directory must be owned by UID 1000 and mode 0700; the key must be readable by UID 1000 and mode 0600. Docker Desktop and native Linux mount permissions differ, so verify access without making the key world-readable. The bind mounts refuse to create missing host paths.
+
+Select the source explicitly using `MOBILE_RECOVERY_VOLUME` and `MOBILE_RECOVERY_MODE`. Confirm the named volume mounted at `/app/var` in the intended API container's `docker inspect` output; project-name overrides change volume names. For the default lab started above, that volume is `onesa-mobile-lab_mobile-data`:
 
 ```sh
+export MOBILE_RECOVERY_VOLUME=onesa-mobile-lab_mobile-data
+export MOBILE_RECOVERY_MODE=lab
+docker volume inspect "$MOBILE_RECOVERY_VOLUME" --format '{{.Name}}'
 docker compose -f infra/runtime/compose.lab.yaml -f infra/runtime/compose.recovery.yaml --profile maintenance build recovery
 docker compose -f infra/runtime/compose.lab.yaml -f infra/runtime/compose.recovery.yaml --profile maintenance run --rm --no-deps recovery backup.mjs --mode lab --database /data/onesa-mobile.sqlite --output /backups/pilot-001.omb --key-file /run/recovery.key
 ```
 
-The helper has no network and runs as UID 1000. It mounts the data volume for online SQLite access and possible restoration; its backup operation opens the source database read-only. The archive is an AES-256-GCM authenticated stream: versioned header, encrypted metadata/checksum, database bytes and authentication tag. The lab key is encrypted in metadata. Production archives deliberately exclude the external authentication encryption key and refuse databases containing lab identities or a lab sidecar.
+The overlay has no default source volume. Its external volume declaration refuses to create an empty replacement, and missing volume/mode selection fails configuration. The container entrypoint rejects a `--mode` that differs from `MOBILE_RECOVERY_MODE` before accessing database paths. Combining a production overlay with maintenance therefore cannot silently choose the lab volume. These checks require the operator to select the correct existing volume; they do not establish its business ownership.
+
+The helper has no network and runs as UID 1000. It mounts the selected data volume for online SQLite access and possible restoration; its backup operation opens the source database read-only. The archive is an AES-256-GCM authenticated stream: versioned header, encrypted metadata/checksum, database bytes and authentication tag. The lab key is encrypted in metadata. Production archives deliberately exclude the external authentication encryption key and refuse databases containing lab identities or a lab sidecar.
 
 Backup creation uses SQLite's online-backup API so committed WAL changes are included consistently. Do not replace it with `cp` or `docker cp` of a running `.sqlite` main file. The snapshot must pass SQLite integrity, expected schema version and audit-chain checks before it is encrypted. The format currently supports schema version 1 and databases up to 16 GiB; larger stores require separate qualification.
 
@@ -111,7 +118,7 @@ Host drill:
 node scripts/restore.mjs --mode lab --input backups/pilot-001.omb --database restored/onesa-mobile.sqlite --key-file private/backup.key
 ```
 
-Compose drill into a new subdirectory of the lab data volume:
+Compose drill into a new subdirectory of the explicitly selected lab data volume, retaining the four recovery environment variables above:
 
 ```sh
 docker compose -f infra/runtime/compose.lab.yaml -f infra/runtime/compose.recovery.yaml --profile maintenance run --rm --no-deps recovery restore.mjs --mode lab --input /backups/pilot-001.omb --database /data/recovered-001/onesa-mobile.sqlite --key-file /run/recovery.key
@@ -135,7 +142,9 @@ docker compose -f infra/runtime/compose.lab.yaml run --rm --no-deps api node src
 
 Retrieve and protect the output as for bootstrap, enroll the new authenticator, and keep unapproved accounts disabled. A role mismatch, absent lab-key sidecar, existing output file or production environment causes refusal; reissue never bulk-enables users. Resolve a post-backup role downgrade through the approved access-change process before reissue. Do not restore the old password or authenticator seed manually.
 
-For an actual cutover, stop the API, point it at the selected restored file and its matching lab key (or the retained external production key), reconcile and reissue any needed lab identities, start one API instance, sign in again, and inspect records and audit integrity. Preserve the previous files for an approved rollback until acceptance is complete. Restoring lab data into production is refused. The maintenance overlay is for the lab volume; production recovery must explicitly target the approved production volume, secrets and environment.
+For an actual cutover, stop the API, point it at the selected restored file and its matching lab key (or the retained external production key), reconcile and reissue any needed lab identities, start one API instance, sign in again, and inspect records and audit integrity. Preserve the previous files for an approved rollback until acceptance is complete. Restoring lab data into production is refused.
+
+Production recovery requires the actual approved production volume in `MOBILE_RECOVERY_VOLUME`, `MOBILE_RECOVERY_MODE=production`, the retained external production authentication key, and the protected recovery key/archive paths. Include `compose.production.yaml` between the lab base and the recovery overlay, and use `--mode production` in the backup/restore command. Inspect the merged configuration before the operation. The helper does not infer the source from overlay order, rename a lab volume or copy lab identities into production. The production environment remains a deployment candidate until separately commissioned.
 
 Temporary decrypted snapshots are held in owner-only directories and removed on normal completion or failure. A host/process crash can leave a protected temporary directory; include its controlled cleanup in recovery and use encrypted disks. The live SQLite database is not itself encrypted by these scripts. Host disk encryption, backup storage controls and jurisdictional decisions remain required for real data.
 
@@ -165,8 +174,9 @@ The web gateway joins both `ingress` and the internal `private` network. Docker 
 
 | Check | How to run | What it proves |
 | --- | --- | --- |
-| Local encrypted recovery | `node --test scripts/tests/recovery.test.mjs` after backend `npm ci` | Actual operational/auth schemas, WAL capture, integrity, tamper/wrong-key rejection, no overwrite, mode isolation, session invalidation and disabled recovered lab authority. |
+| Local encrypted recovery and source selection | `node --test scripts/tests/*.test.mjs` after backend `npm ci` | Actual operational/auth schemas, WAL capture, integrity, tamper/wrong-key rejection, no overwrite, mode isolation, session invalidation, disabled recovered lab authority and matching recovery invocation. The Compose merge test explicitly skips when Docker is absent. |
 | Container runtime | Root workflow `onesa-mobile-ci.yml`, runtime job | Dependency-complete images, gateway/API contracts, identity bootstrap, persistent records/idempotency/audit across restart, and container recovery. |
+| Browser journeys | Root workflow `onesa-mobile-ci.yml`, browser job; locally `npm ci` in Mobile root, install the locked Playwright Chromium, build web, then `npm run test:browser` | Real local API/customer/hardware flows with disposable synthetic data, queued-response expiry, role denial, service retry, open forms and page reflow at 320/390/768/1440 px. Captures synthetic screenshots; no external target or provider action. |
 | Portal identity | Same workflow, ephemeral PostgreSQL job | Additive migration and actual provider regression tests using a loopback `_test` database and synthetic identities. |
 | Native JavaScript | Package `npm run verify` | Types, unit tests and iOS/Android JS exports. |
 | Native compilation | Root workflow `onesa-mobile-native-compile.yml`, scoped push/PR or manual dispatch | Android debug APK and unsigned iPhone/iPad simulator app compile on hosted toolchains. No release keys or store publication. |
@@ -174,10 +184,12 @@ The web gateway joins both `ingress` and the internal `private` network. Docker 
 
 The container smoke script refuses any project name outside `onesa-mobile-ci-*`, creates only synthetic records and never prints or uploads its generated credentials or database. CI cleanup removes only that disposable project. Native compilation runs automatically for scoped changes and can also be dispatched manually. GitHub documents the selected standard Ubuntu and macOS runners as free for public repositories; this is the verified public repository's configuration. The workflow does not purchase larger runners, upload release keys or publish apps.
 
-The six recovery tests passed locally and on hosted CI. Final application source `3af4282` passed [qualification run 42080127807](https://github.com/DruHustle/onesa-ug/actions/runs/42080127807), including actual container build/start/restart/recovery and 35 Portal tests against disposable PostgreSQL. Docker and Apple/Android native toolchains are unavailable in the editing environment; those observations come from hosted jobs. See [VALIDATION.md](../../docs/VALIDATION.md) for the exact source, tested image IDs, native compilation/artifact receipts and physical acceptance boundaries.
+The first release's six recovery tests passed locally and on hosted CI. Its application source `3af4282` passed [qualification run 42080127807](https://github.com/DruHustle/onesa-ug/actions/runs/42080127807), including actual container build/start/restart/recovery and 35 Portal tests against disposable PostgreSQL. The second review adds explicit recovery source selection and browser journeys: eight recovery/entrypoint tests pass locally, with the actual Compose merge test skipped because Docker is absent. Local Chromium launch was denied a required operating-system socket before it opened a page; browser results and screenshots must come from the new hosted job. Those new runtime/browser receipts are pending and are not established by the earlier run. Docker and Apple/Android native toolchains are unavailable in the editing environment. See [VALIDATION.md](../../docs/VALIDATION.md) for the exact source, tested image IDs, native compilation/artifact receipts and physical acceptance boundaries.
 
 ## Primary implementation references
 
+- [Compose external volumes](https://docs.docker.com/reference/compose-file/volumes/) and [required environment interpolation](https://docs.docker.com/reference/compose-file/interpolation/).
+- [Playwright library](https://playwright.dev/docs/library) and [clock-controlled expiry testing](https://playwright.dev/docs/clock).
 - [Node.js 24.22.1 SQLite API and online backup](https://nodejs.org/download/release/v24.22.1/docs/api/sqlite.html).
 - [Official NGINX unprivileged image](https://github.com/nginx/docker-nginx-unprivileged).
 - [Compose health-based startup order](https://docs.docker.com/compose/how-tos/startup-order/).

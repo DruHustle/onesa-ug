@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Item, WorkspaceContext } from './types';
 import { errorMessage } from './api';
 import { humanize, stateTone } from './helpers.mjs';
@@ -44,6 +44,8 @@ export function RecordForm({ title, fields, submitLabel, onSubmit, busy = false,
   busy?: boolean; children?: ReactNode; reset?: boolean;
 }) {
   const prefix = useId(), [error, setError] = useState<string | null>(null), [sending, setSending] = useState(false);
+  const errorTarget=useRef<HTMLParagraphElement|null>(null);
+  useEffect(()=>{if(error)errorTarget.current?.focus();},[error]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (sending || busy) return;
     const form = event.currentTarget, values = Object.fromEntries(new FormData(form).entries()) as FormValues;
@@ -66,7 +68,7 @@ export function RecordForm({ title, fields, submitLabel, onSubmit, busy = false,
         </label>;
       })}
     </div>{children}<div className="mw-form-actions"><button className="mw-button" type="submit" aria-busy={sending}>{sending ? 'Saving…' : submitLabel}</button></div></fieldset>
-    {error && <p className="mw-form-error" role="alert">{error}</p>}
+    {error && <p className="mw-form-error" role="alert" ref={errorTarget} tabIndex={-1}>{error}</p>}
   </form>;
 }
 export function MutationButton({ children, action, context, danger = false }: { children: ReactNode; action: () => Promise<unknown>; context: WorkspaceContext; danger?: boolean }) {

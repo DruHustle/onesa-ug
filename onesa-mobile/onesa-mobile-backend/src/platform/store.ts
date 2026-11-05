@@ -1,7 +1,8 @@
 import { DatabaseSync, backup } from "node:sqlite";
-import { mkdirSync, chmodSync } from "node:fs";
-import { dirname } from "node:path";
+import { chmodSync } from "node:fs";
+import { resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { prepareDatabaseFiles } from "../auth/database-files.ts";
 import {
   DomainError,
   type Actor,
@@ -18,14 +19,14 @@ type Row = {
   created_at: string;
   updated_at: string;
 };
+
 export class Store {
   db: DatabaseSync;
   path: string;
   constructor(path: string) {
-    this.path = path;
-    if (path !== ":memory:")
-      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    this.db = new DatabaseSync(path, { timeout: 5000 });
+    this.path = path === ":memory:" ? path : resolve(path);
+    if (this.path !== ":memory:") prepareDatabaseFiles(this.path);
+    this.db = new DatabaseSync(this.path, { timeout: 5000 });
     this.db
       .exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS platform_schema(version INTEGER PRIMARY KEY, installed_at TEXT NOT NULL);
@@ -36,7 +37,6 @@ export class Store {
       CREATE TABLE IF NOT EXISTS platform_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,actor TEXT NOT NULL,role TEXT NOT NULL,action TEXT NOT NULL,target TEXT NOT NULL,at TEXT NOT NULL,previous_hash TEXT NOT NULL,hash TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS platform_idempotency(actor TEXT NOT NULL,key TEXT NOT NULL,operation TEXT NOT NULL,digest TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(actor,key));
       INSERT OR IGNORE INTO platform_schema(version,installed_at) VALUES(1,strftime('%Y-%m-%dT%H:%M:%fZ','now'));`);
-    if (path !== ":memory:") chmodSync(path, 0o600);
   }
   close(): void {
     this.db.close();

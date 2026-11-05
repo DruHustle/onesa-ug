@@ -3987,7 +3987,7 @@
             }
           }
         },
-        "description": "hardware.write. Site must exist; asset tag is unique. Optional custodian, serialReference and supplierReference are non-secret custody/provenance references. Creates no device command or telemetry.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
+        "description": "hardware.write. Site must exist; asset tag is unique. Missing rated power stays null, never a measured zero. Optional custody/procurement references are non-secret. Creates no device command or telemetry.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
       },
       "options": {
         "operationId": "options_v1_ops_assets",
@@ -4206,7 +4206,7 @@
             }
           }
         },
-        "description": "hardware.write. Retired assets are read-only. Firmware/type-approval changes invalidate relevant checks and retain bounded history.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
+        "description": "hardware.write. Retired assets are read-only. Firmware, serial, type-approval and rated-power changes invalidate affected checks and retain bounded history. powerWatts:null explicitly clears an unknown rating. A rating is never a load measurement. Declaring faulty invalidates every check and retains an unresolved-fault marker until full requalification; changing state to received cannot clear it.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
       },
       "options": {
         "operationId": "options_v1_ops_assets__id_",
@@ -4433,7 +4433,7 @@
             }
           }
         },
-        "description": "hardware.write. Receive asset first. Asset label, power, management security and equipment approval cannot be not_applicable. All required checks must pass before commissioned; failure marks faulty. No remote equipment action is performed.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
+        "description": "hardware.write. Receive asset first. Asset label, power, management security and equipment approval must be assessed for every item. Firmware/connectivity/recovery can be not_applicable only for test_sim, ups or other, and require an explicit note. Active managed equipment must pass every check. Failure remains faulty; no remote equipment action is performed.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
       },
       "options": {
         "operationId": "options_v1_ops_assets__id__checks",
@@ -4651,7 +4651,7 @@
             }
           }
         },
-        "description": "hardware.write. Site/asset must match. Direct-to-cell requires a handset/test-SIM asset; a dish/router is not such evidence.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
+        "description": "hardware.write. Site/asset must match. Direct-to-cell requires the actual Android phone or iPhone, not a SIM by itself. Planning captures equipment configuration. Record deviceScope and acceptanceCriteria before a manual passing observation; old plans without them need to be replanned.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
       },
       "options": {
         "operationId": "options_v1_ops_trials",
@@ -4870,7 +4870,7 @@
             }
           }
         },
-        "description": "hardware.write. No future observation beyond one-minute clock allowance; a passing result needs a commissioned asset. Record source distinguishes manual_field_record from lab_simulator. No radio/network action occurs.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
+        "description": "hardware.write. Passing requires commissioned equipment. Manual pass additionally requires an unchanged planned equipment configuration, agreed criteria preceding observedAt at second precision, approved test-plan authorizationRef and unique evidenceIds. Linked evidence needs independent current acceptance, exact ZW/operator/path/deviceScope match and validity both at observation and now. Required gates: host_agreement and equipment_approval, plus satellite_authorization and satellite_entitlement for direct_to_cell. Documentary issue dates are date-granular; authority/authenticity are not independently verified. Results snapshot equipment/evidence revisions, not ongoing permission or coverage. Failed/blocked and lab_simulator results cannot carry authorization references. Simulations remain simulation_only. No observation more than one minute in the future; no radio/network action occurs.\n\nCookie mutations require exact Origin and X-CSRF-Token; native bearer requests may omit both. Every business mutation requires Idempotency-Key. Existing records require their current positive revision; a stale revision returns 409 without applying the action. Identity and role are revalidated before business processing."
       },
       "options": {
         "operationId": "options_v1_ops_trials__id__results",
@@ -8613,11 +8613,13 @@
               "android_phone",
               "iphone",
               "router",
+              "access_point",
               "switch",
               "ups",
               "satellite_terminal",
               "test_sim",
               "workstation",
+              "tablet",
               "other"
             ]
           },
@@ -8638,10 +8640,17 @@
             "maxLength": 80
           },
           "powerWatts": {
-            "default": 0,
-            "type": "number",
-            "minimum": 0,
-            "maximum": 10000
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "typeApprovalRef": {
             "type": "string",
@@ -8694,6 +8703,18 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 80
+          },
+          "powerWatts": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "typeApprovalRef": {
             "type": "string",
@@ -8799,6 +8820,16 @@
             "minLength": 1,
             "maxLength": 80
           },
+          "deviceScope": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "acceptanceCriteria": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
           "service": {
             "type": "string",
             "enum": [
@@ -8862,6 +8893,20 @@
               "manual_field_record",
               "lab_simulator"
             ]
+          },
+          "authorizationRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "evidenceIds": {
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
           },
           "latencyMs": {
             "type": "number",
@@ -10346,11 +10391,13 @@
               "android_phone",
               "iphone",
               "router",
+              "access_point",
               "switch",
               "ups",
               "satellite_terminal",
               "test_sim",
               "workstation",
+              "tablet",
               "other"
             ]
           },
@@ -10371,10 +10418,17 @@
             "maxLength": 80
           },
           "powerWatts": {
-            "default": 0,
-            "type": "number",
-            "minimum": 0,
-            "maximum": 10000
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "typeApprovalRef": {
             "type": "string",
@@ -10429,6 +10483,14 @@
               "commissioned",
               "retired"
             ]
+          },
+          "faultReported": {
+            "type": "boolean",
+            "description": "A manually reported physical fault remains open until all commissioning checks are repeated."
+          },
+          "powerRatingRecorded": {
+            "type": "boolean",
+            "description": "True only when the nameplate/rated power was explicitly recorded. Missing on legacy records means unverified; never infer a measurement from zero."
           },
           "checks": {
             "type": "object",
@@ -10709,6 +10771,196 @@
         ],
         "additionalProperties": true
       },
+      "TrialPlannedAsset": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "assetType": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "firmware": {
+            "type": "string"
+          },
+          "serialReference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "typeApprovalRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "assetType",
+          "manufacturer",
+          "model",
+          "firmware",
+          "serialReference",
+          "typeApprovalRef"
+        ],
+        "additionalProperties": false
+      },
+      "TrialAssetSnapshot": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tag": {
+            "type": "string"
+          },
+          "assetType": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "firmware": {
+            "type": "string"
+          },
+          "typeApprovalRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "tag",
+          "assetType",
+          "manufacturer",
+          "model",
+          "firmware",
+          "typeApprovalRef",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "TrialAuthorizationEvidence": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "gate": {
+            "type": "string",
+            "enum": [
+              "telecom_licence",
+              "host_agreement",
+              "subscriber_registration",
+              "data_protection",
+              "equipment_approval",
+              "approved_tariff",
+              "numbering_interconnect",
+              "emergency_services",
+              "satellite_authorization",
+              "satellite_entitlement",
+              "device_acceptance",
+              "operational_acceptance"
+            ]
+          },
+          "country": {
+            "type": "string",
+            "const": "ZW"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "terrestrial",
+              "direct_to_cell",
+              "dish_wifi"
+            ]
+          },
+          "deviceScope": {
+            "type": "string"
+          },
+          "evidenceRef": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reviewedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "gate",
+          "country",
+          "operator",
+          "service",
+          "deviceScope",
+          "evidenceRef",
+          "issuer",
+          "issuedAt",
+          "expiresAt",
+          "reviewedBy",
+          "reviewedAt"
+        ],
+        "additionalProperties": false
+      },
       "TrialRecord": {
         "type": "object",
         "properties": {
@@ -10739,6 +10991,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 80
+          },
+          "deviceScope": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "acceptanceCriteria": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
           },
           "service": {
             "type": "string",
@@ -10805,6 +11067,9 @@
             "type": "boolean",
             "const": false
           },
+          "plannedAsset": {
+            "$ref": "#/components/schemas/TrialPlannedAsset"
+          },
           "observedAt": {
             "type": "string",
             "format": "date-time"
@@ -10825,6 +11090,36 @@
           "recordedBy": {
             "type": "string",
             "format": "uuid"
+          },
+          "authorizationRef": {
+            "type": "string"
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 12,
+            "uniqueItems": true
+          },
+          "assetSnapshot": {
+            "$ref": "#/components/schemas/TrialAssetSnapshot"
+          },
+          "authorizationEvidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrialAuthorizationEvidence"
+            },
+            "maxItems": 12
+          },
+          "authorizationAssessment": {
+            "type": "string",
+            "enum": [
+              "simulation_only",
+              "internal_evidence_review",
+              "not_assessed"
+            ]
           },
           "latencyMs": {
             "type": "number",

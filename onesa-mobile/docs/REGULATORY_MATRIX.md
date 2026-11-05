@@ -13,6 +13,7 @@ The cited Gazette instruments are primary legal text; Veritas hosts copies where
 | [SI 95 of 2014 — Subscriber Registration](https://www.potraz.gov.zw/wp-content/uploads/2015/04/SI_95_of_2014_Subscriber_Registration_Regulations.pdf) | Registration, verification, subscriber records and confidentiality |
 | [SI 250 of 2019 — Subscriber Registration amendment](https://www.veritaszim.net/sites/veritas_d/files/SI%202019-250%20Postal%20and%20Telecommunications%20%28Subscriber%20Registration%29%20%28Amendment%29%20Regulations%2C%202019%20%28No.%201%29.pdf) | Conditional use of foreign-hosted storage for subscriber data |
 | [SI 155 of 2024 — Data controllers and DPOs](https://www.potraz.gov.zw/wp-content/uploads/2025/02/sI-155-of-2024-Cyber-and-Data-Protection-Normal_240913_1250178.pdf) | Controller licensing, DPO, security, transfers and breach handling |
+| [POTRAZ-authored 2025 implementation guidelines, Veritas copy](https://www.veritaszim.net/sites/veritas_d/files/Cyber%20and%20Data%20Protection%20Act%20Implementation%20Guidlines.pdf) | Compliance assessments, impact assessments and cross-border protection guidance, including CDPG 1, 3 and 4 of 2025; guidance accompanying the Act and SI 155/2024, not a new Act |
 | [POTRAZ equipment approval form](https://www.potraz.gov.zw/wp-content/uploads/2015/04/TypeApprovalApplicarionForm.pdf) | Model/specification/test-report information; confirm the current submission process |
 
 ## Release requirements
@@ -42,13 +43,31 @@ The implementation column is Onesa's proposed engineering response. It does not 
 
 **Cloud storage.** Review the original registration rules together with the 2019 amendment. Do not describe them as an absolute foreign-cloud ban, and do not assume a cloud provider's default encryption automatically meets the host-unreadable encryption/local key-custody conditions. Account for backups, logs, support exports and disaster recovery as well as the primary database.
 
-**Breach response.** SI 155/2024 s17 specifies reporting personal-data breaches to the Authority within **24 hours** of awareness, with **72-hour** notification to affected subjects where the stated high-risk condition applies. Establish detection, a DPO-led incident clock, notification preparation, an evidence log and recovery drills. Obtain advice on the applicable incident's reporting obligations; no automated email alone constitutes compliance.
+**Breach response.** SI 155/2024 s17 specifies reporting personal-data breaches to the Authority within **24 hours** of awareness, with **72-hour** notification to affected subjects where the stated high-risk condition applies. It also requires responses to the Authority's information requests within **14 days**, and an investigation report within **21 days of notification**. Establish detection, a DPO-led incident clock, notification preparation, an evidence log and recovery drills. Obtain advice on the applicable incident's reporting obligations; no automated email alone constitutes compliance.
 
 **Prices and fees.** Obtain a current written regulatory fee assessment and approved retail tariff process. Do not display the development fixture's sample monetary amounts as Onesa prices. Host wholesale rates and regulator-approved customer tariffs are different records.
 
 **Physical installations.** Identify the applicable licence/permission, equipment approval, installer competence, site owner permission and spectrum conditions before a radio installation. A lab label or reduced transmitter power is not an authorization. An ordinary IP/device bench can be prepared while these matters are resolved.
 
 **Emergency claims.** The production service must satisfy the obligations applicable to its licence and contract. A disclaimer is not a substitute. Separate ordinary voice, app voice and emergency capability, and agree an authorized test procedure rather than calling live emergency services to check a demo.
+
+## Test permission and commercial release
+
+An authorized experiment and a sellable mobile service are different decisions. Record the actual permission to test before performing a physical network trial. Later, the trial results can support device/service acceptance. Requiring an already-completed device acceptance certificate for the experiment that creates it would be circular.
+
+The following is **Onesa's internal record-acceptance policy**, not a claim that POTRAZ requires these database keys. It applies to a **passing manual** radio observation. Plans, blocked/failed observations and clearly labelled simulations can be recorded without claiming successful service.
+
+| Trial path | Required current evidence references | What the evidence must actually cover |
+| --- | --- | --- |
+| `terrestrial` | `host_agreement`, `equipment_approval` | Authorized host test account/use and the exact permitted equipment scope |
+| `direct_to_cell` | The above, plus `satellite_authorization`, `satellite_entitlement` | The specific Zimbabwe handset-to-satellite experiment, operator, device/profile, service functions and observation window |
+| `dish_wifi` | `host_agreement`, `equipment_approval` | Authorized broadband account/install/use and equipment; the agreement concerns broadband here, not MVNO access |
+
+Use country `ZW`, the same operator, path and explicit device-scope reference. Accepted evidence must be valid for the observation and still current at review; do not use a document issued after the experiment to backdate permission. Preserve document/record IDs and revisions, the tested asset's identity/firmware revision, approved test-plan reference, pass criteria and observed bearer evidence. D2C needs a handset as the primary test asset; a SIM record alone is insufficient. A managed AP and tablet have their own inventory types.
+
+The `device_acceptance` gate is an outcome of qualification and a commercial release requirement. It is not an entry gate for its own test. Likewise, a service's required licence, registration, tariff, emergency, data and operational obligations remain part of the full launch decision; the smaller test-evidence set does not waive them.
+
+Software checks references, dates and scope. The responsible engineer still verifies documentary authenticity, actual test permission, safety, equipment condition and compliance with the agreed conditions before performing the test. No accepted record sends RF, provisions a SIM, establishes coverage or enables customer sales.
 
 ## Evidence lifecycle
 

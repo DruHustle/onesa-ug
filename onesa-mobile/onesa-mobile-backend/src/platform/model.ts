@@ -75,11 +75,13 @@ export const assetKinds = [
   "android_phone",
   "iphone",
   "router",
+  "access_point",
   "switch",
   "ups",
   "satellite_terminal",
   "test_sim",
   "workstation",
+  "tablet",
   "other",
 ] as const;
 export const commissioningKeys = [
@@ -125,7 +127,7 @@ export const schemas = {
       manufacturer: text(60),
       model: text(100),
       firmware: text(80).default("Not recorded"),
-      powerWatts: z.number().min(0).max(10000).default(0),
+      powerWatts: z.number().min(0).max(10000).nullable().default(null),
       typeApprovalRef: ref.optional(),
       custodian: text(80).optional(),
       serialReference: ref.optional(),
@@ -137,6 +139,7 @@ export const schemas = {
       revision,
       state: z.enum(["planned", "received", "faulty", "retired"]).optional(),
       firmware: text(80).optional(),
+      powerWatts: z.number().min(0).max(10000).nullable().optional(),
       typeApprovalRef: ref.optional(),
       custodian: text(80).optional(),
       serialReference: ref.optional(),
@@ -159,6 +162,8 @@ export const schemas = {
       path: z.enum(["terrestrial", "direct_to_cell", "dish_wifi"]),
       scenario: text(160),
       operator: text(80),
+      deviceScope: ref.optional(),
+      acceptanceCriteria: note.optional(),
       service: z.enum([
         "sms",
         "app_data",
@@ -177,6 +182,8 @@ export const schemas = {
       observation: note,
       observedAt: z.iso.datetime(),
       source: z.enum(["manual_field_record", "lab_simulator"]),
+      authorizationRef: ref.optional(),
+      evidenceIds: z.array(id).max(12).refine(ids => new Set(ids).size === ids.length, "Evidence references must be unique").optional(),
       latencyMs: z.number().min(0).max(60000).optional(),
       downloadMbps: z.number().min(0).max(10000).optional(),
     })

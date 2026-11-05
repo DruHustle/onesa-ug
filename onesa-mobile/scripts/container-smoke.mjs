@@ -112,6 +112,7 @@ const missing = await request('/v1/unknown', { token: admin });
 assert.equal(missing.status, 404);
 assert.match(missing.headers.get('content-type'), /application\/json/, 'unknown API paths do not return the SPA shell');
 const recovery = ['run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true',
+  '--env','MOBILE_RECOVERY_MODE=lab',
   '--mount',`type=volume,src=${project}_mobile-data,dst=/data`,'onesa-mobile-recovery:ci'];
 // These temporary key/archive paths exist only in this disposable CI volume.
 // Operator backups require separately retained keys and archives, as documented.

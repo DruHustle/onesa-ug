@@ -1,5 +1,5 @@
-# Optional lab maintenance helper. Never copy a running SQLite main file directly.
-# Overlay on compose.lab.yaml; prepare the protected host directory and key first.
+# Explicit maintenance helper. Never infer the source database from overlay order.
+# Set the existing data volume, lab/production mode, protected archive directory and key.
 services:
   recovery:
     profiles: [maintenance]
@@ -14,8 +14,10 @@ services:
     security_opt: ['no-new-privileges:true']
     pids_limit: 32
     mem_limit: 256m
+    environment:
+      MOBILE_RECOVERY_MODE: '${MOBILE_RECOVERY_MODE:?Choose lab or production explicitly}'
     volumes:
-      - mobile-data:/data
+      - recovery-source:/data
       - type: bind
         source: '${MOBILE_RECOVERY_DIRECTORY:?Set an absolute protected directory owned by UID 1000}'
         target: /backups
@@ -29,3 +31,7 @@ services:
           create_host_path: false
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+volumes:
+  recovery-source:
+    external: true
+    name: '${MOBILE_RECOVERY_VOLUME:?Set the exact existing Mobile data volume to recover}'

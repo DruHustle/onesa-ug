@@ -2,6 +2,8 @@
 
 Prepared **5 November 2026** for a proposed Zimbabwe Light MVNO with a conditional satellite extension. This is a procurement and acceptance plan. No hardware was purchased, configured, connected, measured or commissioned during this review. Existing PamoFi routers/Starlink terminals have not been inspected or assigned to Onesa Mobile.
 
+Start with the [physical bench pack](PHYSICAL_BENCH.md): numbered wiring plan, staged purchase/reuse decisions, isolation test matrix, power worksheet and first-session handover. The machine-readable [pilot template](../infra/hardware/pilot-template.json) contains unfilled planning fields; it is not a device configuration or evidence that a bench exists.
+
 ## What to obtain first
 
 Build one small **IP and device test bench**. Inventory and reuse suitable existing equipment first. The quantities below are proposed minimums for one bench, not a rollout forecast. Final radio-capable models need local supplier/type-approval evidence and the exact device/firmware acceptance conditions from the host.
@@ -21,6 +23,8 @@ Build one small **IP and device test bench**. Inventory and reuse suitable exist
 | USB power banks | 2 | Manufacturer-approved charging behavior and capacity measured with the test phones | Useful for outdoor field acceptance after host authorization. |
 
 The L009 is a lab routing reference, not a guaranteed production throughput recommendation. A port's line rate is not its encrypted or filtered routing capacity. Measure the intended firewall/VPN path before selecting production edge equipment.
+
+For this model, subscriber traffic uses the licensed host's mobile network and contracted satellite access. The bench router supplies lab IP connectivity; it is not a cellular base station, mobile core, SMS centre or Starlink gateway. Onesa does not need to buy those carrier components for the proposed Light MVNO bench. The host must accept its responsibilities before any radio-service trial.
 
 **Do not purchase a Starlink dish just to make ordinary phones connect directly to satellites.** Direct-to-cell acceptance uses qualified phones, host-issued service profiles and the contracted network. Starlink's published architecture describes operator integration; the ordinary dish is a different access product. [Technical description](https://starlink.com/public-files/DIRECT_TO_CELL_SERVICE_FEB_25.pdf).
 
@@ -49,11 +53,13 @@ Use the existing authorized internet connection for the first phase. The worksta
 
 Apply explicit inter-segment firewall rules. Confirm both IPv4 and IPv6 behavior; a working IPv4 rule does not prove IPv6 isolation. Keep database and device administration off the public WAN. Use a reviewed outbound-initiated remote-access design if required; do not forward public management ports as a shortcut. The physical installation needs a documented local recovery path.
 
-This is a design specification, not an importable configuration for an unknown router. Before creating a device-specific change, capture its model, firmware, interfaces, existing bridges/VLANs, addressing and access path. MikroTik's documentation warns that incorrect VLAN filtering can create security and access problems. [Bridge/VLAN documentation](https://help.mikrotik.com/docs/spaces/ROS/pages/328068/Bridging%2Band%2BSwitching).
+This is a design specification, not an importable configuration for an unknown router. Before creating a device-specific change, capture its model, firmware, interfaces, existing bridges/VLANs, addressing and access path. MikroTik's documentation warns that incorrect VLAN filtering can create security and access problems. [Bridge/VLAN documentation](https://manual.mikrotik.com/docs/bridging-and-switching/).
 
 ## Power sizing
 
 Measure the router, AP and any optional satellite terminal at idle and representative load. Include losses and startup demand. Keep laptop charging and other large loads out of the network-runtime budget unless deliberately included.
+
+The inventory power field is a declared nameplate/rating, not a measured runtime load. Record **unknown** until a rating or measurement is available in its corresponding record; zero watts is not a substitute for missing information. Retain meter, timestamp, supply, measured average/peak, included loads and evidence reference in the separate power worksheet. After replacing a supply, changing PoE load or changing the recorded rating, repeat the affected power and recovery checks. The [worksheet](PHYSICAL_BENCH.md#5-power-and-recovery-worksheet) keeps total load and runtime uncalculated until those inputs are supplied.
 
 For an initial battery estimate:
 
@@ -73,6 +79,12 @@ Example using invented sizing assumptions: a 100 W load, two-hour target, 80% us
 8. **Run host-network acceptance when authorized.** Use the approved SIMs, devices, locations, tests and service window. Store host event references and test outcomes without publishing identifiers or secrets.
 9. **Run direct-to-cell acceptance separately.** Begin only with written country/service authorization and entitlement. Confirm actual transport using agreed network/device evidence; the presence of a dish or an app label is insufficient.
 10. **Review and sign off.** Require the named technical and operational owners to accept results and open exceptions. Commissioning status does not authorize customer sales; the commercial/regulatory release gates remain separate.
+
+### Evidence before a passing manual radio observation
+
+Use the [trial-authority policy](REGULATORY_MATRIX.md#test-permission-and-commercial-release) for the specific operator, path and device scope. The software's acceptance of a record is not permission to transmit; the physical operator must verify the actual documents and conditions before testing. A SIM record alone cannot identify a direct-to-cell test: record the handset, exact SKU/software, host profile reference and permitted functions. `device_acceptance` is a later decision supported by trial results, so do not make it a circular precondition for its own qualification trial.
+
+A physical asset with firmware, network connectivity or recoverable configuration must be tested for those functions. Use the dedicated `access_point` and `tablet` inventory types. A legacy managed AP entered as `other` still needs these checks and must not use its generic classification to skip them. Record a substantive reason whenever a check is legitimately not applicable, such as firmware on a passive accessory; never use that outcome just because equipment or test access is missing.
 
 ## First Android USB bench session
 

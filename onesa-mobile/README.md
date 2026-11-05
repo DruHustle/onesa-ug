@@ -10,7 +10,7 @@ The public website deployment targets [mobile.onesa.eu](https://mobile.onesa.eu)
 
 ## Start with the hardware
 
-Use the [hardware pilot runbook](docs/HARDWARE_PILOT.md) and [planned inventory template](infra/hardware/pilot-template.json). Reuse a suitable workstation, obtain one managed router, a locally approved AP if needed, an iPhone, two representative Android phones, access to a tablet, measured backup power, cabling and encrypted recovery media. Starlink dish quantity starts at **zero**; add one only for a separately approved satellite-broadband IP test. A dish does not establish handset direct-to-cell service.
+Start with the [physical bench pack](docs/PHYSICAL_BENCH.md), [hardware pilot runbook](docs/HARDWARE_PILOT.md) and [planned inventory template](infra/hardware/pilot-template.json). The first USB session can reuse a suitable Mac and Android phone. For the multi-device phase, allocate one managed router, a locally approved AP if needed, an iPhone, two representative Android phones, access to a tablet, measured backup power, cabling and encrypted recovery media. The pack includes port roles, isolation checks, a power worksheet and the evidence handover. Starlink dish quantity starts at **zero**; add one only for a separately approved satellite-broadband IP test. A dish does not establish handset direct-to-cell service.
 
 The proposed commercial model is a **Light MVNO**, with a licensed host supplying radio/core functions and Onesa supplying the customer experience and operations. Satellite country, device and service entitlement needs its own written scope. [Business brief](docs/BUSINESS_BRIEF.md), [regulatory matrix](docs/REGULATORY_MATRIX.md), [partner due diligence](docs/PARTNER_DUE_DILIGENCE.md).
 
@@ -59,7 +59,8 @@ The sample LAN address must be replaced with the actual reachable lab API addres
 - Lab staff use password plus TOTP. Production requires the registered Onesa Mobile OIDC client and current Mobile grants; local lab authentication is refused.
 - Cookies are HttpOnly, use exact allowed origins and anti-CSRF tokens. Native tokens use the device secure store. Role and owner checks run on the server.
 - Mutations require actor-scoped retry keys and current record revisions. Evidence acceptance needs a different authorized reviewer. Completed trial observations are immutable.
-- Failed commissioning checks remain failed until corrected; firmware/approval changes invalidate affected checks. Inventory has no invented live telemetry.
+- Failed commissioning checks remain failed until corrected; declaring a physical fault requires all checks to be repeated. Firmware/approval/power changes invalidate affected checks. Unknown nameplate power stays unknown, and inventory has no invented live telemetry.
+- Passing manual trials require prior criteria, the planned device configuration and current independently accepted evidence for the exact operator/path/device scope. D2C records must identify a handset and include satellite authority/entitlement. Results preserve equipment/evidence revisions; simulations stay explicitly synthetic.
 - List pages are bounded and have cursors; account exports stream all owned records. Test PDFs are labelled **not tax invoices**, and no lab ledger entry moves money.
 - Backups are encrypted; restore verifies the archive/database and invalidates sessions and pending sign-in flows. The audit hash chain detects local alteration but needs independent anchoring to resist a privileged host administrator.
 
@@ -76,6 +77,6 @@ Run package commands after `npm ci`. [Validation evidence and boundaries](docs/V
 
 ## Release boundaries
 
-The software pilot is available for synthetic operational exercises. A commercial launch still needs the licensed host/wholesale model, POTRAZ and data-controller decisions, provider sandboxes and documented APIs, approved tariffs/registration, authoritative metering and settlement, native signing, physical commissioning and service acceptance. The related Company Portal Mobile identity migration is additive source code and must be released separately through its normal process. No live client, secret, user grant, public domain or regulator application is created here.
+The software pilot is available for synthetic operational exercises. A commercial launch still needs the licensed host/wholesale model, POTRAZ and data-controller decisions, provider sandboxes and documented APIs, approved tariffs/registration, authoritative metering and settlement, native signing, physical commissioning and service acceptance. The related Company Portal Mobile identity migration is additive source code and must be released separately through its normal process. The website's domain attachment and DNS status are recorded separately in the deployment guide. No live identity client, secret, user grant or regulator application is created by this code.
 
 No blanket open-source licence is granted for original Onesa source. Framework/native-template files retain their own licences and notices.

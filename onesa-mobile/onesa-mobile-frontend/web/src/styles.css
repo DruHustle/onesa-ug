@@ -15,6 +15,7 @@
   --muted: #5c716a;
   --mint: #c7f5b5;
   --line: #dae3da;
+  --control-line: #718a78;
   --paper: #f8f9f5;
 }
 * {
@@ -121,6 +122,8 @@ em {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+  flex-wrap: wrap;
+  padding-block: 12px;
 }
 .brand {
   display: inline-flex;
@@ -183,8 +186,13 @@ em {
   display: flex;
   align-items: center;
   gap: 28px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .site-header nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   text-decoration: none;
   font-size: 0.875rem;
 }
@@ -280,6 +288,7 @@ h1 em {
 }
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 22px;
   margin: 25px 0;
@@ -298,6 +307,7 @@ h1 em {
 }
 .hero-footnote {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   font-size: 0.875rem;
   color: var(--muted);
@@ -311,12 +321,14 @@ h1 em {
   position: relative;
   min-height: 435px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 18px;
   border-radius: 150px 150px 20px 20px;
   background: linear-gradient(145deg, #e2ead1, #e9eddb 50%, #f3edda);
   overflow: hidden;
-  padding: 35px;
+  padding: 24px 35px 20px;
 }
 .orbit {
   position: absolute;
@@ -341,15 +353,14 @@ h1 em {
   transform: rotate(37deg);
 }
 .orbit-caption {
-  position: absolute;
-  top: 20px;
-  left: 0;
-  right: 0;
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   font-size: 0.875rem;
-  color: #66764e;
+  color: #4b624b;
 }
 .phone-preview {
   position: relative;
@@ -499,13 +510,12 @@ h1 em {
   color: var(--ink);
 }
 .visual-label {
-  position: absolute;
-  bottom: 12px;
-  left: 0;
-  right: 0;
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
   text-align: center;
   font-size: 0.875rem;
-  color: #667455;
+  color: #4b624b;
 }
 .connection-section {
   background: #edf1e8;
@@ -541,7 +551,7 @@ h1 em {
   min-height: 44px;
   min-width: 0;
   padding: 10px 18px;
-  border: 1px solid #cdd8c8;
+  border: 1px solid var(--control-line);
   color: #48613f;
   background: transparent;
   border-radius: 100px;
@@ -576,7 +586,7 @@ h1 em {
   list-style: none;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0;
   gap: 9px;
 }
@@ -626,7 +636,7 @@ h1 em {
 }
 .plan-index {
   font-size: 0.875rem;
-  color: #78926c;
+  color: var(--muted);
 }
 .plan-card h3 {
   font-size: 1.8rem;
@@ -692,18 +702,26 @@ h1 em {
 }
 .answers details {
   border-bottom: 1px solid var(--line);
-  padding: 16px 0;
+  padding: 0;
 }
 .answers summary {
   cursor: pointer;
+  min-height: 48px;
   font-weight: 650;
   font-size: 0.875rem;
-  padding-right: 12px;
+  line-height: 1.5;
+  padding: 13px 4px;
+}
+.answers summary:hover {
+  background: #edf2e7;
+}
+.answers summary::marker {
+  color: var(--ink);
 }
 .answers details p {
   font-size: 0.875rem;
   color: var(--muted);
-  padding-top: 14px;
+  padding: 0 4px 16px;
   margin-bottom: 0;
   line-height: 1.7;
 }
@@ -741,6 +759,9 @@ footer {
   margin: 0;
 }
 .footer-inner > a:last-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-size: 0.875rem;
   text-decoration: none;
 }
@@ -936,7 +957,7 @@ dt {
 .concept-options button {
   min-height: 44px;
   padding: 10px 18px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-line);
   border-radius: 100px;
   background: transparent;
   color: var(--ink);
@@ -1148,7 +1169,7 @@ dt {
     min-height: 44px;
     padding: 10px 14px;
     border-radius: 8px;
-    color: var(--forest);
+    color: var(--ink);
     background: #c7f5b5;
     font-weight: 700;
   }
@@ -1206,7 +1227,7 @@ dt {
   }
   .hero-visual {
     min-height: 0;
-    padding: 32px 18px 28px;
+    padding: 24px 18px 20px;
     border-radius: 110px 110px 16px 16px;
     max-width: 430px;
     width: 100%;
@@ -1232,7 +1253,6 @@ dt {
   }
   .visual-label {
     font-size: 0.875rem;
-    bottom: 9px;
   }
   .connection-section {
     padding: 25px 0;
@@ -1332,7 +1352,7 @@ dt {
     font-size: 0.875rem;
   }
   .answers details {
-    padding-block: 13px;
+    padding-block: 0;
   }
   .answers summary {
     font-size: 0.875rem;
@@ -1543,6 +1563,7 @@ dt {
 
 .site-header a:focus-visible,
 .site-header button:focus-visible,
+.plan-card.featured .button:focus-visible,
 footer a:focus-visible {
   outline-color: #c7f5b5;
 }
@@ -1577,4 +1598,15 @@ dl dd {
 .balance .amount,
 .plan-price {
   font-variant-numeric: tabular-nums;
+}
+
+/* Let essential copy reflow instead of expanding narrow grid tracks. */
+.hero > *,
+.connection-panel > *,
+.plan-grid > *,
+.answers-section > *,
+.workspace-grid > *,
+.route-steps > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }

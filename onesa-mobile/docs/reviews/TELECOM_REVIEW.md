@@ -1,6 +1,6 @@
 # Principal telecommunications engineering review
 
-Review date: **5 November 2026**. Baseline inspected: commit `1e53a20f5cfbb8f589de1191a6005bc0e1a658b7`, scoped to `onesa-mobile/`. This is a role-based engineering review of the repository and public source material. No physical site, host network, SIM, satellite entitlement or regulatory application was inspected or commissioned.
+Review date: **5 November 2026**. Follow-up baseline: commit `29da3e5285a21ef4e01cff8ab1668c797475dc99` and the working changes described below, scoped to `onesa-mobile/`. The earlier review of `1e53a20f5cfbb8f589de1191a6005bc0e1a658b7` is retained explicitly as historical evidence. This is a role-based engineering review of the repository and public source material. No physical site, host network, SIM, satellite entitlement or regulatory application was inspected or commissioned.
 
 ## Decision
 
@@ -10,7 +10,44 @@ POTRAZ's published guidance distinguishes a Light MVNO from branded resale; the 
 
 There is currently no repository evidence of an Onesa host agreement, assigned mobile numbering, network credentials, a qualified handset list or authorized Zimbabwe Starlink Mobile service. Public source research did not establish such an entitlement. That is an unresolved commercial/regulatory dependency, not proof that negotiations cannot succeed.
 
-## What the baseline actually implements
+## Current follow-up: hardware first
+
+The software now supports an authenticated, persistent pilot operation. The first deliverable in the physical world remains an isolated device and IP bench. The new [physical bench pack](../PHYSICAL_BENCH.md) provides a numbered topology and port-role proposal, USB-first sequence, purchase/reuse decisions, IPv4/IPv6 isolation matrix, measured-power worksheet and handover evidence. No subnet, live router configuration, hardware order or measured value is invented.
+
+| Current component inspected | Observed implementation | Limit of the evidence |
+| --- | --- | --- |
+| `src/platform/model.ts`, `service.ts` and persistent store in the backend | Sites/assets, seven commissioning checks, immutable completed trials, twelve evidence gates, revisions, permissions and audit records | Records organize work; they do not establish physical custody, document authenticity, equipment approval or network operation |
+| Manual trial acceptance | Exact operator/path/device scope, accepted current evidence, approved-test-plan reference, pre-existing criteria and asset/configuration snapshots | An internal record review cannot authorize RF, extend a provider's terms or prove the observed bearer |
+| Web hardware workflow | Inventory and trial preparation for a protected staff workspace; managed AP and tablet are distinct asset types | UI review and synthetic tests do not establish installation or physical-device acceptance |
+| Customer and operational records | Persistent application/support/financial workflows and separate identity controls | No live SIM, charging, metering, voice, SMS or satellite provider is connected |
+| Local deployment and recovery | Isolated lab runtime and documented recovery path | Real hosting, shared identity, data-controller arrangements and production operations still require their own acceptance |
+| Public deployment | Vercel website deployment and requested domain attachment are recorded in `DEPLOYMENT.md`; DNS/backend completion remains separate | A reachable website or API health result is not mobile-service coverage or commercial readiness |
+| Pilot template | Fourteen asset-planning rows, fourteen acceptance cases and twelve unverified release gates | Planned quantities and not-run rows are not installed hardware or completed results |
+
+### Follow-up findings and closure
+
+| ID | Priority | Gap identified | Change and verified closure |
+| --- | --- | --- | --- |
+| TEL-13 | High | A passing manual radio result could be recorded with no scoped permission evidence; a SIM could be the sole D2C test asset | Manual passes now require matching accepted evidence, valid both when observed and when recorded. D2C requires host, equipment, satellite-authorization and satellite-entitlement references; terrestrial/dish paths require their own host-use and equipment scope. D2C requires an actual handset at planning and recording. Planned criteria/configuration must precede and match the observation. Evidence revisions and the equipment snapshot are retained. Synthetic regression tests pass. |
+| TEL-14 | Medium | Unknown power defaulted to zero and its rating could not be corrected through the asset update | Rating is nullable and editable, with an explicit recorded-rating flag. A rating correction invalidates the power check and preserves history. The docs distinguish nameplate rating from a meter reading and require the separate measurement/runtime worksheet. Regression tests pass; no actual load has been measured. |
+| TEL-15 | Medium | Firmware, connectivity and recovery could be skipped without rationale, including on active network equipment | N/A now requires a reason and is limited to asset categories where it may be legitimate. Active phone/router/AP/tablet/workstation categories cannot skip those checks. Managed AP and tablet types remove the need to classify them as generic accessories. Regression tests pass. Human review remains necessary for an item classified as `other`. |
+| TEL-16 | Medium | Partner due diligence described the protected workspace as an unauthenticated preview and deployment as wholly unconfigured | Corrected the surface descriptions and linked the current deployment record. This closes documentation drift; DNS, backend and shared-identity deployment still have separate external dependencies. |
+| TEL-17 | Medium | Procurement guidance lacked an executable first-session topology, port map and measured-power packet | Added `PHYSICAL_BENCH.md` and expanded the planning template. Stage A uses a current Mac/phone over USB; Stage B needs a reviewed lab interface/gateway before Wi-Fi clients can reach the loopback-only runtime. Procurement starts with an actual inventory. No device-specific configuration or price is asserted. |
+| TEL-18 | Medium | The policy/research pack omitted newer POTRAZ implementation guidance and some breach-response deadlines | Added the POTRAZ-authored 2025 compliance/DPIA/cross-border guidance, completed the SI 155/2024 incident timing summary, and recorded source retrieval limits. Current entity, licence, fee and test conditions still need written confirmation. |
+
+The telecom reviewer independently ran `node --test test/hardware-qualification.test.ts` after inspecting the model/service changes: **11 tests passed, 0 failed**. The suite exercises unknown power, N/A restrictions, handset-only D2C planning, absent/mismatched/revoked/expired authority, immutable evidence snapshots, terrestrial/dish scopes, simulation distinctions and plan/configuration timing. These are synthetic record-integrity tests, not field tests or regulator acceptance. Broader application/native verification is reported by the coordinating engineering review.
+
+The smaller trial-permission policy deliberately does not require `device_acceptance` before the trial that establishes device acceptance. An approved test plan and permission to operate must exist first; the observed results then support the separate qualification/release decision. See the [exact policy and legal distinction](../REGULATORY_MATRIX.md#test-permission-and-commercial-release).
+
+### Remaining external acceptance
+
+The software-control gaps above are addressed. Hardware, host, regulatory and production-service dependencies remain open because no actual equipment or executed service evidence was provided. The minimum next packet is a real inventory/site custodian, exact device and router/AP versions, authorized internet handoff, measured power conditions and spending ceiling. Host-issued test profiles, permitted test functions and any Zimbabwe D2C entitlement are additional inputs for the radio phase. No purchase or radio test was performed by this review.
+
+The earlier TEL-02, TEL-03 and TEL-12 software deficiencies now have implemented record and change controls. Their physical/documentary acceptance is still outstanding. TEL-01 and the live-network aspects of TEL-04 through TEL-11 remain launch dependencies; an internal acceptance row does not close them. Keep provisioning, payments and live satellite claims unavailable until the actual integrations and full release evidence are accepted.
+
+## Historical baseline implementation
+
+The following table describes only commit `1e53a20f5cfbb8f589de1191a6005bc0e1a658b7`; it is not a description of the current persistent platform.
 
 | Inspected component | Observed implementation | Engineering implication |
 | --- | --- | --- |
@@ -23,9 +60,9 @@ There is currently no repository evidence of an Onesa host agreement, assigned m
 | Native package and generated platforms | Source projects and JavaScript export qualification | Device install, carrier behavior and native release acceptance remain separate |
 | Physical infrastructure | No commissioned inventory or measured site evidence in baseline | Nothing in this review establishes that hardware is installed, powered or reachable |
 
-## Findings and required closure evidence
+## Historical findings and required closure evidence
 
-These findings describe the inspected baseline. Later implementation must be evaluated against the closure evidence; a document or UI label alone does not close a network dependency.
+These findings describe the earlier baseline. The current follow-up above records subsequent implementation and its limits; a document or UI label alone does not close a network dependency.
 
 | ID | Priority | Finding | Required remediation and closure evidence |
 | --- | --- | --- | --- |

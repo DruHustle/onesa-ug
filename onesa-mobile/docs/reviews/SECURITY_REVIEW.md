@@ -2,6 +2,21 @@
 
 Review date: 5 November 2026. Reviewer role: Cybersecurity Engineer, working as an automated engineering collaborator. Scope: repository source, dependency inventory, authenticated customer/staff/native flows, internal business operations, Company Portal integration, CI and hardware-pilot trust boundaries. This is not independent human approval, a hosted penetration test or a carrier-security certification.
 
+## Second review: reproduced defects and fixes
+
+The follow-up review re-read authentication, the Portal adapter, HTTP/RBAC boundaries, domain/store code, web/native request and private-storage handling, runtime configuration, and encrypted recovery. It identified two concrete defects:
+
+| Finding | Reproduction and impact | Resolution and verification |
+| --- | --- | --- |
+| SEC-02-01 — P1: a delayed assertion survived local sign-out | Hold a successful Portal `/session` response, sign out the same Mobile token, then release the response. Authentication returned a staff principal after the local capability had already been deleted. An in-flight request could consequently enter a business operation after sign-out. | `AuthService.authenticate` re-reads local capability existence and expiry after the asynchronous Portal check. The deterministic regression failed before the change and passes afterward. It returns no principal for the revoked token. This is a check before authorizing the operation, not a claim to cancel operations already authorized and committed. |
+| SEC-02-02 — P1 on a shared host with a traversable data directory: SQLite sidecars had broader permissions than the main database | With an existing `0755` directory and ordinary `0022` umask, the initial platform constructor produced a `0600` database but `0644` WAL/SHM files. A local user could read journaled records. The constructor also reached SQLite before the later authentication constructor rejected a database symlink. | A filesystem guard shared by the platform and authentication stores prepares files before SQLite opens them: main database and existing WAL/SHM/journal files are `0600`; symlinks, hard links, non-files and a data directory writable by other users are refused. It uses no-follow file descriptors and validates all existing companions before changing permissions. Six storage regressions cover new and existing sidecars, both stores, linked main/companion files, unchanged link targets, and unsafe directories. |
+
+Focused qualification: **31 tests passed** — 25 authentication/reissue cases and six storage-security cases — plus the backend TypeScript check, on Node **24.22.1**. All **six encrypted recovery tests** also passed with the new filesystem guard. The storage tests retain real SQLite WAL behavior rather than mocking filesystem permissions. The directory guard leaves an existing non-writable `0755` directory unchanged; deployments should still provide a dedicated private `0700` data directory. Filesystem owners and host administrators remain trusted custodians.
+
+An additional configuration finding was handed to the integration owner: a process launched with `NODE_ENV=production` must explicitly select `APP_MODE`, rather than silently using the lab password endpoint. The platform owner implements and qualifies that separate change. The telecom evidence-binding improvements also receive their own domain acceptance tests.
+
+This review does not change the deployment boundary: the Vercel release exposes the prelaunch website and an explicit unavailable API response. Oracle access, shared Mobile identity commissioning, trusted ingress, real hardware tests, native signing and provider/regulatory acceptance remain externally verifiable work. No live subscriber, payment, network or satellite service is authorized by a software test result.
+
 ## Decision
 
 The original synthetic preview was appropriately read-only and did not expose real customer data. It was insufficient for physical-pilot operations because staff identity, ownership enforcement, persistent operations and recovery had not been implemented. The current change adds those software controls while retaining explicit prelaunch status and disabled provider effects. A lab pilot can exercise recorded operations with generated credentials. Real subscriber service still requires the externally commissioned integrations and operational acceptance described below.
@@ -54,6 +69,7 @@ Code links are relative to this product directory; sibling Portal changes remain
 
 - [Authentication service](../../onesa-mobile-backend/src/auth/service.ts), [Portal protocol adapter](../../onesa-mobile-backend/src/auth/onesa.ts), [credential storage](../../onesa-mobile-backend/src/auth/store.ts), [bootstrap CLI](../../onesa-mobile-backend/src/auth/bootstrap.ts).
 - [Local identity tests](../../onesa-mobile-backend/test/auth.test.ts), [OIDC/native identity tests](../../onesa-mobile-backend/test/auth-onesa.test.ts), [HTTP routes](../../onesa-mobile-backend/src/platform/http.ts), [business authorization](../../onesa-mobile-backend/src/platform/model.ts), [persistent operations](../../onesa-mobile-backend/src/platform/service.ts).
+- [SQLite filesystem guard](../../onesa-mobile-backend/src/auth/database-files.ts) and [storage-security regressions](../../onesa-mobile-backend/test/platform-storage-security.test.ts).
 - [Threat model](../THREAT_MODEL.md).
 - [glob advisory](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4), [minimatch advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249).
 

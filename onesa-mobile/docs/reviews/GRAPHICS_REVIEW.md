@@ -1,5 +1,29 @@
 # Senior graphics design review
 
+## Independent second review — 5 November 2026
+
+Reviewed the published source at `29da3e5285a21ef4e01cff8ab1668c797475dc99`, all three web style sheets, the customer/staff component structure, native component/style definitions, and the existing synthetic hardware-workspace screenshot. This pass retains the forest-and-mint identity and corrects specific visibility and reflow defects. It does not treat the earlier review as proof that every screen is complete.
+
+| ID | Priority | Finding | Correction / disposition |
+| --- | --- | --- | --- |
+| GFX-10 | High | The mobile public-header account link used undefined `--forest`. Its fallback inherited white text on mint, approximately **1.22:1** contrast. | Uses the existing forest `--ink` token: **9.98:1**. The account entry remains visible on phones. |
+| GFX-11 | High for empty inputs | Workspace input boundaries were **2.22:1** on white; internal-preview inputs were **1.48:1**. Passive divider colors were also being used for interactive outlines. | Added independent control-border tokens, `#718A78`, in each web surface. Contrast is **3.74:1** on white and at least **3.27:1** on the selected surrounding pale surfaces. Passive panel dividers remain light. |
+| GFX-12 | Medium | The public focus ring had **2.92:1** contrast against a featured forest plan card. | Featured-card actions receive the same mint focus ring as dark headers: **9.98:1** against forest. |
+| GFX-13 | Medium | Small plan indices were **3.40:1** on their card. Illustration captions were approximately **3.97–4.28:1** against gradient stops; absolute positioning reserved no extra space when captions wrapped. | Plan indices use the existing muted token (**5.17:1** on the card). Captions use `#4B624B` (**5.38:1** or greater at gradient stops) and participate in normal flow. |
+| GFX-14 | Medium | FAQ padding belonged to `details`, leaving the actual `summary` target close to text height. Some standalone navigation links lacked the product's 44px target. | FAQ summaries own their padding and a 48px minimum; header/footer actions have a 44px minimum. This is the product target, not a claim that WCAG requires 44px everywhere. |
+| GFX-15 | Medium | Several headers/action rows did not permit wrapping, and operational preview navigation forced labels onto one line. | Headers, actions and pagination wrap; grid children can shrink and wrap; operational navigation permits multiline labels. Busy workspace buttons use a progress cursor. Summary numbers use tabular figures. |
+| GFX-16 | Medium | Native `local.input` and `local.choice` also use the passive `colors.border` token for their boundaries. | Handed to the native/UI/UX implementation owner: introduce `controlBorder: '#718A78'` and apply it to those controls. Native files are outside this graphics pass's edit ownership. |
+
+### Current reference check
+
+The official [fraenk offer](https://fraenk.de/hol-dir-fraenk) remains useful for a clear app-first proposition and a small set of plan tasks. [Econet](https://www.econet.co.zw/) and [NetOne](https://www.netone.co.zw/) explicitly distinguish USD/ZWG products and prominent self-service access; these support keeping account entry, currency and support discoverable. [Vodacom's billing help](https://www.vodacom.co.za/vodacom/help/balances-usage-and-billing) places balances, delayed top-ups and charge questions together, supporting task-based recovery rather than purely promotional account screens. [T-Mobile's T-Satellite page](https://www.t-mobile.com/coverage/satellite-phone-service) places device, outdoor conditions and service limitations with the offer; Onesa should likewise retain eligibility and availability explanations beside satellite concepts. These are design inferences from the retrieved pages, not copied artwork or claims of equivalent service. The Vodacom home and My Vodacom pages returned no readable body; this pass does not claim a visual audit of those pages.
+
+### Verification boundary
+
+The color ratios above were calculated from source sRGB values; they are not screenshot sampling or an accessibility certification. The web TypeScript/production build passed after the CSS corrections. Source checks cover token resolution and the target/layout declarations. The existing hardware screenshot was visually inspected, but a new interactive viewport review could not run: the connected browser extension was unavailable and the cloud browser could not reach the executor's local preview. Final integrated rendering at 320/390/768/1440 pixels, enlarged text and keyboard traversal remains with the release owner. Physical iOS/Android screenshots and device accessibility testing remain separate acceptance work.
+
+The earlier findings and closure record below are retained as historical evidence.
+
 Reviewed **5 November 2026**. Scope: Onesa Mobile public website, customer preview, internal operations preview, and iOS/Android interface source in `DruHustle/onesa-ug/onesa-mobile`.
 
 This is a role-based design review, not a claim of an external professional certification. Initial findings were established from the component structure and style definitions. The closure pass inspected the integrated source, regenerated native artwork and local build/test results. Responsive browser checks of the new workspaces were performed by the integration owner; native device validation remains separate acceptance work.
