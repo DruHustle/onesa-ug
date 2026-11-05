@@ -1,5 +1,78 @@
 # Separate application builds and tests
 
+## ARM64 runtime candidate build
+
+`infra/oracle/runtime_builds/build.py` rebuilds a pinned, containerd-only K3s
+candidate in an unprivileged Linux ARM64 Docker builder. The lock binds upstream
+archives, module locks, compiler packages, runtime payload and expected executable
+hashes. Before executing a builder or vendor client, it also requires the private
+inputs pinned by `vendor-custody.lock.json`. That manifest covers every regular
+vendor runtime file: copied userspace tools, their configured Buildroot dependency
+closure, the separately built CNI and its embedded Go module graph, and the
+attributed `check-config` script. The three replaced executables, generated metadata
+and empty extraction lock have explicit, checked dispositions.
+
+The gate retains original source archives, notices, upstream recipes, configuration,
+patches and provenance in `vendor-custody.tar.gz`. It rejects missing or altered
+bytes, symlink/file-type/path substitutions and incomplete coverage, then reads back
+every archive member before accepting the bundle. Original package archives remain
+opaque; the gate never extracts or executes them. Source archives and operational
+evidence stay in private custody; only hashes and public provenance are tracked.
+
+The build also collects original rebuilt-component dependency notices and fails on
+missing notices, changed sources or different output bytes. At least 24 GiB of free local
+space is required; source/module downloads need HTTPS access. The final builds
+and vendor-client extraction run without network access.
+
+From this product directory:
+
+```sh
+python3 -m unittest discover -s infra/oracle/runtime_builds -p 'test_*.py'
+python3 infra/oracle/runtime_builds/build.py \
+  --output /absolute/new/runtime-build \
+  --cache /absolute/private/runtime-module-cache \
+  --vendor-custody /absolute/private/vendor-custody-inputs
+```
+
+The custody gate can be checked independently without Docker, network access or a
+runtime rebuild. The output directory must be new:
+
+```sh
+python3 infra/oracle/runtime_builds/custody.py \
+  --inputs /absolute/private/vendor-custody-inputs \
+  --output /absolute/new/vendor-custody-check
+```
+
+Arrange original inputs using the manifest's relative paths and verify their hashes;
+do not substitute reconstructed notices or grant a missing source an exception.
+The bundle preserves the 43 configured target packages conservatively, including
+the pinned Buildroot and K3s-root archives and overlay recipes. CNI custody follows
+its own embedded revision, Go version, module versions and Flannel overlay, not the
+separately rebuilt K3s module graph. Its recorded dirty build is not claimed to have
+been reproduced bit for bit. The `check-config` custody includes its exact K3s source
+and the explicitly attributed Moby/LXC sources. Source/notice coverage is not a legal
+completeness certification; redistribution review remains separate.
+
+An existing exact builder can be supplied with `--builder-image sha256:...`;
+architecture and compiler-package hashes are still checked. `--retained-inputs`
+accepts a directory containing the three component `.archive` files,
+`vendor-k3s-arm64`, and the two chart filenames from the lock. Their original
+hashes remain mandatory. Preserve `build-result.json`, `build.log`, both locks,
+source inputs, `licenses/` and the hash-bound `vendor-custody.tar.gz` with the
+candidate. The custody archive is separate from the runtime payload, preserving
+the reviewed payload and wrapper hashes. A wrapper alone is not a complete retained
+build result. The custody-only command records archive/readback results separately;
+it does not certify a rebuild or change an earlier build record.
+
+The recipe runs selected upstream tests. Its containerd test-only fixture separates
+the file-size and line-size limits and adds explicit oversized-line rejection;
+production Go source hashes and module locks must remain unchanged. These checks
+do not cover a running cluster or all upstream tests. The result remains
+`BUILT_NOT_INSTALL_QUALIFIED`: no installation, publication, owner-policy update or
+deployment authorization occurs. Security assessment, independent review, disabled
+embedded registry and vendor add-ons, real workload/network/storage acceptance,
+Portainer compatibility and VM recovery remain separate requirements.
+
 ## Dependency-patched Kubernetes component builds
 
 `infra/oracle/component_builds/build.py` prepares local ARM64 runtime images for
