@@ -417,7 +417,7 @@ export default function App() {
               <div>
                 <p className="eyebrow">Before we go further</p>
                 <h2>
-                  Good questions.
+                  Good questions.{' '}
                   <br />
                   Clear answers.
                 </h2>

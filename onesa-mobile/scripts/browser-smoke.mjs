@@ -119,12 +119,20 @@ async function assertLayout(page, surface, widths = [320,390,768,1440]) {
 }
 async function enlargedText(page, surface) {
   await page.setViewportSize({width:390,height:1000});
-  await page.evaluate(() => {
+  const result = await page.evaluate(() => {
     const nodes = [...document.querySelectorAll('body *')].filter(element => element instanceof HTMLElement);
-    const sizes = nodes.map(element => [element, Number.parseFloat(getComputedStyle(element).fontSize)]);
-    for (const [element,size] of sizes) if (Number.isFinite(size)) element.style.setProperty('font-size',size*2+'px','important');
+    const sizes = nodes.map(element => ({element, size:Number.parseFloat(getComputedStyle(element).fontSize),
+      value:element.style.getPropertyValue('font-size'), priority:element.style.getPropertyPriority('font-size')}));
+    try {
+      for (const {element,size} of sizes) if (Number.isFinite(size)) element.style.setProperty('font-size',size*2+'px','important');
+      return {viewport:window.innerWidth, document:document.documentElement.scrollWidth, body:document.body.scrollWidth};
+    } finally {
+      for (const {element,value,priority} of sizes) {
+        if (value) element.style.setProperty('font-size',value,priority);
+        else element.style.removeProperty('font-size');
+      }
+    }
   });
-  const result = await page.evaluate(() => ({viewport:window.innerWidth, document:document.documentElement.scrollWidth, body:document.body.scrollWidth}));
   assert.ok(Math.max(result.document,result.body) <= result.viewport+1, `${surface} overflows with twice-size text: ${JSON.stringify(result)}`);
   layouts.push({surface,width:390,textScale:2,overflow:false});
   record(surface+' retains page reflow with twice-size text');
