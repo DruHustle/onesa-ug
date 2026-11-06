@@ -14,6 +14,7 @@ from unittest.mock import patch
 import oracle_install as installer
 import oracle_owner as verifier
 import oracle_portal as runner
+from legacy_identity_test_source import backend_bytes as legacy_identity_backend
 
 
 class Source:
@@ -109,11 +110,9 @@ class InstallTests(unittest.TestCase):
                 b"// disposable parser fixture only\n"
             )
         if self.component in {"identity", "identity-acceptance"}:
-            for name in subprocess.check_output(
-                ["git", "-C", str(repo), "ls-files", "onesa-company-portal-backend"],
-                text=True,
-            ).splitlines():
-                files[name] = (repo / name).read_bytes()
+            # This fake GitHub/installer fixture exercises the unchanged 014
+            # profile, not acceptance of the current Mobile 015 application.
+            files.update(legacy_identity_backend())
         for name, data in files.items():
             path = source_root / name
             path.parent.mkdir(parents=True, exist_ok=True)

@@ -151,6 +151,16 @@ remain unchanged and cannot be relabelled as consolidated approvals. Source
 verification alone does not establish hosted staging acceptance, deployment,
 recovery readiness, hardware qualification or completed repository retirement.
 
+The preserved legacy Portal identity profile still accepts only its reviewed
+schema-014 backend and literal frontend pins. Its synthetic installer and scope
+tests use public bytes from the exact preserved staging ancestor `8752df4a376d6bd9918a0282e544cde5bbb7a4ea`,
+with the root tree and ancestry checked before reading regular Git blobs. These
+tests require full local Git history and fail without it; there is no fetch or
+mutable fallback. Separate regressions require that current Mobile schema-015
+source and each changed frontend pin remain refused by that profile. Current
+application, database and browser suites still exercise the current source.
+The historical fixture confers no candidate or installed release authority.
+
 ## Publication boundaries
 
 The root publication scanner inspects the consolidated Git index and publishable

@@ -19,6 +19,7 @@ import oracle_portal_identity_acceptance as acceptance
 import oracle_portal_identity_restore as restore
 import oracle_owner as owner
 import test_oracle_owner as owner_fixtures
+from legacy_identity_test_source import backend_bytes as legacy_identity_backend
 
 
 def binding():
@@ -168,11 +169,9 @@ class ProfileTests(unittest.TestCase):
     def test_exact_backend_closure_includes_auth_migrations_and_vendored_dependencies(
         self,
     ):
-        root = Path(__file__).resolve().parents[2]
         files = {
-            str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in (root / "onesa-company-portal-backend").rglob("*")
-            if p.is_file() and "node_modules" not in p.parts and "dist" not in p.parts
+            name: hashlib.sha256(data).hexdigest()
+            for name, data in legacy_identity_backend().items()
         }
         selected = identity.identity_source_files(files)
         self.assertIn(identity.PREFIX + "src/identity/provider.ts", selected)
@@ -188,6 +187,23 @@ class ProfileTests(unittest.TestCase):
         ]:
             with self.assertRaises(r.Refused):
                 identity.identity_source_files(changed)
+
+    def test_current_mobile_source_has_no_legacy_identity_release_authority(self):
+        root = Path(__file__).resolve().parents[2]
+        files = {
+            name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+            for name in subprocess.check_output(
+                ["git", "-C", str(root), "ls-files", "onesa-company-portal-backend"],
+                text=True,
+            ).splitlines()
+        }
+        self.assertEqual(
+            files[identity.PREFIX + "migrations/015_mobile_identity.sql"],
+            "424c55596b0a3ee98330a2b2cd9171ab9dd2b23b8b20961a5f4b16b59f9867df",
+        )
+        self.assertEqual(len(identity.MIGRATIONS), 2)
+        with self.assertRaisesRegex(r.Refused, "IDENTITY_REVIEWED_012_TO_014_ONLY"):
+            identity.identity_source_files(files)
 
     def test_runtime_receipt_uses_the_recovery_controller_fingerprint(self):
         row = {

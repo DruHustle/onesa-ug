@@ -6,14 +6,15 @@ from unittest.mock import patch
 
 import oracle_portal as portal
 import oracle_portal_identity_scope as identity
+from legacy_identity_test_source import frontend_inventory as legacy_frontend_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class FrontendIdentityScopeTests(unittest.TestCase):
     def inventories(self):
-        new = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
-               for name in identity.PINS}
+        new = legacy_frontend_inventory(identity.PINS)
+        self.assertEqual(new, identity.PINS)
         old = dict(new)
         old[identity.PREFIX + "src/features/account/account.tsx"] = "1" * 64
         return old, new
@@ -27,6 +28,29 @@ class FrontendIdentityScopeTests(unittest.TestCase):
         with patch.object(portal, "source_equivalence", return_value="legacy") as original:
             self.assertEqual(portal.source_scope(None, {}, {}), "legacy")
             original.assert_called_once_with(None, {}, {})
+
+    def test_every_published_mobile_frontend_change_is_refused_by_legacy_profile(self):
+        old, legacy = self.inventories()
+        current = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+                   for name in identity.PINS}
+        changed = {name for name in current if current[name] != legacy[name]}
+        self.assertEqual(changed, {
+            identity.PREFIX + name for name in [
+                "src/features/account/access-manager.tsx",
+                "src/features/account/account.tsx",
+                "src/features/account/api.ts",
+                "src/lib/api/generated/schema.d.ts",
+                "src/lib/onesa-identity.ts",
+                "unit/onesa-identity.test.ts",
+            ]
+        })
+        for name in sorted(changed):
+            with self.subTest(path=name), self.assertRaisesRegex(
+                ValueError, "IDENTITY_FRONTEND_REVIEWED_SOURCE_CHANGED"
+            ):
+                identity.reviewed_delta(old, {**legacy, name: current[name]})
+        with self.assertRaisesRegex(ValueError, "IDENTITY_FRONTEND_REVIEWED_SOURCE_CHANGED"):
+            identity.reviewed_delta(old, current)
 
     def test_account_proxy_or_manifest_changes_require_an_explicit_new_review(self):
         for name in ["src/features/account/account.tsx", "src/lib/domains.ts",
