@@ -1,6 +1,6 @@
 """Source-bound shared identity release through the commissioned owner verifier.
 
-This separate profile may migrate 012 -> 014 and replace the existing Portal API
+This separate profile may migrate 012, 014 or published Mobile 015 -> 016 and replace the existing Portal API
 and worker together. The narrow API/worker profiles keep their original scope.
 Every write has a durable, single-use intent. An interrupted operation is inspected,
 never retried automatically. No supplied receipt creates release authority.
@@ -31,6 +31,8 @@ PREFIX = "onesa-company-portal-backend/"
 MIGRATIONS = {
     "013_onesa_identity.sql": "ce7f4ab09f7fafb915b4a4e8b1657ef1e6520494bd28a0492fc3d46d0f4d79e7",
     "014_identity_grant_sessions.sql": "a45640fc7a946f410033c0cc9cd666bfcb2e6a8e02a4f5a200bc2b548f7ce03f",
+    "015_mobile_identity.sql": "424c55596b0a3ee98330a2b2cd9171ab9dd2b23b8b20961a5f4b16b59f9867df",
+    "016_engineering_account_links.sql": "37416e013033aedfc54478f569ccc2b0eb8b0bf67e32bc76e13ae4fec24b5577",
 }
 ENVIRONMENTS = ("staging", "production")
 TARGETS = {
@@ -142,13 +144,13 @@ def identity_source_files(files):
         if name.startswith(PREFIX + "migrations/")
     }
     r.require(
-        len(migrations) == 14
+        len(migrations) == 16
         and all(
             re.fullmatch(r"%03d_[a-z_]+\.sql" % (i + 1), name)
             for i, name in enumerate(sorted(migrations))
         )
         and all(migrations.get(name) == value for name, value in MIGRATIONS.items()),
-        "IDENTITY_REVIEWED_012_TO_014_ONLY",
+        "IDENTITY_REVIEWED_012_014_OR_015_TO_016_ONLY",
     )
     return selected
 
@@ -734,15 +736,16 @@ def migration(binding, plan, env, operation, migrations, action, target):
         and result["environment"] == env
         and result["state"]
         == (
-            "IDENTITY_SCHEMA_014_APPLIED_NOT_AUTHORIZATION"
+            "IDENTITY_SCHEMA_016_APPLIED_NOT_AUTHORIZATION"
             if action == "apply"
             else "IDENTITY_SCHEMA_INSPECTED_NOT_AUTHORIZATION"
         )
         and result["credential_changes"] == 0
         and result["down_migrations"] == 0
         and result["existing_accounts_preserved"] is True
+        and result["schema_version"] in {12, 14, 15, 16}
         and result["schema_version"]
-        == (14 if action == "apply" else result["schema_version"]),
+        == (16 if action == "apply" else result["schema_version"]),
         "IDENTITY_MIGRATION_READBACK",
     )
     r.write(target / ("migration-" + action + ".json"), result)

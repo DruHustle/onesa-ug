@@ -963,6 +963,50 @@ configuration, keys, receipts and timers, and never rerun the bootstrap installe
 Observe the next normal scheduled backup rather than triggering a production backup
 to test cleanup.
 
+## Private PostgreSQL target preparation
+
+Run the credential-free target and backup regressions from the Portal directory:
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_oracle_database_target.py'
+python3 -m unittest discover -s scripts -p 'test_oracle_backup*.py'
+python3 -m unittest discover -s scripts -p 'test_oracle_database_snapshots.py'
+node --test scripts/test_oracle_backup_payload.mjs
+```
+
+The target tests use synthetic environment files, resource observations and a public
+certificate fixture. They reject changed source/role/database/TLS settings, unequal
+API/worker credentials, unreviewed runtime hashes, duplicate keys, unsafe file custody,
+mutable/wrong-architecture images, recreated volumes, changed bridge IDs, exposed
+ports, foreign mounts, unsafe HBA rules and an unenrolled primary. They also exercise
+the actual backup failure cleanup with a temporary CA and prove that local inspection
+and execution select the same local Docker daemon. No test connects to a provider,
+starts a database, sends email or changes application data.
+
+`infra/oracle/operations/database_target.py` has only read-only `render` and `check`
+actions. Rendering reads the ignored extension from the complete qualified source
+tree and validates existing resource/TLS custody before emitting a separate Compose
+model. It never invokes Compose or initializes a cluster. A missing optional profile
+retains the existing Neon behavior; a present invalid profile fails closed. The
+profile contains digests and target identities, not database passwords. Runtime
+files and the CA remain root-private; server certificate/key/HBA mounts are
+root-owned, readable by the pinned PostgreSQL group and inaccessible to others.
+
+The ordinary Compose model has no new active service or top-level network/volume.
+The rendered model requires its explicit `container-primary` profile, immutable
+ARM64 image, existing external volume/bridges and private read-only TLS mounts.
+Its direct PostgreSQL entrypoint deliberately cannot bootstrap an empty volume.
+Backup encryption, off-instance readback, existing retention and restore quarantine
+are retained; no second application writer or automatic recovery actuator is added.
+
+Real Docker Compose rendering/startup, initialized-volume ownership, certificate
+hostname/expiry, PostgreSQL major-version compatibility, restart persistence,
+restricted-role readiness, snapshot/restore and private-network reachability still
+require the approved isolated host and protected procedure. Unit success is not
+live database acceptance. An eventual cutover must stop all writers, preserve a
+verified recovery snapshot, coordinate both private runtime files and the backup
+binding, and retain the old primary fenced until recovery is resolved.
+
 ## Operations notification regression
 
 ### Bounded process recovery
@@ -1438,6 +1482,23 @@ An explicitly supplied `ONESA_TEST_CHROMIUM_EXECUTABLE` with
 `ONESA_TEST_BROWSERS=chromium` supports a supplemental local engine when the pinned
 browser download is unavailable. That run is labeled supplemental and never
 substitutes for native three-engine CI or hosted end-to-end acceptance.
+The Engineering sign-in renderer also accepts `ONESA_TEST_CHROMIUM_EXECUTABLE`
+and reports the actual browser version and supplemental status; its default
+continues to use the pinned Chromium installation.
+`ONESA_SIGNIN_BROWSER=firefox` or `webkit` selects that pinned engine explicitly
+for additional local coverage; it does not change the default Chromium CI gate.
+
+Account renderer regressions keep unconnected catalog entries out of registration,
+access requests and launch links, including for administrators. The current
+three-product claims remain unchanged. Docs can return from central sign-in only
+to a validated local Engineering interaction; a fresh sign-in request uses the
+existing password/MFA flow. Linking an existing Docs identity requires an unchecked
+opt-in with its password or confirmed emailed-link proof. Email-link requests do
+not perform that link. If MFA enrollment is required, the same validated Docs return
+survives setup and routes through fresh central login; enrollment creates no session.
+Local renderer fixtures verify these controls without mail,
+database or provider requests; backend approval, identity-binding and concurrency
+tests remain separate.
 
 The feature remains off until complete owner-held issuer/client configuration,
 additive migrations, restricted grants, exact frontend callback allowlisting and
@@ -1486,6 +1547,12 @@ simulation workspace and Robot's read-only simulator, then observes permission
 and global-session revocation. Each product's own complete workflow qualification
 remains required; this combined check neither starts physical operations nor
 substitutes read-only identity results for simulation or AI workflow tests.
+Those product journeys must reuse the already verified central browser session:
+only the matching account continuation or an automatic protocol continuation is
+accepted. A password/MFA prompt or central login POST fails the SSO observation;
+the helper never re-enters fixture credentials to conceal lost session recognition.
+Separate denial observations still require an unapproved product to refuse access,
+and explicit protected-action MFA remains a distinct observation.
 
 The owner-held fixtures contain an existing owner credential, two operation-unique
 synthetic email aliases/passwords, an approved Drone workspace and a TLS IMAP inbox
@@ -1515,11 +1582,16 @@ Portal API and worker. Installation compares the complete backend source closure
 including authentication, migrations, dependency locks and build inputs, with the
 reviewed current-main tree. The existing narrow API and worker profiles retain
 their original rejection of authentication and migration changes. The new profile
-admits only the checksummed 012-to-014 additive migration, grants the existing
+admits only the checksummed 012, 014 or published Mobile 015 transition to 016, grants the existing
 restricted runtime role without creating or rotating credentials, and keeps schema
-014 during the staged compatible fallback and candidate reapplication. The fallback
+016 during the staged compatible fallback and candidate reapplication. Published
+Mobile migration 015 retains its exact bytes; migration 016 adds immutable Docs
+account links and linked-grant revocation while preserving
+existing credentials and approvals. The fallback
 uses the exact candidate image with identity disabled; historical images are not
-qualified merely because they start or can read the additive schema.
+qualified merely because they start or can read the additive schema. An unshipped
+Engineering migration recorded under number 015 fails the exact baseline checks;
+the adapter never infers its equivalence or rewrites migration history.
 
 Its restore observation reads the actual encrypted off-instance backup and escrow,
 compares every restored table with the original snapshot manifest, rehearses the

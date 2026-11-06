@@ -177,9 +177,18 @@ class ProfileTests(unittest.TestCase):
         selected = identity.identity_source_files(files)
         self.assertIn(identity.PREFIX + "src/identity/provider.ts", selected)
         self.assertIn(identity.PREFIX + "package-lock.json", selected)
+        ambiguous = {
+            name: checksum for name, checksum in files.items()
+            if name != identity.PREFIX + "migrations/015_mobile_identity.sql"
+        }
+        ambiguous[identity.PREFIX + "migrations/015_engineering_account_links.sql"] = (
+            identity.MIGRATIONS["016_engineering_account_links.sql"]
+        )
         for changed in [
-            {**files, identity.PREFIX + "migrations/015_unapproved.sql": "0" * 64},
+            {**files, identity.PREFIX + "migrations/017_unapproved.sql": "0" * 64},
             {**files, identity.PREFIX + "migrations/013_onesa_identity.sql": "0" * 64},
+            {**files, identity.PREFIX + "migrations/015_mobile_identity.sql": "0" * 64},
+            ambiguous,
             {
                 k: v
                 for k, v in files.items()
