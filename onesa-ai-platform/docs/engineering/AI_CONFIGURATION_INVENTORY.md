@@ -118,10 +118,12 @@ outside browsers and this Settings inventory. See [Digital Twins](DIGITAL_TWINS.
 ## Cloudflare generation transition candidate — 2026-11-06
 
 Cloudflare's [2026-11-05 retirement notice](https://developers.cloudflare.com/changelog/post/2026-11-05-planned-model-deprecations/)
-lists `@cf/qwen/qwen3-30b-a3b-fp8` for removal on **2026-11-15**. Use that published
-deadline for release planning. The model remains in the historical acceptance
-records below; those records do not qualify a replacement or establish the current
-private runtime configuration.
+lists `@cf/qwen/qwen3-30b-a3b-fp8` for removal on **2026-11-20**. Its
+[2026-11-06 revision](https://github.com/cloudflare/cloudflare-docs/commit/a5a271f2fc6de7009ef4eec2af393ada7c8a3269)
+moved the originally published 2026-11-15 date to 2026-11-20 and states that
+requests will then fail with HTTP `410 Gone` and error code `5028`. The model
+remains in the historical acceptance records below; those records do not qualify
+a replacement or establish the current private runtime configuration.
 
 The source candidate now accepts only
 `ONESA_MODEL_NAME=@cf/google/gemma-4-26b-a4b-it` when
