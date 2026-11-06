@@ -13,6 +13,7 @@ from pathlib import Path
 import yaml
 from config import (
     CHECKOUT,
+    MOBILE_WORKFLOW_SOURCES,
     PRODUCTS,
     ROOT,
     SETUP_PYTHON,
@@ -52,6 +53,40 @@ WorkflowDumper.add_representer(str, represent_string)
 
 def load(path):
     return yaml.load(path.read_text(), Loader=WorkflowLoader)
+
+
+def hosted_policy_step():
+    """The same read-only visibility and allowance guard for every entry point."""
+    return {
+        "name": "Verify hosted execution, visibility and included-allowance policy",
+        "env": {
+            "GH_TOKEN": "${{ github.token }}",
+            "EXPECTED_PRIVATE": "${{ github.event.repository.private }}",
+            "PRIVATE_VALIDATION_ENABLED": "${{ vars.ONESA_PRIVATE_HOSTED_VALIDATION_ENABLED }}",
+        },
+        "run": (
+            'test "$RUNNER_ENVIRONMENT" = github-hosted\n'
+            'actual=$(gh api "repos/$GITHUB_REPOSITORY" --jq ".private")\n'
+            'test "$actual" = "$EXPECTED_PRIVATE" || { echo "Repository visibility changed"; exit 1; }\n'
+            'if [ "$actual" = true ] && [ "$PRIVATE_VALIDATION_ENABLED" != true ]; then\n'
+            '  echo "Private hosted verification requires explicit included-allowance opt-in"\n'
+            "  exit 1\nfi\n"
+        ),
+    }
+
+
+def mobile_workflow(source):
+    """Keep Mobile's complete root-relative graph with the shared runner guard."""
+    document = copy.deepcopy(source)
+    if document.get("permissions") != {"contents": "read"}:
+        raise ValueError("Mobile verification permissions require migration review")
+    for job in document["jobs"].values():
+        if "uses" in job or not isinstance(job.get("steps"), list):
+            raise ValueError("Mobile reusable workflow changes require migration review")
+        # The native and matrix jobs have product-level defaults. This guard
+        # runs before checkout, while those directories do not yet exist.
+        job["steps"].insert(0, {**hosted_policy_step(), "working-directory": "."})
+    return document
 
 
 def workspace_strings(value, product):
@@ -264,22 +299,7 @@ def orchestrator(root=ROOT):
             "permissions": {"contents": "read"},
             "outputs": outputs,
             "steps": [
-                {
-                    "name": "Verify hosted execution, visibility and included-allowance policy",
-                    "env": {
-                        "GH_TOKEN": "${{ github.token }}",
-                        "EXPECTED_PRIVATE": "${{ github.event.repository.private }}",
-                        "PRIVATE_VALIDATION_ENABLED": "${{ vars.ONESA_PRIVATE_HOSTED_VALIDATION_ENABLED }}",
-                    },
-                    "run": (
-                        'test "$RUNNER_ENVIRONMENT" = github-hosted\n'
-                        'actual=$(gh api "repos/$GITHUB_REPOSITORY" --jq ".private")\n'
-                        'test "$actual" = "$EXPECTED_PRIVATE" || { echo "Repository visibility changed"; exit 1; }\n'
-                        'if [ "$actual" = true ] && [ "$PRIVATE_VALIDATION_ENABLED" != true ]; then\n'
-                        '  echo "Private hosted verification requires explicit included-allowance opt-in"\n'
-                        "  exit 1\nfi\n"
-                    ),
-                },
+                hosted_policy_step(),
                 {
                     "uses": CHECKOUT,
                     "with": {"persist-credentials": False, "fetch-depth": 0},
@@ -394,6 +414,8 @@ def rendered(root=ROOT):
                 pipeline_path,
             )
     files["verify.yml"] = (orchestrator(root), None)
+    for filename, source_path in MOBILE_WORKFLOW_SOURCES.items():
+        files[filename] = (mobile_workflow(load(root / source_path)), source_path)
     result = {}
     for filename, (document, source_path) in files.items():
         text = yaml.dump(

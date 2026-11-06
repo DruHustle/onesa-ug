@@ -40,6 +40,8 @@ checkout. `scripts/ci/generate_workflows.py` generates the following active file
 | `_pipeline-portal.yml` | Portal `.github/workflows/_pipeline-review.yml` |
 | `_pipeline-platform.yml` | AI Platform `.github/workflows/_pipeline-review.yml` |
 | `_pipeline-robot.yml` | Robot `.github/workflows/_pipeline-review.yml` |
+| `onesa-mobile-ci.yml` | Mobile `scripts/ci/workflows/onesa-mobile-ci.yml` |
+| `onesa-mobile-native-compile.yml` | Mobile `scripts/ci/workflows/onesa-mobile-native-compile.yml` |
 
 Each generated product file records the SHA256 of its source workflow. Generation
 retains jobs, dependencies, conditions, services, matrices, timeouts, browser and
@@ -79,6 +81,15 @@ Their permissions are read-only. No deployment secrets are passed to reusable
 verification workflows. Browser package preparation and Portal recovery fixtures
 accept the exact consolidated repository identity while retaining their Linux,
 disposable hosted-runner, privilege, revision, and host-safety checks.
+
+Mobile's two workflows retain their existing product path filters and complete
+job graphs independently of the four imported products' aggregate. Generation
+adds the same hosted visibility and included-allowance guard before checkout;
+it does not add Mobile to unrelated product browser or native compile runs.
+The iOS job prepares its ignored local Xcode environment from the public example
+without replacing existing local configuration. Active environment files remain
+forbidden in publication; only the reviewed exact historical bootstrap blob is
+recognized as harmless source by the history scanner.
 
 ## Pinned contracts and verification provenance
 

@@ -1,7 +1,7 @@
 # Onesa UG
 
 Onesa UG contains the public software for the Company Portal, AI Platform, Robot,
-and Drone. Each product keeps its own application, configuration, dependency
+Drone, and Mobile. Each product keeps its own application, configuration, dependency
 locks, tests, container builds, and release policy.
 
 | Folder | Project | Development instructions |
@@ -10,16 +10,24 @@ locks, tests, container builds, and release policy.
 | `onesa-ai-platform` | AI Platform | [Product README](onesa-ai-platform/README.md) |
 | `onesa-robot` | Robot | [Build and test](onesa-robot/docs/engineering/BUILD_AND_TEST.md) |
 | `onesa-drone` | Drone | [Local development](onesa-drone/docs/engineering/local-development.md) |
+| `onesa-mobile` | Mobile telephony product: public website, customer and internal operations previews, native apps and API | [Product README](onesa-mobile/README.md) |
 
 ## Verification
 
-The root `Onesa verification` workflow runs on pull requests and pushes to `dev`,
+The root `Onesa verification` workflow aggregates the four imported product
+suites and runs on pull requests and pushes to `dev`,
 `staging`, and `main`, on a weekly schedule, and by manual dispatch. Pushes,
-scheduled runs, and manual runs execute every product suite. Pull requests may
+scheduled runs, and manual runs execute all four imported product suites. Pull requests may
 select affected products; repository controls, shared identity, contract changes,
 and ambiguous Git evidence select all products. Every selected product runs its
 complete existing verification, including its browser, database, container,
 security, and release-contract tests.
+
+Onesa Mobile retains its separate **Onesa Mobile CI** and **Onesa Mobile native
+compilation** workflows with their existing product path filters and checks.
+Their source definitions live in `onesa-mobile/scripts/ci/workflows/`; generation
+preserves every job and adds the same hosted-runner visibility and included-allowance
+guard. Native compiler jobs remain separate from JavaScript bundle verification.
 
 The independent publication gate also retains the original Portal/Robot
 documentation checks and scans all products' preserved source history plus root
@@ -73,3 +81,7 @@ the old repositories. Existing deployments and release consumers must be migrate
 and qualified before their source repositories are removed. Legacy deployment
 workflows remain historical inputs inside product folders; no root deployment
 workflow is enabled by this consolidation.
+
+The existing product repositories remain authoritative for release and deployment while the unified repository's workflows and security controls are qualified. The folders include the reviewed main-branch sources and retain their original Git ancestry.
+
+Onesa Mobile is developed directly in [`onesa-mobile/`](onesa-mobile/README.md). Its root-level workflow qualifies the development foundation only; it does not deploy or activate a telecommunications service.

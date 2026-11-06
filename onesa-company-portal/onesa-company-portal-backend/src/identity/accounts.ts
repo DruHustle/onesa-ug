@@ -126,7 +126,7 @@ export async function accountAccess(
           .filter((row) => row.status === "active")
           .map((row) => row.product),
     onesa_product_roles: admin
-      ? { ai: "admin", drone: "admin", robot: "admin" }
+      ? { ai: "admin", drone: "admin", robot: "admin", mobile: "admin" }
       : Object.fromEntries(
           access
             .filter((row) => row.status === "active")
