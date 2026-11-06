@@ -294,36 +294,45 @@ class TargetFixture(unittest.TestCase):
         self.assertEqual(commands[1][len(target.DOCKER):len(target.DOCKER) + 3], ["rm", "-f", "--volumes"])
         self.assertTrue(commands[1][-1].startswith("onesa-scheduled-backup-"))
 
-    def test_cutover_during_upload_cannot_publish_a_success_receipt(self):
+    def test_cutover_or_resource_drift_preserves_previous_success_receipt(self):
         original_read = Path.read_text
-        uri = urlsplit("postgresql://onesa_portal_app:synthetic@portal-postgres-production/portal_fixture?sslmode=verify-full")
+        original_files = copy.deepcopy(self.files)
+        original_container = copy.deepcopy(self.container)
 
         def read(path, *args, **kwargs):
             if path == Path("/etc/onesa/operations.json"):
                 return json.dumps({"image": "onesa-portal-worker:" + "a" * 40})
             return original_read(path, *args, **kwargs)
 
-        for change in ("profile", "runtime"):
+        for change in ("profile", "runtime", "resources_before_upload", "resources_during_upload"):
+            self.files = copy.deepcopy(original_files)
+            self.container = copy.deepcopy(original_container)
             current = {"profile": copy.deepcopy(self.profile), "uploaded": False}
             commands = []
             pipe = SimpleNamespace(stdin=io.BytesIO(), stdout=io.BytesIO(b"00000001-00000002-1\nEND\n[]\n"),
                                    returncode=0, wait=lambda **kwargs: 0, poll=lambda: 0)
 
-            def checked_env(*_args, **_kwargs):
-                if change == "runtime" and current["uploaded"]:
-                    raise ValueError("PORTAL_DATABASE_RUNTIME_CHANGED")
-                return {}, uri
+            def attach_network():
+                self.container["NetworkSettings"]["Networks"]["unreviewed-extra-network"] = {
+                    "NetworkID": "f" * 64, "Aliases": [],
+                }
 
             def run(argv, **kwargs):
                 commands.append(argv)
                 output = b"synthetic-client"
                 if "pg_dump" in argv:
                     output = b"PGDMPsynthetic-dump"
+                    if change == "resources_before_upload":
+                        attach_network()
                 if "backup.mjs" in argv:
                     self.assertEqual(json.loads(kwargs["input"])["action"], "backup")
                     current["uploaded"] = True
                     if change == "profile":
                         current["profile"]["runtime_sha256"]["api"] = "f" * 64
+                    elif change == "runtime":
+                        self.files[target.runtime_paths("production")["worker"]] += b"UNREVIEWED=1\n"
+                    elif change == "resources_during_upload":
+                        attach_network()
                     output = b'{"passed":true,"id":"synthetic-upload"}'
                 return subprocess.CompletedProcess(argv, 0, output, b"")
 
@@ -332,10 +341,14 @@ class TargetFixture(unittest.TestCase):
                 receipt = state / "backup-success.json"
                 receipt.write_bytes(b'{"id":"previous-verified-backup"}\n')
                 before = receipt.read_bytes()
-                with patch.object(backup, "STATE", state), patch.object(backup.os, "geteuid", return_value=0), patch.object(target, "load", side_effect=lambda: copy.deepcopy(current["profile"])), patch.object(backup, "checked_env", side_effect=checked_env), patch.object(target, "backup_binding", return_value={"network_id": "d" * 64, "ca": b"synthetic-ca", "profile_sha256": "a" * 64}), patch.object(Path, "read_text", read), patch.object(subprocess, "run", side_effect=run), patch.object(subprocess, "Popen", return_value=pipe), patch.object(backup.select, "select", return_value=([pipe.stdout], [], [])):
-                    with self.assertRaises(ValueError):
+                with patch.object(backup, "STATE", state), patch.object(backup.os, "geteuid", return_value=0), patch.object(target, "load", side_effect=lambda: copy.deepcopy(current["profile"])), patch.object(target, "private_bytes", side_effect=self.read), patch.object(target, "inspect", side_effect=self.inspect), patch.object(Path, "read_text", read), patch.object(subprocess, "run", side_effect=run), patch.object(subprocess, "Popen", return_value=pipe), patch.object(backup.select, "select", return_value=([pipe.stdout], [], [])):
+                    reason = "PRIMARY_NETWORKS" if change.startswith("resources_") else "guard rejected|RUNTIME_CHANGED"
+                    with self.assertRaisesRegex(ValueError, reason):
                         backup.backup()
-                self.assertTrue(current["uploaded"], "The refusal must occur after the upload")
+                self.assertEqual(current["uploaded"], change != "resources_before_upload")
+                if change.startswith("resources_"):
+                    self.assertEqual(current["profile"], self.profile)
+                    self.assertEqual(self.files, original_files)
                 self.assertEqual(receipt.read_bytes(), before)
                 self.assertFalse((state / "backup-success.tmp").exists())
                 self.assertEqual(list(state.glob("*.conf")), [])

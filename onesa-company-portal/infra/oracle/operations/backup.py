@@ -193,9 +193,10 @@ def backup():
                 }
             ).encode()
             if target is not None:
-                # Do not publish a receipt across a concurrent configuration cutover.
+                # Refuse configuration or enrolled-resource drift before uploading.
                 require(database_target.load() == target)
                 checked_env(target=target)
+                require(database_target.backup_binding(target) == binding)
             result = run(
                 [
                     *docker,
@@ -244,9 +245,10 @@ def backup():
                 receipt.update(database_source="container-primary",
                                database_target_sha256=binding["profile_sha256"])
                 # Upload/readback can span a cutover. Keep the prior success receipt
-                # unless this same source/runtime binding still holds afterward.
+                # unless the runtime and enrolled resources still match afterward.
                 require(database_target.load() == target)
                 checked_env(target=target)
+                require(database_target.backup_binding(target) == binding)
             temporary = STATE / "backup-success.tmp"
             temporary.write_text(json.dumps(receipt, indent=2) + "\n")
             temporary.chmod(0o600)
