@@ -249,13 +249,20 @@ test("catalog recognition cannot commission future applications or grant their a
       "mobile",
     ],
   );
-  for (const product of [
-    "farmer",
-    "logistics",
-    "factory",
-    "pasofi",
-    "mobile",
-  ]) {
+  const counts = () =>
+    db.query(
+      "SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM identity_registration_links) AS links, (SELECT count(*) FROM identity_product_access) AS access, (SELECT count(*) FROM jobs) AS jobs",
+    );
+  const before = (await counts()).rows;
+  for (const [product, status] of [
+    ["farmer", 400],
+    ["logistics", 400],
+    ["factory", 400],
+    ["pasofi", 400],
+    // Mobile has a published vocabulary, but this fixed-client registry does not
+    // commission it. Preserve its existing unavailable-client contract.
+    ["mobile", 503],
+  ] as const) {
     const result = await browser().request({
       method: "POST",
       url: "/api/v1/account/register",
@@ -265,8 +272,11 @@ test("catalog recognition cannot commission future applications or grant their a
         products: [product],
       },
     });
-    assert.equal(result.statusCode, 400);
+    assert.equal(result.statusCode, status, product + ": " + result.body);
+    if (product === "mobile")
+      assert.equal(result.json().error.code, "PRODUCT_UNAVAILABLE");
   }
+  assert.deepEqual((await counts()).rows, before);
 });
 
 test("linking is explicit, requires both passwords' authorities, and preserves identity and approval records", async () => {
