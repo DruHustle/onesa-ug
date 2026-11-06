@@ -16,6 +16,13 @@ SOURCE_WORKFLOWS = {
     "robot": "scaffold.yml",
     "drone": "verify.yml",
 }
+# Mobile was developed in this monorepo. Its existing root-relative workflows
+# retain their own path selection and native compile checks instead of joining
+# the four imported products' aggregate verification graph.
+MOBILE_WORKFLOW_SOURCES = {
+    name: Path("onesa-mobile/scripts/ci/workflows") / name
+    for name in ("onesa-mobile-ci.yml", "onesa-mobile-native-compile.yml")
+}
 # These public main commits were imported with their original ancestry. They are
 # historical scan boundaries, not production deployment authorization.
 IMPORTED_HEADS = {

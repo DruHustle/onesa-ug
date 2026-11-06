@@ -161,3 +161,20 @@ post-commit runtime-readiness observation is an uncertain release outcome requir
 inspection, never an instruction to replay or reverse the migration. The ordinary
 API profile remains unable to apply it. See the
 [release adapter tests](../engineering/BUILD_AND_TEST.md#shared-identity-release-adapters).
+
+
+## Optional Mobile identity vocabulary (prepared migration 015)
+
+`015_mobile_identity.sql` expands only the product and product-specific role
+constraints in `identity_product_access`. Mobile permits `customer`, `agent`,
+`support`, `operations`, `finance`, `auditor` and `admin`; the role sets for AI,
+Drone and Robot remain unchanged. No rows, credentials, client configurations,
+access approvals or workspace memberships are created or changed by this migration.
+A Mobile client remains unavailable unless explicitly provisioned in issuer config.
+
+The migration is transactional with bounded lock/statement timeouts. Keep this
+additive schema if reverting application code; do not drop approved Mobile access
+records to satisfy an older image. Existing release helpers scoped to 012–014 do
+not authorize or automatically apply 015. Qualify a separate Portal release/migration
+path and fallback before deployment. Local generated contracts and isolated tests
+are source verification, not evidence of a live migration or client registration.

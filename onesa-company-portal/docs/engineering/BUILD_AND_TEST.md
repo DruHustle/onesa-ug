@@ -1564,3 +1564,24 @@ real signature verification and revocation, interruption without retry, atomic
 migration failure, checksum drift, idempotence, credential preservation, recovered
 archive integrity and read-only production inspection. These tests use disposable
 fixtures and do not issue live release records.
+
+
+### Optional Onesa Mobile identity regression
+
+The Mobile product extension adds `tests/identity-mobile-policy.test.ts` and
+Mobile cases to `tests/onesa-identity.test.ts`. With an isolated loopback
+`TEST_DATABASE_URL` whose database name ends `_test`, run from the backend:
+
+```sh
+node --import tsx --import ./tests/local-environment.ts --test --test-concurrency=1 tests/identity-mobile-policy.test.ts tests/onesa-identity.test.ts
+```
+
+The suite runs all migrations, including 015, against disposable data. It verifies
+pending customer defaults, all Mobile role constraints, staff MFA at login and
+continuation, live revocation, absence of implicit client enablement and unchanged
+three-product assertions for existing consumers. The frontend domain tests also
+cover the optional fourth exact callback and rejection of absent/extra callbacks.
+Run backend typecheck/build/lint/contracts and frontend API generation/typecheck/
+lint with these changes. The Onesa Mobile CI workflow adds an isolated PostgreSQL
+service for the complete focused identity suite; local PGlite results do not replace
+PostgreSQL concurrency or separate hosted release qualification.

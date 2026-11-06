@@ -38,7 +38,12 @@ import {
   identityConfiguration,
   identityPath,
   products,
+  mobileRoles,
+  defaultProductRole,
+  validProductRole,
+  productRequiresMfa,
   type IdentityClient,
+  type Product,
 } from "./config.js";
 import { createIdentityProvider } from "./provider.js";
 
@@ -141,6 +146,19 @@ export async function registerIdentity(
       );
     return { config, provider };
   };
+  // Existing three products retain their behavior; Mobile is opt-in per client.
+  const requireMobileConfigured = (selected: string) => {
+    const { config } = configured();
+    if (
+      selected === "mobile" &&
+      !config.clients.some((client) => client.product === "mobile")
+    )
+      throw new HttpError(
+        503,
+        "PRODUCT_UNAVAILABLE",
+        "This product is not configured for shared sign-in.",
+      );
+  };
   const meta = (operationId: string, authenticated = false) => ({
     operationId,
     tags: ["Onesa account"],
@@ -235,6 +253,7 @@ export async function registerIdentity(
                 ai: z.enum(["user", "admin"]).optional(),
                 drone: z.enum(["viewer", "operator", "admin"]).optional(),
                 robot: z.enum(["viewer", "operator", "admin"]).optional(),
+                mobile: z.enum(mobileRoles).optional(),
               }),
               onesa_memberships: z.array(
                 membershipSchema
@@ -303,16 +322,31 @@ export async function registerIdentity(
         onesa_product_roles,
         onesa_memberships,
       } = await accountAccess(account);
+      // Legacy consumers reject unknown product names. Mobile receives the expanded
+      // vocabulary; existing product assertions retain their three-product contract.
       const claims = {
         onesa_roles,
-        onesa_applications,
-        onesa_product_roles,
+        onesa_applications:
+          client.product === "mobile"
+            ? onesa_applications
+            : onesa_applications.filter((name) => name !== "mobile"),
+        onesa_product_roles:
+          client.product === "mobile"
+            ? onesa_product_roles
+            : Object.fromEntries(
+                Object.entries(onesa_product_roles).filter(
+                  ([name]) => name !== "mobile",
+                ),
+              ),
         onesa_memberships,
       };
       if (!claims.onesa_applications.includes(client.product))
         return { active: false as const };
       if (
-        claims.onesa_product_roles[client.product] === "admin" &&
+        productRequiresMfa(
+          client.product,
+          claims.onesa_product_roles[client.product],
+        ) &&
         !source.amr.includes("otp")
       )
         return { active: false as const };
@@ -539,7 +573,7 @@ export async function registerIdentity(
           .object({
             email: z.email().max(254),
             name: z.string().trim().min(1).max(200),
-            products: z.array(product).min(1).max(3),
+            products: z.array(product).min(1).max(4),
           })
           .strict(),
         response: { 202: z.object({ ok: z.literal(true) }), ...failures },
@@ -547,6 +581,8 @@ export async function registerIdentity(
     },
     async (req, reply) => {
       configured();
+      for (const requested of req.body.products)
+        requireMobileConfigured(requested);
       const email = req.body.email.toLowerCase();
       await limits.limit(
         "identity-registration-ip:" + limits.address(req),
@@ -675,7 +711,7 @@ export async function registerIdentity(
         for (const selected of link.products as string[])
           await c.query(
             "INSERT INTO identity_product_access(user_id,product,role) VALUES($1,$2,$3) ON CONFLICT(user_id,product) DO NOTHING",
-            [user.id, selected, selected === "ai" ? "user" : "viewer"],
+            [user.id, selected, defaultProductRole(selected as Product)],
           );
         await c.query(
           "UPDATE identity_registration_links SET consumed_at=now() WHERE email=$1 AND consumed_at IS NULL",
@@ -752,13 +788,14 @@ export async function registerIdentity(
           "EMAIL_VERIFICATION_REQUIRED",
           "Verify your Onesa account email before continuing. Your existing password will be retained.",
         );
+      const accessRoles = (await accountAccess(account, c)).onesa_product_roles;
       const needsMfa =
         mfaRequired ||
         account.role !== "member" ||
         account.mfa_enrolled ||
-        Object.values(
-          (await accountAccess(account, c)).onesa_product_roles,
-        ).includes("admin");
+        Object.entries(accessRoles).some(([product, role]) =>
+          productRequiresMfa(product, role),
+        );
       const amr = ["pwd"];
       if (needsMfa) {
         if (!user.mfa_secret)
@@ -1058,7 +1095,7 @@ export async function registerIdentity(
       },
     },
     async (req) => {
-      configured();
+      requireMobileConfigured(req.params.product);
       const session = await requireAccount(req, true);
       if (!session.account.email_verified_at)
         throw new HttpError(
@@ -1078,7 +1115,7 @@ export async function registerIdentity(
           [
             session.account.id,
             req.params.product,
-            req.params.product === "ai" ? "user" : "viewer",
+            defaultProductRole(req.params.product),
           ],
         );
         await c.query(
@@ -1185,7 +1222,10 @@ export async function registerIdentity(
       );
     if (
       (isGlobalAdmin(session.account.role) ||
-        access.onesa_product_roles[client.product] === "admin" ||
+        productRequiresMfa(
+          client.product,
+          access.onesa_product_roles[client.product],
+        ) ||
         mfaRequired(details.params)) &&
       !session.amr.includes("otp")
     )
@@ -1216,7 +1256,10 @@ export async function registerIdentity(
           );
         if (
           (isGlobalAdmin(current.role) ||
-            currentAccess!.onesa_product_roles[client.product] === "admin" ||
+            productRequiresMfa(
+              client.product,
+              currentAccess!.onesa_product_roles[client.product],
+            ) ||
             mfaRequired(details.params)) &&
           !session.amr.includes("otp")
         )
@@ -1383,7 +1426,7 @@ export async function registerIdentity(
         params: z.object({ id: z.uuid(), product }),
         body: z
           .object({
-            role: z.enum(["user", "viewer", "operator", "admin"]),
+            role: z.enum(["user", "viewer", "operator", ...mobileRoles]),
             status: z.enum(["active", "revoked", "rejected"]),
             expectedRevision: z.number().int().min(0),
             memberships: z.array(membershipSchema).max(50).default([]),
@@ -1398,9 +1441,9 @@ export async function registerIdentity(
       await limits.limit("identity-admin-change:" + req.actor!.id, 20, 900);
       const input = req.body,
         selected = req.params.product;
+      requireMobileConfigured(selected);
       if (
-        (selected === "ai" && !["user", "admin"].includes(input.role)) ||
-        (selected !== "ai" && input.role === "user") ||
+        !validProductRole(selected, input.role) ||
         (selected !== "drone" && input.memberships.length) ||
         new Set(input.memberships.map((m) => m.tenant_id)).size !==
           input.memberships.length
