@@ -23,7 +23,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_generated_files_match_reviewed_inputs(self):
         expected = workflows.rendered()
-        self.assertEqual(len(expected), 8)
+        self.assertEqual(len(expected), 9)
         for name, text in expected.items():
             self.assertEqual((ROOT / ".github/workflows" / name).read_text(), text)
 
