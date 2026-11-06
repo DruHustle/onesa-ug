@@ -6,7 +6,9 @@ history and fail if it is missing; they never fetch or use a mutable fallback.
 """
 
 import hashlib
+import json
 import subprocess
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def _git(*args):
     return subprocess.run(
-        ["git", "--no-replace-objects", "-C", str(ROOT), *args],
+        ["git", "--no-replace-objects", "--no-lazy-fetch", "-C", str(ROOT), *args],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -65,3 +67,13 @@ def frontend_inventory(names):
     if any(not name.startswith(FRONTEND) for name in names):
         raise ValueError("Legacy frontend fixture path escaped its product")
     return {name: hashlib.sha256(_blob(name)).hexdigest() for name in names}
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] != ["--migration-sql"]:
+        raise SystemExit("Only the historical migration test fixture is available")
+    prefix = BACKEND + "migrations/"
+    print(json.dumps({
+        name.removeprefix(prefix): _blob(name).decode("utf-8")
+        for name in _entries() if name.startswith(prefix) and name.endswith(".sql")
+    }, sort_keys=True))

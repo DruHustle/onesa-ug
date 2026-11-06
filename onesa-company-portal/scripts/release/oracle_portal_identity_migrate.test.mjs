@@ -1,13 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {rootCertificates} from 'node:tls';
 import {readFile,readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {additions,connectionScope,migrate,validateRequest,validateState} from './oracle_portal_identity_migrate.mjs';
 
 const directory=fileURLToPath(new URL('../../onesa-company-portal-backend/migrations/',import.meta.url));
-const files={};for(const name of (await readdir(directory)).filter(n=>n.endsWith('.sql')).sort())files[name]=await readFile(directory+name,'utf8');
+const currentFiles={};for(const name of (await readdir(directory)).filter(n=>n.endsWith('.sql')).sort())currentFiles[name]=await readFile(directory+name,'utf8');
+// The synthetic I/O exercises the unchanged legacy 014 executor. The shared
+// fixture reads exact historical bytes; current 015 source is tested below.
+const files=JSON.parse(execFileSync('python3',[
+ fileURLToPath(new URL('./legacy_identity_test_source.py',import.meta.url)),'--migration-sql',
+],{encoding:'utf8',maxBuffer:1024*1024}));
 const manifest=Object.fromEntries(Object.entries(files).map(([name,raw])=>[name,createHash('sha256').update(raw).digest('hex')]));
 const request=()=>({action:'apply',environment:'staging',operation_id:'11111111-1111-4111-8111-111111111111',source_commit:'a'.repeat(40),
  database:{host:'ep-identity.example.test',database:'portal_test',owner_role:'portal_owner',application_role:'portal_app'},
@@ -34,6 +40,19 @@ test('only the reviewed additive migration bytes are permitted',()=>{
   const r=request();r.migrations[name]='0'.repeat(64);assert.throws(()=>validateRequest(r),/SOURCE_CHANGED/);
  }
  const r=request();r.migrations['015_unreviewed.sql']='0'.repeat(64);assert.throws(()=>validateRequest(r));
+});
+
+test('actual current Mobile 015 source cannot authorize the legacy executor or any schema write',async()=>{
+ const current=Object.fromEntries(Object.entries(currentFiles).map(([name,raw])=>[name,createHash('sha256').update(raw).digest('hex')]));
+ assert.equal(Object.keys(current).length,15);
+ assert.equal(current['015_mobile_identity.sql'],'424c55596b0a3ee98330a2b2cd9171ab9dd2b23b8b20961a5f4b16b59f9867df');
+ const requestFixture=fixture();
+ await assert.rejects(()=>migrate({...request(),migrations:current},requestFixture.io),/IDENTITY_MIGRATION_REFUSED/);
+ assert.deepEqual(requestFixture.calls,[],'A current-source request must refuse before opening a transaction');
+ const imageFixture=fixture();imageFixture.io.files=async()=>structuredClone(currentFiles);
+ await assert.rejects(()=>migrate(request(),imageFixture.io),/IMAGE_CHANGED/);
+ assert.deepEqual(imageFixture.calls,['begin','lock','rollback','close'],'A current image must refuse before schema writes');
+ assert.throws(()=>validateState(Object.entries(current).map(([name,checksum])=>({name,checksum})),current),/BASELINE_REQUIRED/);
 });
 
 test('foreign host/database/role, disabled TLS and duplicated query parameters fail closed',()=>{
