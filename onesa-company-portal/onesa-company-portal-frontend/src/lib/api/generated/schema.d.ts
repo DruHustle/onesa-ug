@@ -12132,7 +12132,7 @@ export interface operations {
                         auth_time: number;
                         amr: string[];
                         onesa_roles: "global_admin"[];
-                        onesa_applications: ("ai" | "drone" | "robot")[];
+                        onesa_applications: ("ai" | "drone" | "robot" | "mobile")[];
                         onesa_product_roles: {
                             /** @enum {string} */
                             ai?: "user" | "admin";
@@ -12140,6 +12140,8 @@ export interface operations {
                             drone?: "viewer" | "operator" | "admin";
                             /** @enum {string} */
                             robot?: "viewer" | "operator" | "admin";
+                            /** @enum {string} */
+                            mobile?: "admin" | "operations" | "support" | "finance" | "agent" | "auditor" | "customer";
                         };
                         onesa_memberships: {
                             /** Format: uuid */
@@ -12445,9 +12447,15 @@ export interface operations {
                         enabled: boolean;
                         applications: {
                             /** @enum {string} */
-                            product: "ai" | "drone" | "robot";
+                            product: "ai" | "drone" | "robot" | "mobile";
                             /** Format: uri */
                             url: string;
+                        }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
                         }[];
                     };
                 };
@@ -12605,7 +12613,7 @@ export interface operations {
                         csrf: string;
                         access: {
                             /** @enum {string} */
-                            product: "ai" | "drone" | "robot";
+                            product: "ai" | "drone" | "robot" | "mobile";
                             role: string;
                             /** @enum {string} */
                             status: "pending" | "active" | "revoked" | "rejected";
@@ -12620,9 +12628,15 @@ export interface operations {
                         }[];
                         applications: {
                             /** @enum {string} */
-                            product: "ai" | "drone" | "robot";
+                            product: "ai" | "drone" | "robot" | "mobile";
                             /** Format: uri */
                             url: string;
+                        }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
                         }[];
                     };
                 };
@@ -12762,7 +12776,7 @@ export interface operations {
                     /** Format: email */
                     email: string;
                     name: string;
-                    products: ("ai" | "drone" | "robot")[];
+                    products: ("ai" | "drone" | "robot" | "mobile")[];
                 };
             };
         };
@@ -13094,7 +13108,7 @@ export interface operations {
                         csrf: string;
                         access: {
                             /** @enum {string} */
-                            product: "ai" | "drone" | "robot";
+                            product: "ai" | "drone" | "robot" | "mobile";
                             role: string;
                             /** @enum {string} */
                             status: "pending" | "active" | "revoked" | "rejected";
@@ -13109,9 +13123,15 @@ export interface operations {
                         }[];
                         applications: {
                             /** @enum {string} */
-                            product: "ai" | "drone" | "robot";
+                            product: "ai" | "drone" | "robot" | "mobile";
                             /** Format: uri */
                             url: string;
+                        }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
                         }[];
                     };
                 };
@@ -13692,7 +13712,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                product: "ai" | "drone" | "robot";
+                product: "ai" | "drone" | "robot" | "mobile";
             };
             cookie?: never;
         };
@@ -13724,7 +13744,7 @@ export interface operations {
                         csrf: string;
                         access: {
                             /** @enum {string} */
-                            product: "ai" | "drone" | "robot";
+                            product: "ai" | "drone" | "robot" | "mobile";
                             role: string;
                             /** @enum {string} */
                             status: "pending" | "active" | "revoked" | "rejected";
@@ -13739,9 +13759,15 @@ export interface operations {
                         }[];
                         applications: {
                             /** @enum {string} */
-                            product: "ai" | "drone" | "robot";
+                            product: "ai" | "drone" | "robot" | "mobile";
                             /** Format: uri */
                             url: string;
+                        }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
                         }[];
                     };
                 };
@@ -13888,7 +13914,7 @@ export interface operations {
                     "application/json": {
                         csrf: string;
                         /** @enum {string} */
-                        product: "ai" | "drone" | "robot";
+                        product: "ai" | "drone" | "robot" | "mobile";
                         freshRequired: boolean;
                         mfaRequired: boolean;
                         account: {
@@ -14371,7 +14397,7 @@ export interface operations {
                             };
                             access: {
                                 /** @enum {string} */
-                                product: "ai" | "drone" | "robot";
+                                product: "ai" | "drone" | "robot" | "mobile";
                                 role: string;
                                 /** @enum {string} */
                                 status: "pending" | "active" | "revoked" | "rejected";
@@ -14518,7 +14544,7 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
-                product: "ai" | "drone" | "robot";
+                product: "ai" | "drone" | "robot" | "mobile";
             };
             cookie?: never;
         };
@@ -14526,7 +14552,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    role: "user" | "viewer" | "operator" | "admin";
+                    role: "user" | "viewer" | "operator" | "admin" | "operations" | "support" | "finance" | "agent" | "auditor" | "customer";
                     /** @enum {string} */
                     status: "active" | "revoked" | "rejected";
                     expectedRevision: number;
@@ -14862,6 +14888,13 @@ export interface operations {
                             /** Format: email */
                             email: string;
                         };
+                        onesaLink?: {
+                            /** Format: email */
+                            email: string;
+                        };
+                        onesaSignInPath?: string;
+                        /** @enum {boolean} */
+                        onesaReauthRequired?: true;
                     };
                 };
             };
@@ -15769,6 +15802,8 @@ export interface operations {
                     token: string;
                     /** @default false */
                     rememberBrowser?: boolean;
+                    /** @default false */
+                    linkOnesaAccount?: boolean;
                 };
             };
         };
@@ -15924,6 +15959,8 @@ export interface operations {
                     csrf: string;
                     /** @default false */
                     rememberBrowser?: boolean;
+                    /** @default false */
+                    linkOnesaAccount?: boolean;
                 };
             };
         };
@@ -16082,6 +16119,8 @@ export interface operations {
                     password: string;
                     /** @default false */
                     rememberBrowser?: boolean;
+                    /** @default false */
+                    linkOnesaAccount?: boolean;
                 };
             };
         };

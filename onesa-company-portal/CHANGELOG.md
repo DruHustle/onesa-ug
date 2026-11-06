@@ -72,6 +72,16 @@
   of pending messages before a deployed sender/domain change. No DNS change,
   mailbox creation, external email or live rollout is implied by this source.
 
+## Unreleased — Optional Onesa Mobile identity
+
+- Add an explicitly configured fourth confidential product client and exact callback
+  support. Existing three-client configuration and legacy assertion vocabularies remain
+  compatible; an unconfigured Mobile client cannot accept access requests or sign-in.
+- Add Mobile customer/staff roles with pending customer defaults and MFA for all
+  staff. Migration 015 changes constraints only and grants no access.
+- Update generated contracts, account/admin choices and identity regressions. This
+  is source preparation; no deployed migration, client provision or access grant is claimed.
+
 ## Unreleased — Identity deployment and hosted observation integration
 
 - Keep database-readiness imports independent of application environment and pool

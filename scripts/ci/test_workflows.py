@@ -1,5 +1,8 @@
 """The consolidation must retain every original verification job and safety gate."""
 
+import copy
+import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -7,7 +10,7 @@ import unittest
 from pathlib import Path
 
 import generate_workflows as workflows
-from config import FIELDS, PRODUCTS, ROOT, SOURCE_WORKFLOWS
+from config import FIELDS, MOBILE_WORKFLOW_SOURCES, PRODUCTS, ROOT, SOURCE_WORKFLOWS
 
 
 class WorkflowTests(unittest.TestCase):
@@ -23,9 +26,59 @@ class WorkflowTests(unittest.TestCase):
 
     def test_generated_files_match_reviewed_inputs(self):
         expected = workflows.rendered()
-        self.assertEqual(len(expected), 9)
+        self.assertEqual(len(expected), 11)
         for name, text in expected.items():
             self.assertEqual((ROOT / ".github/workflows" / name).read_text(), text)
+
+    def test_mobile_sources_preserve_every_job_and_trigger_with_only_shared_guard(self):
+        generated = workflows.rendered()
+        for filename, source_path in MOBILE_WORKFLOW_SOURCES.items():
+            source = workflows.load(ROOT / source_path)
+            before = copy.deepcopy(source)
+            result = workflows.mobile_workflow(source)
+            for job in result["jobs"].values():
+                self.assertEqual(
+                    job["steps"].pop(0),
+                    {**workflows.hosted_policy_step(), "working-directory": "."},
+                )
+            self.assertEqual(result, source)
+            self.assertEqual(source, before, "Generating workflows must not mutate source")
+            self.assertIn("# Source: " + source_path.as_posix(), generated[filename])
+            self.assertIn(
+                "# Source SHA256: " + hashlib.sha256((ROOT / source_path).read_bytes()).hexdigest(),
+                generated[filename],
+            )
+
+    def test_mobile_requires_review_for_new_authority_or_reusable_jobs(self):
+        source = workflows.load(ROOT / MOBILE_WORKFLOW_SOURCES["onesa-mobile-ci.yml"])
+        source["permissions"] = {"contents": "write"}
+        with self.assertRaises(ValueError):
+            workflows.mobile_workflow(source)
+        source["permissions"] = {"contents": "read"}
+        source["jobs"]["verify"] = {"uses": "./.github/workflows/unreviewed.yml"}
+        with self.assertRaises(ValueError):
+            workflows.mobile_workflow(source)
+
+    def test_mobile_xcode_template_is_materialized_without_replacing_local_configuration(self):
+        native = ROOT / "onesa-mobile/onesa-mobile-frontend/mobile"
+        scripts = json.loads((native / "package.json").read_text())["scripts"]
+        self.assertEqual(scripts["preios"], "npm run prepare:ios")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "ios").mkdir()
+            template = (native / "ios/.xcode.env.example").read_bytes()
+            (root / "ios/.xcode.env.example").write_bytes(template)
+            subprocess.run(["sh", "-ec", scripts["prepare:ios"]], cwd=root, check=True)
+            destination = root / "ios/.xcode.env"
+            self.assertEqual(destination.read_bytes(), template)
+            destination.write_text("# Existing local Node configuration\n")
+            subprocess.run(["sh", "-ec", scripts["prepare:ios"]], cwd=root, check=True)
+            self.assertEqual(destination.read_text(), "# Existing local Node configuration\n")
+        source = workflows.load(ROOT / MOBILE_WORKFLOW_SOURCES["onesa-mobile-native-compile.yml"])
+        steps = source["jobs"]["ios"]["steps"]
+        prepare = next(i for i, step in enumerate(steps) if step.get("run") == "npm run prepare:ios")
+        pods = next(i for i, step in enumerate(steps) if step.get("run") == "pod install --project-directory=ios")
+        self.assertLess(prepare, pods)
 
     def test_all_original_jobs_dependencies_conditions_and_steps_survive(self):
         for key, product in PRODUCTS.items():

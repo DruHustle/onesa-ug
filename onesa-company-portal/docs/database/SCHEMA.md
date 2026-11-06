@@ -151,13 +151,60 @@ Isolated restore quarantine clears all shared sessions, grants and verification
 links, including optional migration 014 artifacts, while preserving account and
 approval records. Activation still requires the existing restore/release controls.
 
-The dedicated shared-identity release adapter serializes the existing 012-to-014
+The dedicated shared-identity release adapter serializes the reviewed 012, 014 or
+published Mobile 015 transition to 016
 transition with the same migration advisory lock. It refuses partial or unknown
-schema histories and compares all applied checksums before writing. Both additive
-migrations and restricted grants commit together; a completed 014 database is
-idempotent. Existing account IDs, email addresses, credential fields, MFA, role
-and disablement are checked under the transaction's account-table lock. A failed
+schema histories and compares all applied checksums before writing. The pending
+additive migrations and restricted grants commit together; a completed 016 database is
+idempotent. Existing account IDs, email addresses, credential fields, MFA, role,
+disablement and all Engineering membership, credential and registration records
+are compared under transaction locks. A failed
 post-commit runtime-readiness observation is an uncertain release outcome requiring
 inspection, never an instruction to replay or reverse the migration. The ordinary
 API profile remains unable to apply it. See the
 [release adapter tests](../engineering/BUILD_AND_TEST.md#shared-identity-release-adapters).
+
+
+## Optional Mobile identity vocabulary (prepared migration 015)
+
+`015_mobile_identity.sql` expands only the product and product-specific role
+constraints in `identity_product_access`. Mobile permits `customer`, `agent`,
+`support`, `operations`, `finance`, `auditor` and `admin`; the role sets for AI,
+Drone and Robot remain unchanged. No rows, credentials, client configurations,
+access approvals or workspace memberships are created or changed by this migration.
+A Mobile client remains unavailable unless explicitly provisioned in issuer config.
+
+The migration is transactional with bounded lock/statement timeouts. Keep this
+additive schema if reverting application code; do not drop approved Mobile access
+records to satisfy an older image. The prepared shared-identity profile pins these
+published 015 bytes before Engineering migration 016; it refuses an earlier
+unshipped `015_engineering_account_links.sql` history instead of renaming or
+adopting it. Qualify the complete Portal release/migration path and fallback before
+deployment. Local generated contracts and isolated tests
+are source verification, not evidence of a live migration or client registration.
+
+## Prepared Engineering account links (migration 016)
+
+`identity_engineering_links` stores one immutable central user ID for one existing
+Engineering membership ID. The migration creates no links or users and changes no
+password, MFA, approval or product entitlement. Link creation requires an explicit
+user choice, a live verified central session and the existing Docs password or
+one-use approved mailbox proof in one transaction. A conflicting identity cannot
+replace the recorded link, including after an email-address change. Hard deletion
+of a linked central user is restricted so it cannot silently restore independent
+Docs authentication; ordinary disablement preserves the membership and link. Any
+future deliberate account erasure must coordinate the linked identities explicitly,
+without automatic unlinking or credential fallback. Protocol records retain their
+server creation time so a forced fresh request can compare it with the actual
+central authentication time on the same database clock, including within one second.
+
+Linked Engineering grants reuse `identity_grant_sessions` and remain subordinate
+to the exact central source session. The encrypted Engineering adapter rejects
+late records after source revocation, including writes completing after logout.
+Credential/MFA/role/disable changes and central global logout remove linked issuer
+artifacts. Existing Docs passwords stay stored without replacement but cannot
+independently authenticate a linked identity. Exact membership and Cloudflare Access
+authorization remain separate; existing Access cookies are not revoked by deleting
+issuer records. Restore quarantine retains link and approval evidence while clearing
+the existing capability tables. Keep additive schema during rollback, and do not
+use feature disablement as permission to reactivate separate linked credentials.
