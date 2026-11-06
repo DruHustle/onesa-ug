@@ -168,7 +168,7 @@ class Settings(BaseSettings):
                     self.model_base_url,
                 )
                 or len(self.model_api_key) < 32
-                or self.model_name != "@cf/qwen/qwen3-30b-a3b-fp8"
+                or self.model_name != "@cf/google/gemma-4-26b-a4b-it"
             ):
                 raise ValueError(
                     "Cloudflare inference requires its account HTTPS endpoint, "
