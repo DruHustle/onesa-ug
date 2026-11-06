@@ -115,7 +115,63 @@ application URL, account, token or package is required. They are not production 
 Optional MQTT credentials remain in separate private operator configuration/environment,
 outside browsers and this Settings inventory. See [Digital Twins](DIGITAL_TWINS.md).
 
-## Current supported Cloudflare release profile — 2026-10-12
+## Cloudflare generation transition candidate — 2026-11-06
+
+Cloudflare's [2026-11-05 retirement notice](https://developers.cloudflare.com/changelog/post/2026-11-05-planned-model-deprecations/)
+lists `@cf/qwen/qwen3-30b-a3b-fp8` for removal on **2026-11-15**. Use that published
+deadline for release planning. The model remains in the historical acceptance
+records below; those records do not qualify a replacement or establish the current
+private runtime configuration.
+
+The source candidate now accepts only
+`ONESA_MODEL_NAME=@cf/google/gemma-4-26b-a4b-it` when
+`ONESA_MODEL_BACKEND=cloudflare`. The existing account URL, private credential
+fields, mock/Ollama/vLLM selectors and local-model defaults are unchanged. The
+retired Qwen model and unreviewed alternatives fail configuration validation;
+there is no automatic model substitution or mock fallback. The bounded staging
+context diagnostic selects the same candidate and still cannot deploy, change
+configuration or establish hosted qualification.
+
+The [Gemma 4 catalog](https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/)
+documents native `/ai/run/` message requests, `stream: true`, SSE output,
+`stream_options`, bounded `max_tokens` (deprecated but supported), and temperature
+from 0 to 2. Its separate synchronous JSON response is not the application's
+streaming contract. The adapter retains native SSE, strict textual choice deltas,
+usage and terminal handling, output/deadline bounds and cancellation. It does not
+coerce numeric output, expose reasoning fields or accept synchronous JSON as a
+completed stream. Catalog compatibility and synthetic tests do not prove an
+actual model's streamed response or language quality.
+
+At this review, Cloudflare lists Gemma 4 at **$0.10 per million input tokens and
+$0.30 per million output tokens**, compared with **$0.45/$3.20** for the suggested
+[Qwen 3.8 alternative](https://developers.cloudflare.com/workers-ai/models/qwen3.8-27b/).
+These published rates explain the candidate selection, not a spending approval.
+The existing free-only policy remains in force; the
+[Workers AI allowance and pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/)
+must be checked before activation. Review the linked model terms and existing
+privacy/content requirements during the normal hosted qualification.
+
+`@cf/qwen/qwen3-embedding-0.6b` is not named in this retirement notice. Its native
+1024-dimensional response, reviewed normalized MRL256 prefix, vector index and
+`cf-qwen3-mrl256-v1` namespace remain unchanged. No embedding migration, reindex,
+speech model, image model or new provider fallback is part of this transition.
+
+Before any runtime change, use the authorized owner path to verify the actual
+serving source, configured model, credential validity and available allowance
+without recording secret values. Changing the generation selector is an explicit
+release configuration change, not a silent startup repair. Qualify exact source
+and that configuration through `dev → staging → main`, with existing real
+streaming/Stop, persisted history and recall, retrieval, ownership/isolation,
+readiness, privacy and rollback checks. Preserve embeddings and existing records.
+Install the accepted source and model override together: the old source rejects
+Gemma 4, and this candidate rejects the old Qwen override. Do not change either
+side independently on the serving runtime.
+The previous model is not a viable rollback after its removal; retain an
+independently qualified supported serving option before promotion. No hosted
+generation, private configuration update or production acceptance is implied by
+this source candidate.
+
+## Historical Cloudflare release profile — 2026-10-12
 
 The implemented model selectors include `ONESA_MODEL_BACKEND=cloudflare` and
 `ONESA_EMBEDDING_BACKEND=cloudflare`. The release preflight now accepts these real
