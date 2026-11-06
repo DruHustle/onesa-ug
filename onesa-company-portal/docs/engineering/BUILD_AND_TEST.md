@@ -963,6 +963,50 @@ configuration, keys, receipts and timers, and never rerun the bootstrap installe
 Observe the next normal scheduled backup rather than triggering a production backup
 to test cleanup.
 
+## Private PostgreSQL target preparation
+
+Run the credential-free target and backup regressions from the Portal directory:
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_oracle_database_target.py'
+python3 -m unittest discover -s scripts -p 'test_oracle_backup*.py'
+python3 -m unittest discover -s scripts -p 'test_oracle_database_snapshots.py'
+node --test scripts/test_oracle_backup_payload.mjs
+```
+
+The target tests use synthetic environment files, resource observations and a public
+certificate fixture. They reject changed source/role/database/TLS settings, unequal
+API/worker credentials, unreviewed runtime hashes, duplicate keys, unsafe file custody,
+mutable/wrong-architecture images, recreated volumes, changed bridge IDs, exposed
+ports, foreign mounts, unsafe HBA rules and an unenrolled primary. They also exercise
+the actual backup failure cleanup with a temporary CA and prove that local inspection
+and execution select the same local Docker daemon. No test connects to a provider,
+starts a database, sends email or changes application data.
+
+`infra/oracle/operations/database_target.py` has only read-only `render` and `check`
+actions. Rendering reads the ignored extension from the complete qualified source
+tree and validates existing resource/TLS custody before emitting a separate Compose
+model. It never invokes Compose or initializes a cluster. A missing optional profile
+retains the existing Neon behavior; a present invalid profile fails closed. The
+profile contains digests and target identities, not database passwords. Runtime
+files and the CA remain root-private; server certificate/key/HBA mounts are
+root-owned, readable by the pinned PostgreSQL group and inaccessible to others.
+
+The ordinary Compose model has no new active service or top-level network/volume.
+The rendered model requires its explicit `container-primary` profile, immutable
+ARM64 image, existing external volume/bridges and private read-only TLS mounts.
+Its direct PostgreSQL entrypoint deliberately cannot bootstrap an empty volume.
+Backup encryption, off-instance readback, existing retention and restore quarantine
+are retained; no second application writer or automatic recovery actuator is added.
+
+Real Docker Compose rendering/startup, initialized-volume ownership, certificate
+hostname/expiry, PostgreSQL major-version compatibility, restart persistence,
+restricted-role readiness, snapshot/restore and private-network reachability still
+require the approved isolated host and protected procedure. Unit success is not
+live database acceptance. An eventual cutover must stop all writers, preserve a
+verified recovery snapshot, coordinate both private runtime files and the backup
+binding, and retain the old primary fenced until recovery is resolved.
+
 ## Operations notification regression
 
 ### Bounded process recovery
