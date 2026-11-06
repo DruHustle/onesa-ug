@@ -39,7 +39,7 @@ PINS = {
     "onesa-company-portal-frontend/scripts/test-drone-product.mjs": "3bea2bb2b51e6747df223101970218c080b10fcc3c4d1ac719a61cc164a40d3f",
     "onesa-company-portal-frontend/scripts/test-engineering-sign-in.mjs": "33b6b31a69763986837b3a902328534404e6ceb56ea3e33bb86a9068b85afd1c",  # gitleaks:allow -- SHA-256 of reviewed public source.
     "onesa-company-portal-frontend/scripts/test-nvidia-library.mjs": "ef7842475ddf585159da65c30d905c9f7e9970094ecdd07942a34c5afc8e72df",
-    "onesa-company-portal-frontend/scripts/test-onesa-account.mjs": "ff88c9106167a309a4cf732bc166b8439a52fe99f6075532abe35ee91fec4256",
+    "onesa-company-portal-frontend/scripts/test-onesa-account.mjs": "fdd380ccad7ebef858697155c0cd235e8d62d824d54dafcea6ac3edaa24a63e0",
     "onesa-company-portal-frontend/scripts/test-public-loading.mjs": "4a6f3f0f4d0dbdb9f24661152d48a555f078907886cd936d8fc4d1fc8b48fbad",
     "onesa-company-portal-frontend/scripts/validate-nvidia-assets.mjs": "41cc44c7be6fc08e00e85e268742e1740bab1538d3e4d6b86674b4784dda0545",
     "onesa-company-portal-frontend/security/minimatch-callable/README.md": "017d22b9e2057a92eaea7fe84a7d683789b75aa00f3159d8dcb6f688fc5c0ab0",
@@ -81,7 +81,7 @@ PINS = {
     "onesa-company-portal-frontend/src/features/account/access-manager.tsx": "24400fcf47357b6e7951a40a36bf3b9c5e28ac6c97099cd837cfe0fe3471f6d4",  # gitleaks:allow -- SHA-256 of reviewed public source.
     "onesa-company-portal-frontend/src/features/account/account.module.css": "d8505f9ea39cb9e505e7c6285c308947d77594c47a167cb709ce6d2880d06ad9",
     "onesa-company-portal-frontend/src/features/account/account.tsx": "e2352fc9b926dece9de5262f6e1fe02890ceeeb09aa081c598e088a8681027c1",
-    "onesa-company-portal-frontend/src/features/account/api.ts": "b3620980954a2d5437e883f1ff73b9b3860dab41a7d3eece35afe740d4097c09",  # gitleaks:allow -- SHA-256 of reviewed public source.
+    "onesa-company-portal-frontend/src/features/account/api.ts": "b5c768285ed6bfcb68999b48c725a958c0625388da0e87548e6d06cca4ead77f",  # gitleaks:allow -- SHA-256 of reviewed public source.
     "onesa-company-portal-frontend/src/features/account/security.tsx": "bbdeb339758445978c49ae30345424ee487a45e6003617a35de6e59a1102bf83",
     "onesa-company-portal-frontend/src/features/admin/portal.tsx": "deeb9722ccf7434a2835e24f9e2425ea2fcab7c32a46da9dc0306a7621fdcd6e",
     "onesa-company-portal-frontend/src/features/engineering/sign-in.tsx": "2c69fe4bc96f695561d8a38493dedd8892bee85e6e2fb218a8db25ab078c7499",  # gitleaks:allow -- SHA-256 of reviewed public source.

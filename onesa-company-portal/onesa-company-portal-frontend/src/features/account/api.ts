@@ -18,7 +18,7 @@ export function enabledProducts(applications: { product: Product }[]): Product[]
   return (Object.keys(productNames) as Product[]).filter(product => product !== "mobile" || applications.some(application => application.product === "mobile"));
 }
 
-export const futureProductNames = { farmer: "Smart Farmer", logistics: "Smart Logistics", factory: "Smart Factory", pasofi: "PamoFi", mobile: "Onesa Mobile" };
+export const futureProductNames = { farmer: "Smart Farmer", logistics: "Smart Logistics", factory: "Smart Factory", pasofi: "PasoFi", mobile: "Onesa Mobile" };
 export type ProductCatalog = { product: Product | keyof typeof futureProductNames; name: string; connected: boolean }[];
 export type AccountConfig = { enabled: boolean; applications?: { product: Product }[]; catalog?: ProductCatalog };
 export type Account = { id: string; email: string; name: string; globalAdmin: boolean; owner: boolean; portalAccess: boolean; emailVerified: boolean; mfaEnrolled: boolean };

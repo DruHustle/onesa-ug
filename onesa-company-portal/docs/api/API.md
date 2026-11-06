@@ -174,7 +174,7 @@ The change uses schema 012 and retains the worker's existing publication postcon
 The public account configuration and authenticated account snapshots now include
 an additive `catalog` of `{product,name,connected}` entries. AI, Drone and Robot
 and optional Mobile are connected only when their fixed confidential client is configured.
-Farmer, Logistics, Factory and PamoFi remain unconnected recognition entries:
+Farmer, Logistics, Factory and PasoFi remain unconnected recognition entries:
 they accept no registration request, callback or token and receive no entitlement.
 The existing `applications` response and legacy audience-bound three-product claims remain
 compatible; Mobile keeps its separately configured vocabulary and client boundaries.

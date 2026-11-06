@@ -36,7 +36,7 @@ function account(admin = false) {
   return { id: accountId, email: "synthetic-member@example.test", name: "Synthetic Onesa Member", globalAdmin: admin, owner: admin, portalAccess: admin, emailVerified: true, mfaEnrolled: true };
 }
 function catalog(connected = ["ai", "drone", "robot"]) {
-  return Object.entries({ai: "Onesa AI", drone: "Onesa Drone", robot: "Onesa Robot", farmer: "Smart Farmer", logistics: "Smart Logistics", factory: "Smart Factory", pasofi: "PamoFi", mobile: "Onesa Mobile"})
+  return Object.entries({ai: "Onesa AI", drone: "Onesa Drone", robot: "Onesa Robot", farmer: "Smart Farmer", logistics: "Smart Logistics", factory: "Smart Factory", pasofi: "PasoFi", mobile: "Onesa Mobile"})
     .map(([product, name]) => ({product, name, connected: connected.includes(product)}));
 }
 function session(admin = false) {
@@ -288,7 +288,7 @@ try {
         await expect(product("Onesa AI").getByRole("link", { name: t.open })).toHaveAttribute("href", "https://ai.example.test/");
         await expect(product("Onesa Drone").getByRole("button", { name: t.pending, exact: true })).toBeDisabled();
         await expect(product("Onesa Robot")).toContainText(t.denied);
-        for (const future of ["Smart Farmer", "Smart Logistics", "Smart Factory", "PamoFi", "Onesa Mobile"]) {
+        for (const future of ["Smart Farmer", "Smart Logistics", "Smart Factory", "PasoFi", "Onesa Mobile"]) {
           await expect(product(future)).toContainText(language === "de" ? "Noch nicht verbunden" : "Not connected");
           await expect(product(future).getByRole("link")).toHaveCount(0);
           await expect(product(future).getByRole("button")).toHaveCount(0);
@@ -329,7 +329,7 @@ try {
       await page.goto(origin + "/account/register");
       await expect(page.getByRole("checkbox", {name: /Onesa AI/})).toBeDisabled();
       await expect(page.getByRole("checkbox", {name: /Onesa Drone/})).toBeDisabled();
-      await expect(page.getByRole("checkbox", {name: /Farmer|Logistics|Factory|PamoFi|Mobile/})).toHaveCount(0);
+      await expect(page.getByRole("checkbox", {name: /Farmer|Logistics|Factory|PasoFi|Mobile/})).toHaveCount(0);
       await page.getByLabel("Your name", {exact: true}).fill("Synthetic Robot Member");
       await page.getByLabel("Email address", {exact: true}).fill("synthetic-robot@example.test");
       await page.getByRole("checkbox", {name: "Onesa Robot", exact: true}).check();
