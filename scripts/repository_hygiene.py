@@ -6,6 +6,7 @@ for this reviewed consolidation.
 """
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -13,6 +14,24 @@ import sys
 from pathlib import Path, PurePosixPath
 
 from ci.config import IMPORTED_HEADS, PRODUCTS, ROOT
+
+
+# The exact historical Xcode environment bootstrap is source, not a secret.
+# This exception is HISTORY ONLY: current index/worktree policy stays strict.
+# Security review: https://github.com/DruHustle/onesa-ug/issues/18
+HISTORICAL_XCODE_PATH = "onesa-mobile/onesa-mobile-frontend/mobile/ios/.xcode.env"
+HISTORICAL_XCODE_BLOB = "3d5782c71568d32eec2fe71b034efcde053305f9"
+
+
+def reviewed_historical_xcode_bootstrap(scope, name, data, mode="100644"):
+    if (
+        not scope.startswith("history:")
+        or name != HISTORICAL_XCODE_PATH
+        or mode != "100644"
+    ):
+        return False
+    header = b"blob " + str(len(data)).encode("ascii") + b"\0"
+    return hashlib.sha1(header + data).hexdigest() == HISTORICAL_XCODE_BLOB
 
 
 def git(root, *args):
@@ -104,7 +123,7 @@ def scan(root, product=None, history=False):
         selected_rules = [rules[owner]] if owner else list(rules.values())
         detected = set()
         for module in selected_rules:
-            if module.denied(local_name):
+            if module.denied(local_name) and not reviewed_historical_xcode_bootstrap(scope, name, data, mode):
                 detected.add("restricted-or-generated-path")
             detected.update(module.secrets(data, local_name))
         findings.extend(
