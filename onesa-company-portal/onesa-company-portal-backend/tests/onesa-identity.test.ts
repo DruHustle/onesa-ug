@@ -882,7 +882,7 @@ test("Native Portal logout revokes only grants bound to that native session", as
   assert.equal((await second.request({url: "/api/v1/admin/dashboard"})).statusCode, 200);
 });
 
-test("Identity-disabled candidate keeps native administration usable with a member on schema 014", async () => {
+test("Identity-disabled candidate keeps native administration usable with a member on schema 015", async () => {
   const before = (await db.query("SELECT id,email,password_hash,role,disabled FROM users WHERE id=$1", [member])).rows[0];
   const previous = process.env.ONESA_IDENTITY_ENABLED;
   process.env.ONESA_IDENTITY_ENABLED = "false";
@@ -901,7 +901,9 @@ test("Identity-disabled candidate keeps native administration usable with a memb
       payload: {email: emails.member, password, code: ""}});
     assert.equal(memberLogin.statusCode, 401);
     const configResponse = await fallback.inject({url: "/api/v1/account/config", headers: proxy});
-    assert.deepEqual(configResponse.json(), {enabled: false, applications: []});
+    const configuration=configResponse.json();
+    assert.deepEqual({enabled:configuration.enabled,applications:configuration.applications}, {enabled: false, applications: []});
+    assert.deepEqual(configuration.catalog.map((entry:{product:string;connected:boolean})=>[entry.product,entry.connected]), ["ai","drone","robot","farmer","logistics","factory","pasofi","mobile"].map(product=>[product,false]));
     assert.deepEqual((await db.query("SELECT id,email,password_hash,role,disabled FROM users WHERE id=$1", [member])).rows[0], before);
   } finally {
     process.env.ONESA_IDENTITY_ENABLED = previous;

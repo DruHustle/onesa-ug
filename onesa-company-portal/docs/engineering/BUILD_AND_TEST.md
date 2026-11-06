@@ -1482,6 +1482,23 @@ An explicitly supplied `ONESA_TEST_CHROMIUM_EXECUTABLE` with
 `ONESA_TEST_BROWSERS=chromium` supports a supplemental local engine when the pinned
 browser download is unavailable. That run is labeled supplemental and never
 substitutes for native three-engine CI or hosted end-to-end acceptance.
+The Engineering sign-in renderer also accepts `ONESA_TEST_CHROMIUM_EXECUTABLE`
+and reports the actual browser version and supplemental status; its default
+continues to use the pinned Chromium installation.
+`ONESA_SIGNIN_BROWSER=firefox` or `webkit` selects that pinned engine explicitly
+for additional local coverage; it does not change the default Chromium CI gate.
+
+Account renderer regressions keep unconnected catalog entries out of registration,
+access requests and launch links, including for administrators. The current
+three-product claims remain unchanged. Docs can return from central sign-in only
+to a validated local Engineering interaction; a fresh sign-in request uses the
+existing password/MFA flow. Linking an existing Docs identity requires an unchecked
+opt-in with its password or confirmed emailed-link proof. Email-link requests do
+not perform that link. If MFA enrollment is required, the same validated Docs return
+survives setup and routes through fresh central login; enrollment creates no session.
+Local renderer fixtures verify these controls without mail,
+database or provider requests; backend approval, identity-binding and concurrency
+tests remain separate.
 
 The feature remains off until complete owner-held issuer/client configuration,
 additive migrations, restricted grants, exact frontend callback allowlisting and
@@ -1530,6 +1547,12 @@ simulation workspace and Robot's read-only simulator, then observes permission
 and global-session revocation. Each product's own complete workflow qualification
 remains required; this combined check neither starts physical operations nor
 substitutes read-only identity results for simulation or AI workflow tests.
+Those product journeys must reuse the already verified central browser session:
+only the matching account continuation or an automatic protocol continuation is
+accepted. A password/MFA prompt or central login POST fails the SSO observation;
+the helper never re-enters fixture credentials to conceal lost session recognition.
+Separate denial observations still require an unapproved product to refuse access,
+and explicit protected-action MFA remains a distinct observation.
 
 The owner-held fixtures contain an existing owner credential, two operation-unique
 synthetic email aliases/passwords, an approved Drone workspace and a TLS IMAP inbox
@@ -1559,9 +1582,11 @@ Portal API and worker. Installation compares the complete backend source closure
 including authentication, migrations, dependency locks and build inputs, with the
 reviewed current-main tree. The existing narrow API and worker profiles retain
 their original rejection of authentication and migration changes. The new profile
-admits only the checksummed 012-to-014 additive migration, grants the existing
+admits only the checksummed 012-or-014-to-015 additive migration, grants the existing
 restricted runtime role without creating or rotating credentials, and keeps schema
-014 during the staged compatible fallback and candidate reapplication. The fallback
+015 during the staged compatible fallback and candidate reapplication. Migration
+015 adds immutable Docs account links and linked-grant revocation while preserving
+existing credentials and approvals. The fallback
 uses the exact candidate image with identity disabled; historical images are not
 qualified merely because they start or can read the additive schema.
 

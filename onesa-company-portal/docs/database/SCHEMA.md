@@ -151,13 +151,40 @@ Isolated restore quarantine clears all shared sessions, grants and verification
 links, including optional migration 014 artifacts, while preserving account and
 approval records. Activation still requires the existing restore/release controls.
 
-The dedicated shared-identity release adapter serializes the existing 012-to-014
+The dedicated shared-identity release adapter serializes the reviewed 012-or-014-to-015
 transition with the same migration advisory lock. It refuses partial or unknown
-schema histories and compares all applied checksums before writing. Both additive
-migrations and restricted grants commit together; a completed 014 database is
-idempotent. Existing account IDs, email addresses, credential fields, MFA, role
-and disablement are checked under the transaction's account-table lock. A failed
+schema histories and compares all applied checksums before writing. The pending
+additive migrations and restricted grants commit together; a completed 015 database is
+idempotent. Existing account IDs, email addresses, credential fields, MFA, role,
+disablement and all Engineering membership, credential and registration records
+are compared under transaction locks. A failed
 post-commit runtime-readiness observation is an uncertain release outcome requiring
 inspection, never an instruction to replay or reverse the migration. The ordinary
 API profile remains unable to apply it. See the
 [release adapter tests](../engineering/BUILD_AND_TEST.md#shared-identity-release-adapters).
+
+## Prepared Engineering account links (migration 015)
+
+`identity_engineering_links` stores one immutable central user ID for one existing
+Engineering membership ID. The migration creates no links or users and changes no
+password, MFA, approval or product entitlement. Link creation requires an explicit
+user choice, a live verified central session and the existing Docs password or
+one-use approved mailbox proof in one transaction. A conflicting identity cannot
+replace the recorded link, including after an email-address change. Hard deletion
+of a linked central user is restricted so it cannot silently restore independent
+Docs authentication; ordinary disablement preserves the membership and link. Any
+future deliberate account erasure must coordinate the linked identities explicitly,
+without automatic unlinking or credential fallback. Protocol records retain their
+server creation time so a forced fresh request can compare it with the actual
+central authentication time on the same database clock, including within one second.
+
+Linked Engineering grants reuse `identity_grant_sessions` and remain subordinate
+to the exact central source session. The encrypted Engineering adapter rejects
+late records after source revocation, including writes completing after logout.
+Credential/MFA/role/disable changes and central global logout remove linked issuer
+artifacts. Existing Docs passwords stay stored without replacement but cannot
+independently authenticate a linked identity. Exact membership and Cloudflare Access
+authorization remain separate; existing Access cookies are not revoked by deleting
+issuer records. Restore quarantine retains link and approval evidence while clearing
+the existing capability tables. Keep additive schema during rollback, and do not
+use feature disablement as permission to reactivate separate linked credentials.

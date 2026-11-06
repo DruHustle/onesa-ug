@@ -33,7 +33,7 @@ test('only the reviewed additive migration bytes are permitted',()=>{
  for(const name of Object.keys(additions)){
   const r=request();r.migrations[name]='0'.repeat(64);assert.throws(()=>validateRequest(r),/SOURCE_CHANGED/);
  }
- const r=request();r.migrations['015_unreviewed.sql']='0'.repeat(64);assert.throws(()=>validateRequest(r));
+ const r=request();r.migrations['016_unreviewed.sql']='0'.repeat(64);assert.throws(()=>validateRequest(r));
 });
 
 test('foreign host/database/role, disabled TLS and duplicated query parameters fail closed',()=>{
@@ -52,16 +52,22 @@ test('a custody-pinned private CA must be one bounded CA certificate',()=>{
  }
 });
 
-test('migration is atomic, grants only after both migrations, and checks real runtime readiness',async()=>{
+test('migration is atomic, grants only after all three migrations, and checks real runtime readiness',async()=>{
  const f=fixture();const result=await migrate(request(),f.io);
- assert.equal(result.applied_migrations,2);assert.equal(result.schema_version,14);assert.equal(result.credential_changes,0);
+ assert.equal(result.applied_migrations,3);assert.equal(result.schema_version,15);assert.equal(result.credential_changes,0);
  assert.deepEqual(f.calls,['begin','lock',...Object.keys(additions),'existing-role-grants','commit','runtime-readiness','close']);
 });
 
-test('already-applied 014 is idempotent without recreating tables or credentials',async()=>{
- const f=fixture(14);const result=await migrate(request(),f.io);
+test('already-applied 015 is idempotent without recreating tables or credentials',async()=>{
+ const f=fixture(15);const result=await migrate(request(),f.io);
  assert.equal(result.applied_migrations,0);assert.ok(!f.calls.some(name=>name.endsWith('.sql')));
  assert.deepEqual(f.calls,['begin','lock','existing-role-grants','commit','runtime-readiness','close']);
+});
+
+test('a qualified 014 baseline applies only the reviewed Engineering link migration',async()=>{
+ const f=fixture(14);const result=await migrate(request(),f.io);
+ assert.equal(result.applied_migrations,1);assert.equal(result.schema_version,15);
+ assert.deepEqual(f.calls,['begin','lock','015_engineering_account_links.sql','existing-role-grants','commit','runtime-readiness','close']);
 });
 
 test('inspection is read only and never grants, migrates or runs writable readiness',async()=>{
@@ -87,10 +93,10 @@ test('changed image SQL refuses even when the supplied manifest looks valid',asy
  assert.deepEqual(f.calls,['begin','lock','rollback','close']);
 });
 
-test('failure in migration 014 or grants rolls back instead of continuing or retrying',async()=>{
- for(const stage of ['014','grants']){
+test('failure in migration 014, 015 or grants rolls back instead of continuing or retrying',async()=>{
+ for(const stage of ['014','015','grants']){
   const f=fixture();const original=f.io.apply;
-  if(stage==='014')f.io.apply=async(...args)=>{if(args[0].startsWith('014'))throw Error('synthetic failure');await original(...args);};
+  if(stage!=='grants')f.io.apply=async(...args)=>{if(args[0].startsWith(stage))throw Error('synthetic failure');await original(...args);};
   else f.io.grants=async()=>{throw Error('synthetic grant failure');};
   await assert.rejects(()=>migrate(request(),f.io),/synthetic/);
   assert.ok(!f.calls.includes('commit'));assert.equal(f.calls.filter(x=>x==='rollback').length,1);assert.equal(f.calls.at(-1),'close');
@@ -117,8 +123,8 @@ test('connection identity is checked before any schema write',async()=>{
  assert.deepEqual(f.calls,['begin','lock','rollback','close']);
 });
 
-test('exact 001–014 state matching excludes newer or reordered counterfeit names',()=>{
+test('exact 001–015 state matching excludes newer or reordered counterfeit names',()=>{
  const rows=Object.entries(manifest).map(([name,checksum])=>({name,checksum}));
- assert.equal(validateState(rows.reverse(),manifest),14);
+ assert.equal(validateState(rows.reverse(),manifest),15);
  rows[0]={name:'099_forged.sql',checksum:rows[0].checksum};assert.throws(()=>validateState(rows,manifest));
 });

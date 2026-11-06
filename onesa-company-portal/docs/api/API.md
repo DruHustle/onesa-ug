@@ -92,6 +92,24 @@ expected revision and access-policy evidence. An engineering identity has no Por
 role. The exact Cloudflare email policy remains an independent requirement. See
 [Engineering Docs access](../engineering/ENGINEERING_DOCS_IDENTITY.md).
 
+## Prepared common-account Docs link
+
+Prepared additive account-link fields preserve older clients: current Docs details
+may include `onesaSignInPath` with only the fixed central-account return to the
+current `/engineering/sign-in/{uid}`, and `onesaLink:{email}` when the central
+account is eligible to prove its existing Docs identity. Password, link-verify and
+handoff-verify accept `linkOnesaAccount`, default false. The request-link operation
+does not link accounts. The opt-in operation requires both the live central session
+and the existing approved Docs proof, with immutable-ID collision and one-use-link
+checks in the same transaction. `ENGINEERING_ACCOUNT_PROOF` and
+`ENGINEERING_ACCOUNT_CONFLICT` refuse mismatches; `ONESA_SESSION_REQUIRED` and
+`ONESA_REAUTH_REQUIRED` route the user through central sign-in without accepting an
+unapproved identity or bypassing MFA. Linked membership UUIDs remain the Docs OIDC
+subjects; no Cloudflare identity or allowlist is silently replaced.
+For an already proven linked account that needs fresh authentication, details
+include `onesaReauthRequired:true`; the fixed account return then presents central
+password/MFA again. Rounded OIDC timestamps do not permit reuse within the same second.
+
 ## Cross-browser Engineering email links (accepted 2026-10-21)
 
 Independently accepted API `cfe0d43e7032dabc83be8e49dba340660e1975e0` has the identical reviewed tree to
@@ -152,6 +170,15 @@ that live-edition details are unavailable rather than inferring publication from
 The change uses schema 012 and retains the worker's existing publication postconditions.
 
 ## Shared Onesa account and product access (prepared, default off)
+
+The public account configuration and authenticated account snapshots now include
+an additive `catalog` of `{product,name,connected}` entries. AI, Drone and Robot
+are connected only when their existing fixed confidential client is configured.
+Farmer, Logistics, Factory, PasoFi and Mobile remain unconnected recognition entries:
+they accept no registration request, callback or token and receive no entitlement.
+The existing `applications` response and audience-bound three-product claims remain
+unchanged. Future commissioning requires an independently reviewed client and its
+own scoped data/action authorization; appearing in the catalog grants nothing.
 
 The existing Portal hosts the independent `/api/v1/identity` issuer using its
 locked OpenID Connect provider. Fixed confidential clients use authorization code

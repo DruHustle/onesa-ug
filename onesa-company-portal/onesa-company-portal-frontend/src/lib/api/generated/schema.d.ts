@@ -12449,6 +12449,12 @@ export interface operations {
                             /** Format: uri */
                             url: string;
                         }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
+                        }[];
                     };
                 };
             };
@@ -12623,6 +12629,12 @@ export interface operations {
                             product: "ai" | "drone" | "robot";
                             /** Format: uri */
                             url: string;
+                        }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
                         }[];
                     };
                 };
@@ -13112,6 +13124,12 @@ export interface operations {
                             product: "ai" | "drone" | "robot";
                             /** Format: uri */
                             url: string;
+                        }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
                         }[];
                     };
                 };
@@ -13742,6 +13760,12 @@ export interface operations {
                             product: "ai" | "drone" | "robot";
                             /** Format: uri */
                             url: string;
+                        }[];
+                        catalog: {
+                            /** @enum {string} */
+                            product: "ai" | "drone" | "robot" | "farmer" | "logistics" | "factory" | "pasofi" | "mobile";
+                            name: string;
+                            connected: boolean;
                         }[];
                     };
                 };
@@ -14862,6 +14886,13 @@ export interface operations {
                             /** Format: email */
                             email: string;
                         };
+                        onesaLink?: {
+                            /** Format: email */
+                            email: string;
+                        };
+                        onesaSignInPath?: string;
+                        /** @enum {boolean} */
+                        onesaReauthRequired?: true;
                     };
                 };
             };
@@ -15769,6 +15800,8 @@ export interface operations {
                     token: string;
                     /** @default false */
                     rememberBrowser?: boolean;
+                    /** @default false */
+                    linkOnesaAccount?: boolean;
                 };
             };
         };
@@ -15924,6 +15957,8 @@ export interface operations {
                     csrf: string;
                     /** @default false */
                     rememberBrowser?: boolean;
+                    /** @default false */
+                    linkOnesaAccount?: boolean;
                 };
             };
         };
@@ -16082,6 +16117,8 @@ export interface operations {
                     password: string;
                     /** @default false */
                     rememberBrowser?: boolean;
+                    /** @default false */
+                    linkOnesaAccount?: boolean;
                 };
             };
         };

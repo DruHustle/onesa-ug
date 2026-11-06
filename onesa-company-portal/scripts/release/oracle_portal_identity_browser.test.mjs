@@ -4,7 +4,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {readFileSync} from 'node:fs';
 import {X509Certificate} from 'node:crypto';
-import {validateRequest, totp, ACCOUNT_CHECKS, PRODUCT_CHECKS, authorizationBinding, verifyCallback, validateOwnerSession, verifyEntitlements} from './oracle_portal_identity_browser.mjs';
+import {validateRequest, totp, ACCOUNT_CHECKS, PRODUCT_CHECKS, authorizationBinding, verifyCallback, validateOwnerSession, verifyEntitlements, continueExistingProductSession} from './oracle_portal_identity_browser.mjs';
 import {validateMailbox, parseImapResponse, messageLink, deliveredLink, observeZohoOnce, waitForZoho, zohoTLSRoots, ZOHO_BLOCKED_CA} from './oracle_portal_identity_mail.mjs';
 
 const operation = '12345678-1234-1234-1234-123456789abc';
@@ -48,6 +48,46 @@ test('member entitlement observations require exact active products and ordinary
   }
   snapshot.access[1].status = 'active'; verifyEntitlements(snapshot, ['ai', 'drone']);
   snapshot.access[2].status = 'active'; verifyEntitlements(snapshot, ['ai', 'drone', 'robot']);
+});
+
+test('product SSO observation never supplies credentials when central recognition is lost', async () => {
+  const email = request().fixtures.member.email;
+  const current = request().origins.portal + '/account/sign-in/synthetic-interaction';
+  function page({continuation, fields = []} = {}) {
+    const events = [];
+    return {
+      events,
+      url: () => current,
+      getByRole: (role, options) => ({
+        isVisible: async () => Boolean(continuation && (options.name instanceof RegExp ? options.name.test(continuation) : options.name === continuation)),
+        click: async () => events.push('continue'),
+      }),
+      locator: selector => ({isVisible: async () => fields.some(name => selector === 'input[name="' + name + '"]'),
+        fill: async () => assert.fail('An SSO observation must not enter a password or MFA code')}),
+      waitForURL: async predicate => {
+        assert.equal(predicate(new URL(current)), false);
+        assert.equal(predicate(new URL(request().origins.drone)), true);
+        events.push('redirect');
+      },
+    };
+  }
+  // The real account UI also renders an optional account-switch form beside
+  // Continue as. Reusing the matching identity must leave that form untouched.
+  const reused = page({continuation: 'Continue as ' + email, fields: ['email', 'password']});
+  await continueExistingProductSession(reused, email);
+  assert.deepEqual(reused.events, ['continue', 'redirect']);
+  for (const fields of [['email', 'password'], ['password'], ['code']]) {
+    const expired = page({fields});
+    await assert.rejects(() => continueExistingProductSession(expired, email), /PRODUCT_SSO_REAUTHENTICATION_REQUIRED/);
+    assert.deepEqual(expired.events, []);
+  }
+  const switched = page({continuation: 'Continue as another@example.org', fields: ['email', 'password']});
+  await assert.rejects(() => continueExistingProductSession(switched, email), /PRODUCT_SSO_PRINCIPAL_MISMATCH/);
+  assert.deepEqual(switched.events, []);
+  // A provider may still be loading or complete authorization without an
+  // interaction. Neither case is permission to fill a credential form.
+  const pending = page(); await continueExistingProductSession(pending, email);
+  assert.deepEqual(pending.events, []);
 });
 
 test('arbitrary, cross-environment and credential-bearing origins cannot receive fixtures', () => {

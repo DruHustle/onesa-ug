@@ -149,6 +149,10 @@ export async function revokeAccountIdentity(
     userId,
   ]);
   await connection.query(
+    "DELETE FROM engineering_identity_records WHERE account_id IN (SELECT membership_id::text FROM identity_engineering_links WHERE user_id=$1)",
+    [userId],
+  );
+  await connection.query(
     "DELETE FROM identity_grant_sessions WHERE user_id=$1",
     [userId],
   );
@@ -162,7 +166,7 @@ export async function revokeAccountIdentity(
 
 /** Recheck after the account lock: admission before a concurrent logout is insufficient. */
 export async function lockAccountSession(
-  connection: PoolClient,
+  connection: Pick<PoolClient, "query">,
   session: AccountSession,
 ) {
   const account = (
