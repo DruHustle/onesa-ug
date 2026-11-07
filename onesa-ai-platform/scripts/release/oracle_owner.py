@@ -910,7 +910,7 @@ class GitHub:
 
     def qualify(self, binding, archives=None):
         if binding.get("repository") == CONSOLIDATED_REPOSITORY:
-            source = ai_operational_source(binding)
+            source = operational_source(binding)
             # This is still unsigned source evidence. Only the separately
             # commissioned Store can issue an application context afterward.
             return [self.verify_source(source, archives)]
@@ -1109,9 +1109,38 @@ def ai_operational_source(value):
     return source
 
 
+def docs_operational_source(value):
+    """A separate public Docs scope; never expand the AI application profile set."""
+    require(
+        isinstance(value, dict)
+        and value.get("component") == "docs-public"
+        and AI_SOURCE_FIELDS <= set(value),
+        "Canonical public Docs component source required",
+    )
+    return ai_operational_source({key: value[key] for key in AI_SOURCE_FIELDS})
+
+
+def operational_source(value):
+    return (
+        docs_operational_source(value)
+        if value.get("component") == "docs-public"
+        else ai_operational_source(value)
+    )
+
+
+def is_docs_binding(value):
+    return (
+        value.get("repository") == "DruHustle/onesa-ai-platform"
+        and value.get("component") in {"docs-public", "docs-internal"}
+    ) or (
+        value.get("repository") == CONSOLIDATED_REPOSITORY
+        and value.get("component") == "docs-public"
+    )
+
+
 def component_scope(binding):
     if binding.get("repository") == CONSOLIDATED_REPOSITORY:
-        ai_operational_source(binding)
+        operational_source(binding)
         return CONSOLIDATED_REPOSITORY + ":platform:" + binding["component"]
     return binding["repository"] + ":" + binding["component"]
 
@@ -1198,7 +1227,7 @@ def binding_valid(value, policy):
         "Separate configuration bindings required",
     )
     if consolidated:
-        source = ai_operational_source(value)
+        source = operational_source(value)
         tool = policy.get("toolchain", {})
         require(
             type(policy.get("schema_version")) is int
@@ -1213,13 +1242,31 @@ def binding_valid(value, policy):
         selected = next(
             (
                 names
-                for names in ({"api", "frontend"}, AI_NATIVE_COMPONENTS, AI_COMPONENTS)
+                for names in (
+                    ({"docs-public"},)
+                    if value["component"] == "docs-public"
+                    else ({"api", "frontend"}, AI_NATIVE_COMPONENTS, AI_COMPONENTS)
+                )
                 if set(policy.get("components", {}))
                 == {CONSOLIDATED_REPOSITORY + ":platform:" + name for name in names}
             ),
             None,
         )
         require(selected is not None, "Canonical AI literal profile set required")
+        if selected == {"docs-public"}:
+            item = policy["components"][component_scope(value)]
+            require(
+                set(item)
+                == {
+                    "qualification_attempt_limit",
+                    "runners",
+                    "required_checks",
+                    "publication_mechanism",
+                }
+                and item["publication_mechanism"]
+                == "existing-isolated-owner-vercel-cli",
+                "Separate canonical public Docs profile required",
+            )
         for name in selected:
             item = policy["components"][CONSOLIDATED_REPOSITORY + ":platform:" + name]
             require(
@@ -1230,7 +1277,7 @@ def binding_valid(value, policy):
             require(
                 (
                     "release_mode" not in item
-                    if selected == {"api", "frontend"}
+                    if selected in ({"api", "frontend"}, {"docs-public"})
                     else item.get("release_mode")
                     == (name.rsplit("-", 1)[0] if "-" in name else "foundation")
                 ),
@@ -1481,9 +1528,7 @@ class Store:
             "Unreviewed runner refused",
         )
         request = {"binding": binding, "context": context}
-        if binding["repository"] == "DruHustle/onesa-ai-platform" and binding[
-            "component"
-        ] in {"docs-public", "docs-internal"}:
+        if is_docs_binding(binding):
             # Only an explicitly commissioned Docs runner needs to revalidate its
             # genuine build artifacts. This travels in private stdin, never the
             # browser, arguments, environment, Actions or returned observations.
@@ -1700,9 +1745,7 @@ class Store:
             self.db.execute(
                 "UPDATE deployments SET state='deployed-unverified' WHERE id=?", (id_,)
             )
-        if binding["repository"] == "DruHustle/onesa-ai-platform" and binding[
-            "component"
-        ] in {"docs-public", "docs-internal"}:
+        if is_docs_binding(binding):
             # Native canonical-browser evidence can only be collected after the
             # provider publication. Preserve its genuine receipt while pending.
             return self.inspect(id_, observe=False)
@@ -1740,11 +1783,7 @@ class Store:
                 "Canonical deployment differs from provider receipt",
             )
         with self.transaction():
-            if (
-                r["binding"]["repository"] == "DruHustle/onesa-ai-platform"
-                and r["binding"]["component"] in {"docs-public", "docs-internal"}
-                and not receipts
-            ):
+            if is_docs_binding(r["binding"]) and not receipts:
                 existing = self.db.execute(
                     "SELECT id FROM records WHERE kind='deployment-receipt' AND parent=?",
                     (operation,),

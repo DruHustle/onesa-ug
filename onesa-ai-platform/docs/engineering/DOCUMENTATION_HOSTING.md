@@ -69,10 +69,24 @@ and the separately pinned canonical Platform source-artifact ZIPs, reuses exact
 current-Main source/CI verification before and after the read, and retains all
 existing freshness, successful-step, archive, classification and context checks.
 Canonical build evidence cannot use the legacy two-archive inspection mode or
-contain provider steps. Schema-1 legacy evidence remains unchanged. This is public
-build support only: the Docs installer, component policy, owner contexts, native
-Preview/production executor and protected Engineering publication still require
-their separately reviewed source transition and commissioned authority.
+contain provider steps. Schema-1 legacy evidence remains unchanged. This public
+build path grants no installation, owner context, publication or native authority.
+
+The separate canonical public operational profile explicitly selects schema 2 and
+`docs-public`. Installation, policy and every existing source/CI recheck bind the
+numeric repository, exact current-main commit/root tree, Platform subtree and
+fixed installed source-artifact ZIPs. Product-relative tar reconstruction remains
+separate from the root source identity. The full identity also travels through
+prepared publications, provider metadata and signed native observations. The
+existing public Docs project must remain independently pinned with no Git link.
+
+Canonical and legacy public installations retain the same global publication lock
+and operation journal scan. Uncertain older requests cannot be hidden by a new
+source/store; terminal provider inspection grants no production acceptance. The
+new policy is separate from all AI application profiles and cannot activate
+protected Engineering Docs. Legacy schema-1 records and private publication
+contracts remain unchanged. Actual controller cutover, installed custody, native
+observer commissioning and retained rollback facts require owner inspection.
 
 The public Docs owner adapter extends the existing external Oracle verifier. Its
 installation is checked against reviewed Main and fresh CI; installation, issuer
