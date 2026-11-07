@@ -7,10 +7,11 @@ import oracle_owner as owner
 
 def for_binding(binding):
     owner.require(
-        binding.get("repository") == "DruHustle/onesa-ai-platform"
-        and binding.get("component") in {"docs-public", "docs-internal"},
+        owner.is_docs_binding(binding),
         "EXACT_INDEPENDENT_DOCS_DRIVER_SCOPE_REQUIRED",
     )
+    if binding["repository"] == owner.CONSOLIDATED_REPOSITORY:
+        owner.docs_operational_source(binding)
     return importlib.import_module(
         "oracle_docs_runner"
         if binding["component"] == "docs-public"
@@ -19,6 +20,16 @@ def for_binding(binding):
 
 
 def for_component(store, component=None):
+    canonical = owner.CONSOLIDATED_REPOSITORY + ":platform:docs-public"
+    if canonical in store.policy["components"]:
+        owner.require(
+            set(store.policy["components"]) == {canonical}
+            and component in {None, "docs-public"},
+            "ONE_CANONICAL_PUBLIC_DOCS_COMPONENT_REQUIRED",
+        )
+        return for_binding(
+            {**store.policy["toolchain"]["source_binding"], "component": "docs-public"}
+        )
     if component is None:
         components = set(store.policy["components"])
         owner.require(

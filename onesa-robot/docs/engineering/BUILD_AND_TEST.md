@@ -673,3 +673,25 @@ Administrator appearance checks compare every operator-action request while allo
 the existing scheduled legacy heartbeat during accessibility scans. A scan crossing
 the normal poll interval must not mistake routine supervision for a theme-triggered
 permission or motion command.
+
+## Canonical Robot application consumer regressions
+
+`test_oracle_robot_canonical_application.py` reuses the existing canonical GitHub
+protocol fixtures and reconstructs real local Git archives. It distinguishes the
+repository root from the product subtree, requires the literal two/four profile
+sets and fixed runtime ZIPs, and rejects source-only policy as commissioning. A
+real Ed25519 synthetic ledger checks fresh current-main/source-archive rechecks,
+non-renewable contexts and refusal before provider creation after drift. A distinct
+original verifier signs the retained chain; the new reader must preserve every
+old file, refuse changed keys/source/anchor/revocations and mutation phases, and
+cannot supply the identity bridge or special repair/recovery route.
+
+The build fixture checks actual archive and sealed metadata hashes with synthetic
+Docker responses; it is not an executed Docker build. Paired Preview and provider
+checks require the complete source identity. Actual loopback HTTP tests in
+`oracle_vercel_transport_guard.test.cjs` prove wrong or missing canonical deployment
+metadata is refused before a request, and exercise the actual browser source guard
+before its anonymous-denial request. No browser, hosted deployment, simulator,
+physical hardware, private database or installed controller is qualified by those
+fixtures. Run the full release suite and existing transport/documentation checks;
+normal repository CI and real owner-controlled hosted acceptance remain required.

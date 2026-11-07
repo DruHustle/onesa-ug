@@ -1047,6 +1047,26 @@ def trusted_toolchain(plan):
     if "mode" in plan or selected != profiles.LEGACY:
         profiles.validate_mode(plan["binding"], plan.get("mode"), policy)
     tool = policy["toolchain"]
+    if profiles.is_canonical(plan.get("binding")):
+        binding = plan["binding"]
+        source = profiles.source_binding(binding)
+        installation = read(private(VERIFIER.parent / "installation.json"))
+        require(
+            policy.get("schema_version") == 2
+            and tool.get("source_binding") == source
+            and tool.get("source_commit") == binding["candidate_commit"]
+            and tool.get("source_tree") == binding["source_tree"]
+            and tool.get("source_sha256") == binding["source_sha256"]
+            and installation.get("source_binding") == source
+            and installation.get("state") == "INSTALLED_NOT_COMMISSIONED"
+            and installation.get("policy_sha256") == trust["policy_sha256"],
+            "CANONICAL_AI_SOURCE_NOT_COMMISSIONED",
+        )
+        for name, pin in installation["files"].items():
+            require(
+                sha(private(VERIFIER.parent / name)) == pin,
+                "INSTALLED_EXECUTABLE_CHANGED",
+            )
     require(
         plan["probe_image"] == tool["probe_image"],
         "CANDIDATE_CANNOT_SELECT_VERIFICATION_IMAGE",
@@ -1145,7 +1165,8 @@ def image_security(scan, identity):
 
 def validate_plan(binding):
     require(
-        binding.get("repository") == "DruHustle/onesa-ai-platform"
+        binding.get("repository")
+        in {profiles.REPOSITORY, profiles.CANONICAL_REPOSITORY}
         and profiles.kind(binding) == "api"
         and binding.get("target_environment") == "production",
         "COMPONENT_SCOPE",
@@ -1200,6 +1221,11 @@ def validate_plan(binding):
         }
         if plan["mode"] == "identity":
             allowed = set(IDENTITY_KEYS)
+        generation_change = generation_transition(plan, current, values, env)
+        if generation_change:
+            # This opt-in cannot also activate a feature, change a credential,
+            # migrate embeddings or select another model/provider.
+            allowed = {"ONESA_MODEL_NAME"}
         if env == "staging":
             allowed.add("ONESA_PUBLIC_ORIGIN")
         require(
@@ -1234,7 +1260,11 @@ def validate_plan(binding):
                 and all(
                     values.get(k) == current.get(k)
                     for k in allowed
-                    if k not in {"ONESA_CYBERSECURITY_ENABLED", "ONESA_PUBLIC_ORIGIN"}
+                    if k
+                    not in (
+                        {"ONESA_CYBERSECURITY_ENABLED", "ONESA_PUBLIC_ORIGIN"}
+                        | ({"ONESA_MODEL_NAME"} if generation_change else set())
+                    )
                 ),
                 "CYBERSECURITY_INDEPENDENT_ACTIVATION_PROFILE",
             )
@@ -1330,7 +1360,131 @@ def validate_plan(binding):
     return folder, plan
 
 
-def verify_invocation(binding, context, phase, plan, *, dependency=False):
+GENERATION_TRANSITION = "cloudflare-qwen3-to-gemma4"
+PREVIOUS_GENERATION = "@cf/qwen/qwen3-30b-a3b-fp8"
+CURRENT_GENERATION = "@cf/google/gemma-4-26b-a4b-it"
+PREVIOUS_GENERATION_RETIREMENT = dt.datetime(2026, 11, 20, tzinfo=dt.timezone.utc)
+
+
+def generation_transition(plan, current, prepared, environment):
+    """A fixed source/config pair, never a general model or feature allowance."""
+    transition = plan.get("generation_transition")
+    if transition is None:
+        return False
+    binding = plan["binding"]
+    require(
+        transition == GENERATION_TRANSITION
+        and profiles.is_canonical(binding)
+        and profiles.kind(binding) == "api"
+        and plan["mode"] in {"foundation", "twins", "cybersecurity"}
+        and environment in ENV,
+        "FIXED_CANONICAL_GENERATION_TRANSITION_REQUIRED",
+    )
+    require(
+        current.get("ONESA_MODEL_BACKEND")
+        == prepared.get("ONESA_MODEL_BACKEND")
+        == "cloudflare"
+        and current.get("ONESA_MODEL_NAME") in {PREVIOUS_GENERATION, CURRENT_GENERATION}
+        and prepared.get("ONESA_MODEL_NAME") == CURRENT_GENERATION,
+        "GENERATION_SOURCE_CONFIGURATION_PAIR_REQUIRED",
+    )
+    retained = plan["rollback"]["binding"]
+    require(
+        profiles.same_product(binding, retained)
+        and profiles.kind(retained) == "api"
+        and retained["target_environment"] == "production",
+        "GENERATION_ACCEPTED_ROLLBACK_SOURCE_REQUIRED",
+    )
+    original = private(candidate_environment(retained, environment))
+    require(
+        sha(original) == retained["configuration_sha256"][environment],
+        "GENERATION_ROLLBACK_CONFIGURATION_CHANGED",
+    )
+    rollback = runtime_values(original)
+    excluded = {"ONESA_MODEL_NAME"} | (
+        {"ONESA_PUBLIC_ORIGIN"} if environment == "staging" else set()
+    )
+    require(
+        {k: v for k, v in current.items() if k not in excluded}
+        == {k: v for k, v in prepared.items() if k not in excluded}
+        == {k: v for k, v in rollback.items() if k not in excluded}
+        and rollback.get("ONESA_MODEL_NAME")
+        in {PREVIOUS_GENERATION, CURRENT_GENERATION},
+        "GENERATION_ONLY_CONFIGURATION_AND_ROLLBACK_REQUIRED",
+    )
+    if rollback["ONESA_MODEL_NAME"] == PREVIOUS_GENERATION:
+        # Existing owner records have at most 24 hours of authority. Do not
+        # qualify a Qwen rollback whose remaining catalog lifetime is shorter.
+        # This deadline is not proof of current provider availability.
+        require(
+            now() + dt.timedelta(hours=24) <= PREVIOUS_GENERATION_RETIREMENT,
+            "SUPPORTED_ROLLBACK_REQUIRED_BEFORE_MODEL_RETIREMENT",
+        )
+    return True
+
+
+def verify_retained_dependency(consumer_binding, retained, plan):
+    """Read an original accepted chain; never invoke its controller or renew it."""
+    binding = retained["binding"]
+    require(
+        profiles.same_product(consumer_binding, binding)
+        and binding["target_environment"] == "production",
+        "RETAINED_AI_PRODUCT_SOURCE_REQUIRED",
+    )
+    verifier_path = retained.get("verifier_path")
+    if profiles.is_canonical(consumer_binding):
+        # The original root-owned file is pinned by its original commissioned
+        # anchor. A new source verifier must not impersonate that installation.
+        require(isinstance(verifier_path, str), "ORIGINAL_RETAINED_VERIFIER_REQUIRED")
+    else:
+        require(verifier_path is None, "LEGACY_INVOCATION_PIN_UNCHANGED")
+    return verify_invocation(
+        binding,
+        {"operation_id": retained["operation_id"], "read_only": True},
+        "production",
+        {
+            "verifier_store": (
+                retained["verifier_store"]
+                if "verifier_store" in retained
+                else plan["verifier_store"]
+            )
+        },
+        dependency=True,
+        **(
+            {"retained_verifier": verifier_path, "consumer_binding": consumer_binding}
+            if verifier_path is not None
+            else {}
+        ),
+    )
+
+
+def verify_invocation(
+    binding,
+    context,
+    phase,
+    plan,
+    *,
+    dependency=False,
+    retained_verifier=None,
+    consumer_binding=None,
+):
+    verifier = VERIFIER
+    if retained_verifier is not None or consumer_binding is not None:
+        require(
+            dependency
+            and phase == "production"
+            and profiles.is_canonical(consumer_binding)
+            and profiles.same_product(consumer_binding, binding)
+            and binding["target_environment"] == "production"
+            and context.get("read_only") is True
+            and isinstance(retained_verifier, str),
+            "RETAINED_VERIFIER_READ_ONLY_DEPENDENCY_REQUIRED",
+        )
+        verifier = private(Path(retained_verifier))
+        require(
+            0 < verifier.stat().st_size <= 2 * 1024 * 1024,
+            "RETAINED_VERIFIER_BYTE_BOUND",
+        )
     if phase == "staging":
         require(set(context) == {"context_id"}, "STAGING_SIGNED_CONTEXT_ONLY")
     elif phase == "deploy":
@@ -1373,7 +1527,7 @@ def verify_invocation(binding, context, phase, plan, *, dependency=False):
     require(
         sha(store / "public.pem") == trust["key_id"]
         and sha(store / "policy.json") == trust["policy_sha256"]
-        and sha(VERIFIER) == trust["verifier_sha256"],
+        and sha(verifier) == trust["verifier_sha256"],
         "ISSUER_CUSTODY_PIN_CHANGED",
     )
     require(sha(OPENSSL) == trust["openssl_sha256"], "SIGNATURE_TOOL_CHANGED")
@@ -1406,7 +1560,7 @@ def verify_invocation(binding, context, phase, plan, *, dependency=False):
             "FOREIGN_RECORD_SIGNER",
         )
         with tempfile.TemporaryDirectory(
-            prefix=".runner-signature-", dir=store
+            prefix=".runner-signature-", dir=None if dependency else store
         ) as folder:
             p = Path(folder)
             (p / "record").write_bytes(canonical(r))
@@ -1579,8 +1733,13 @@ def source_inventory(archive_path, binding):
             b"tree " + str(len(value)).encode() + b"\0" + value
         ).digest()
 
+    expected_tree = (
+        profiles.source_binding(binding)["product_source_tree"]
+        if profiles.is_canonical(binding)
+        else binding["source_tree"]
+    )
     require(
-        git_tree(tree).hex() == binding["source_tree"],
+        git_tree(tree).hex() == expected_tree,
         "ARCHIVE_DIFFERS_FROM_QUALIFIED_GIT_TREE",
     )
     require(
@@ -1792,7 +1951,7 @@ def accepted_rollback_proof(plan):
     old = plan["rollback"]
     binding = old["binding"]
     require(
-        binding["repository"] == plan["binding"]["repository"] == profiles.REPOSITORY
+        profiles.same_product(plan["binding"], binding)
         and binding["target_environment"] == "production"
         and profiles.kind(binding) == "api"
         and binding["artifact_digest"] == old["image"]
@@ -1811,13 +1970,7 @@ def accepted_rollback_proof(plan):
         ),
         "ROLLBACK_SOURCE_BINDING",
     )
-    chain = verify_invocation(
-        binding,
-        {"operation_id": old["operation_id"], "read_only": True},
-        "production",
-        {**plan, "verifier_store": old.get("verifier_store", plan["verifier_store"])},
-        dependency=True,
-    )
+    chain = verify_retained_dependency(plan["binding"], old, plan)
     context = next(record["id"] for record in chain if record["kind"] == "context")
     if plan["mode"] == "identity":
         output = (
@@ -2042,6 +2195,11 @@ def operational_observations(binding, plan):
             and old["retain_additive_schema_and_files"] is True,
             "CURRENT_SCHEMA_ROLLBACK_ARTIFACT_MISSING",
         )
+        generation_rollback = (
+            accepted_rollback_proof(plan)
+            if plan.get("generation_transition") is not None
+            else None
+        )
         return {
             "checks": {k: "PASS" for k in CHECKS["operations"]},
             "mode": "foundation",
@@ -2050,6 +2208,11 @@ def operational_observations(binding, plan):
             "backup_readback": observed,
             "forward_rollback_receipt_sha256": sha(
                 output / "forward-check-receipt.json"
+            ),
+            **(
+                {"accepted_generation_rollback_sha256": generation_rollback}
+                if generation_rollback is not None
+                else {}
             ),
             "metrics_checked_at": metrics["checked_at"],
             "backup_verified_at": backup["verified_at"],
@@ -3252,7 +3415,8 @@ def record_runner_failure(phase, request, error):
         require(phase in {*CHECKS, "preflight"}, "PHASE_SCOPE")
         binding = request["binding"]
         require(
-            binding["repository"] == "DruHustle/onesa-ai-platform"
+            binding["repository"]
+            in {profiles.REPOSITORY, profiles.CANONICAL_REPOSITORY}
             and profiles.kind(binding) == "api"
             and re.fullmatch(r"[a-f0-9]{40}", binding["candidate_commit"]),
             "FAILURE_SOURCE_SCOPE",
@@ -3293,6 +3457,31 @@ def record_runner_failure(phase, request, error):
         pass
 
 
+def ci_reference(binding, ci):
+    workflow = (
+        ".github/workflows/verify.yml" if profiles.is_canonical(binding) else "ci.yml"
+    )
+    candidates = [
+        row
+        for row in ci
+        if row.get("workflow") == workflow
+        and type(row.get("run_id")) is int
+        and row["run_id"] > 0
+    ]
+    require(len(candidates) == 1, "SIGNED_GENUINE_CI_REFERENCE_MISSING")
+    if profiles.is_canonical(binding):
+        row = candidates[0]
+        require(
+            row.get("source") == profiles.source_binding(binding)
+            and row.get("verification_only") is True
+            and row.get("release_authorized") is False
+            and type(row.get("run_attempt")) is int
+            and row["run_attempt"] == 1,
+            "SIGNED_CANONICAL_SOURCE_REFERENCE_MISMATCH",
+        )
+    return candidates[0]["run_id"]
+
+
 def run_request(phase, request):
     binding = request["binding"]
     context = request["context"]
@@ -3310,16 +3499,8 @@ def run_request(phase, request):
         ),
         None,
     )
-    require(
-        ci
-        and any(
-            row.get("workflow") == "ci.yml"
-            and type(row.get("run_id")) is int
-            and row["run_id"] > 0
-            for row in ci
-        ),
-        "SIGNED_GENUINE_CI_REFERENCE_MISSING",
-    )
+    require(ci, "SIGNED_GENUINE_CI_REFERENCE_MISSING")
+    observed_ci_run_id = ci_reference(binding, ci)
     plan["qualification_context_id"] = next(
         record["id"] for record in signed_chain if record["kind"] == "context"
     )
@@ -3331,9 +3512,7 @@ def run_request(phase, request):
             binding, plan["qualification_context_id"]
         )
     )
-    plan["observed_ci_run_id"] = next(
-        row["run_id"] for row in ci if row.get("workflow") == "ci.yml"
-    )
+    plan["observed_ci_run_id"] = observed_ci_run_id
     migration_prerequisites(plan)
     if plan["mode"] == "identity" and phase in {"staging", "deploy"}:
         renew_identity_credentials(binding, plan, context, phase)
