@@ -132,13 +132,45 @@ deployment-provider mutation. The existing custody pins and separate owner commi
 still apply. Changing source or policy files in an older installation cannot
 activate it.
 
-Operational consumers retain their original repository binding and receipt
-schemas. Their immutable installers, component builders, provider mappings,
-qualification runners and recovery readers still require a separately reviewed
-transition to the consolidated root/product identity. Existing accepted receipts
-remain unchanged and cannot be relabelled as consolidated approvals. Source
-verification alone does not establish hosted staging acceptance, deployment,
-recovery readiness, hardware qualification or completed repository retirement.
+The Portal frontend has a separate, explicit schema-2 operational source path.
+Its immutable installer and component policy bind canonical repository ID,
+exact current-main commit/root tree, Portal subtree and the three pinned source
+artifact ZIPs. Every existing owner qualification boundary rereads those private
+installed bytes and reuses the source verifier above. Its unsigned result remains
+verification-only; signed owner contexts, hosted staging, current operations,
+authorization, custody and rollback are still separate gates. The product-relative
+build archive retains the root identity and the fixed canonical provider root.
+
+Legacy schema-1 installations and accepted records remain unchanged. Canonical
+Portal frontend records have a distinct product namespace while sharing the
+existing frontend lifecycle resource, so an old unresolved hold still blocks.
+This source path does not migrate API/worker/scanner/identity controllers, other
+products, historical Git-triggered provider workflows or recovery readers. Those
+consumers retain their original bindings pending their own reviewed transitions.
+Actual controller/provider cutover and retained operations must be inspected and
+new custody separately commissioned; source support does not retire an old
+controller or repository. Source verification alone does not establish hosted
+acceptance, deployment, recovery readiness or hardware qualification.
+
+The generated `onesa-public-docs-build.yml` adds only a credential-free public
+Docs build on owner-dispatched canonical Main. It preserves classified build and
+local acceptance commands and the exact three public artifacts. Its schema-2
+producer and external reader bind the root identity and Platform subtree, reuse
+canonical source/CI verification and retain unsigned, nonauthorizing results.
+Legacy schema-1 evidence remains supported separately. This build workflow grants
+no installation, owner, provider or native hosted authority.
+
+Public Docs has a separate opt-in schema-2 operational consumer. Its installer,
+component policy, build reader, provider metadata and native observer bind the
+same numeric repository, exact current-main root identity and Platform subtree.
+It accepts only `docs-public`; AI application profiles and protected Docs cannot
+borrow that policy. Existing source/CI rechecks reread the fixed installed source
+ZIPs. Legacy records and the shared publication journal and lock remain visible,
+so an old uncertain outcome blocks a new publication across installations.
+Provider inspection remains read-only outcome evidence, not acceptance. New
+issuer and observer commissioning, real Preview/native checks, current rollback
+readback and owner authorization remain required. This source support claims no
+controller cutover, provider change, protected-source transition or deployment.
 
 ## Publication boundaries
 

@@ -698,6 +698,27 @@ source. Mode changes, path aliases, expanded attempt limits, foreign repositorie
 changed CI, revoked dependencies and context reuse are rejected. Temporary test
 keys and a disposable signed ledger are not external release authority.
 
+`test_oracle_canonical_application.py` adds the explicit canonical application
+installation boundary: exact root/product source identity, the two fixed archived
+CI manifests, literal profile sets, installed-archive rechecks, one-use signed
+contexts, original retained verifier/key/chain binding, and refusal of borrowed
+source-only authority. It also checks product-relative build metadata against the
+canonical provider root and the fixed generation-only configuration transition.
+The signed-chain fixtures use real Ed25519 signatures and disposable ledgers;
+their synthetic commissioning registry is not an installed owner trust anchor.
+Root custody, real Docker builds, actual provider/model availability and hosted
+application/recovery acceptance are separate mandatory boundaries.
+
+Run that module with the existing Oracle release suite, including
+`test_oracle_context.py`, `test_oracle_ai_frontend.py`,
+`test_oracle_retained_frontend.py` and `test_oracle_profile_ledger.py`.
+The Python and Node context readers must retain the same private-fixture,
+source/origin and nonauthorizing receipt rules. The existing real loopback
+`oracle_vercel_transport_guard.test.cjs` also verifies canonical source metadata
+before a create, refuses uninspected raw transports, and preserves the single
+create plus bounded definitive missing-file continuation contract. Credential-free
+local fixtures and generated CI artifacts still cannot authorize runtime work.
+
 Qualification derives required feature journeys from the actual runtime flags.
 If both optional features are enabled, both journeys must pass across the same
 controlled replacement; a missing or skipped check fails qualification. A failure

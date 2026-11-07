@@ -908,7 +908,15 @@ class GitHub:
             "release_authorized": False,
         }
 
-    def qualify(self, binding):
+    def qualify(self, binding, archives=None):
+        if binding.get("repository") == CONSOLIDATED_REPOSITORY:
+            source = operational_source(binding)
+            # This is still unsigned source evidence. Only the separately
+            # commissioned Store can issue an application context afterward.
+            return [self.verify_source(source, archives)]
+        require(
+            archives is None, "Legacy qualification does not accept source archives"
+        )
         repo, sha = binding["repository"], binding["candidate_commit"]
         prefix = "repos/" + repo + "/"
         require(
@@ -1054,7 +1062,131 @@ class GitHub:
         return references
 
 
+AI_SOURCE_FIELDS = {
+    "schema_version",
+    "repository",
+    "repository_id",
+    "product",
+    "source_path",
+    "candidate_commit",
+    "source_tree",
+    "product_source_tree",
+    "branch",
+}
+AI_NATIVE_COMPONENTS = {
+    "api",
+    "frontend",
+    "twins-api",
+    "twins-frontend",
+    "cybersecurity-api",
+    "cybersecurity-frontend",
+}
+AI_COMPONENTS = AI_NATIVE_COMPONENTS | {"identity-api", "identity-frontend"}
+
+
+def ai_operational_source(value):
+    require(
+        isinstance(value, dict) and AI_SOURCE_FIELDS <= set(value),
+        "Complete canonical AI source identity required",
+    )
+    source = {key: value[key] for key in AI_SOURCE_FIELDS}
+    require(
+        type(source["schema_version"]) is int
+        and source["schema_version"] == 2
+        and source["repository"] == CONSOLIDATED_REPOSITORY
+        and type(source["repository_id"]) is int
+        and source["repository_id"] == CONSOLIDATED_REPOSITORY_ID
+        and source["product"] == "platform"
+        and source["source_path"] == CONSOLIDATED_PRODUCTS["platform"]
+        and source["branch"] == "main"
+        and value.get("component", "api") in AI_COMPONENTS
+        and all(
+            isinstance(source[key], str) and re.fullmatch(r"[a-f0-9]{40}", source[key])
+            for key in ("candidate_commit", "source_tree", "product_source_tree")
+        ),
+        "Canonical exact-main AI application scope refused",
+    )
+    return source
+
+
+def docs_operational_source(value):
+    """A separate public Docs scope; never expand the AI application profile set."""
+    require(
+        isinstance(value, dict)
+        and value.get("component") == "docs-public"
+        and AI_SOURCE_FIELDS <= set(value),
+        "Canonical public Docs component source required",
+    )
+    return ai_operational_source({key: value[key] for key in AI_SOURCE_FIELDS})
+
+
+def operational_source(value):
+    return (
+        docs_operational_source(value)
+        if value.get("component") == "docs-public"
+        else ai_operational_source(value)
+    )
+
+
+def is_docs_binding(value):
+    return (
+        value.get("repository") == "DruHustle/onesa-ai-platform"
+        and value.get("component") in {"docs-public", "docs-internal"}
+    ) or (
+        value.get("repository") == CONSOLIDATED_REPOSITORY
+        and value.get("component") == "docs-public"
+    )
+
+
+def component_scope(binding):
+    if binding.get("repository") == CONSOLIDATED_REPOSITORY:
+        operational_source(binding)
+        return CONSOLIDATED_REPOSITORY + ":platform:" + binding["component"]
+    return binding["repository"] + ":" + binding["component"]
+
+
+def ai_archive_pins(tool):
+    pins = tool.get("source_archives")
+    require(
+        isinstance(pins, dict)
+        and set(pins) == set(CONSOLIDATED_ARTIFACTS["platform"])
+        and all(isinstance(pin, str) and HEX.fullmatch(pin) for pin in pins.values()),
+        "All exact AI source artifact archives must be pinned",
+    )
+    return pins
+
+
+def ai_source_archives(directory, pins, *, uid=0):
+    """Read fixed installed public evidence; no fetch, extraction or authority."""
+    directory = Path(directory)
+    private(directory, directory=True, uid=uid)
+    require(
+        set(pins) == set(CONSOLIDATED_ARTIFACTS["platform"]),
+        "Exact AI source archive names required",
+    )
+    archives = {}
+    for name, pin in pins.items():
+        path = directory / (name + ".zip")
+        private(path, uid=uid)
+        require(
+            0 < path.stat().st_size <= SOURCE_ARCHIVE_LIMIT,
+            "Installed source archive exceeds bound",
+        )
+        data = path.read_bytes()
+        require(
+            isinstance(pin, str)
+            and HEX.fullmatch(pin)
+            and hashlib.sha256(data).hexdigest() == pin,
+            "Installed source archive changed",
+        )
+        archives[name] = base64.b64encode(data).decode()
+    return archives
+
+
 def binding_valid(value, policy):
+    consolidated = (
+        isinstance(value, dict) and value.get("repository") == CONSOLIDATED_REPOSITORY
+    )
     fields = {
         "repository",
         "component",
@@ -1067,11 +1199,12 @@ def binding_valid(value, policy):
         "target_environment",
     }
     require(
-        isinstance(value, dict) and set(value) == fields,
+        isinstance(value, dict)
+        and set(value) == fields | (AI_SOURCE_FIELDS if consolidated else set()),
         "Complete exact component binding required",
     )
     require(
-        value["repository"] in {OWNER + "/" + r for r in POLICIES}
+        (consolidated or value["repository"] in {OWNER + "/" + r for r in POLICIES})
         and value["target_environment"] == "production",
         "Repository/target scope refused",
     )
@@ -1093,7 +1226,64 @@ def binding_valid(value, policy):
         and all(HEX.fullmatch(x) for x in value["configuration_sha256"].values()),
         "Separate configuration bindings required",
     )
-    profile = policy["components"].get(value["repository"] + ":" + value["component"])
+    if consolidated:
+        source = operational_source(value)
+        tool = policy.get("toolchain", {})
+        require(
+            type(policy.get("schema_version")) is int
+            and policy["schema_version"] == 2
+            and tool.get("source_binding") == source
+            and tool.get("source_commit") == value["candidate_commit"]
+            and tool.get("source_tree") == value["source_tree"]
+            and tool.get("source_sha256") == value["source_sha256"],
+            "Canonical AI component source has not been commissioned",
+        )
+        ai_archive_pins(tool)
+        selected = next(
+            (
+                names
+                for names in (
+                    ({"docs-public"},)
+                    if value["component"] == "docs-public"
+                    else ({"api", "frontend"}, AI_NATIVE_COMPONENTS, AI_COMPONENTS)
+                )
+                if set(policy.get("components", {}))
+                == {CONSOLIDATED_REPOSITORY + ":platform:" + name for name in names}
+            ),
+            None,
+        )
+        require(selected is not None, "Canonical AI literal profile set required")
+        if selected == {"docs-public"}:
+            item = policy["components"][component_scope(value)]
+            require(
+                set(item)
+                == {
+                    "qualification_attempt_limit",
+                    "runners",
+                    "required_checks",
+                    "publication_mechanism",
+                }
+                and item["publication_mechanism"]
+                == "existing-isolated-owner-vercel-cli",
+                "Separate canonical public Docs profile required",
+            )
+        for name in selected:
+            item = policy["components"][CONSOLIDATED_REPOSITORY + ":platform:" + name]
+            require(
+                type(item.get("qualification_attempt_limit")) is int
+                and item["qualification_attempt_limit"] == 1,
+                "One canonical context per profile and source required",
+            )
+            require(
+                (
+                    "release_mode" not in item
+                    if selected in ({"api", "frontend"}, {"docs-public"})
+                    else item.get("release_mode")
+                    == (name.rsplit("-", 1)[0] if "-" in name else "foundation")
+                ),
+                "Canonical AI fixed profile mode required",
+            )
+    profile = policy["components"].get(component_scope(value))
     require(
         profile and set(profile["runners"]) == set(PHASES),
         "Component is not commissioned",
@@ -1139,6 +1329,7 @@ def commissioned(registry, root, trust):
 class Store:
     def __init__(self, root, github, *, uid=0, clock=timestamp):
         self.root, self.github, self.clock = Path(root), github, clock
+        self.uid = uid
         private(self.root, directory=True, uid=uid)
         for name in [
             "trust.json",
@@ -1178,6 +1369,17 @@ class Store:
             "verifier_sha256": self.trust["verifier_sha256"],
             "policy_sha256": self.trust["policy_sha256"],
         }
+
+    def qualify_source(self, binding):
+        if binding.get("repository") != CONSOLIDATED_REPOSITORY:
+            return self.github.qualify(binding)
+        binding_valid(binding, self.policy)
+        archives = ai_source_archives(
+            Path(__file__).parent / "source-artifacts",
+            ai_archive_pins(self.policy["toolchain"]),
+            uid=self.uid,
+        )
+        return self.github.qualify(binding, archives)
 
     @contextmanager
     def transaction(self):
@@ -1234,7 +1436,7 @@ class Store:
             (
                 record["id"],
                 kind,
-                binding["repository"] + ":" + binding["component"],
+                component_scope(binding),
                 canonical(envelope).decode(),
                 parent,
                 record["issued_at"],
@@ -1269,7 +1471,7 @@ class Store:
             and r["kind"] == row[3]
             and r["parent"] == row[2]
             and r["issued_at"] == row[5]
-            and r["binding"]["repository"] + ":" + r["binding"]["component"] == row[4],
+            and component_scope(r["binding"]) == row[4],
             "Signed record and custody index differ",
         )
         issued, expiry = (
@@ -1326,9 +1528,7 @@ class Store:
             "Unreviewed runner refused",
         )
         request = {"binding": binding, "context": context}
-        if binding["repository"] == "DruHustle/onesa-ai-platform" and binding[
-            "component"
-        ] in {"docs-public", "docs-internal"}:
+        if is_docs_binding(binding):
             # Only an explicitly commissioned Docs runner needs to revalidate its
             # genuine build artifacts. This travels in private stdin, never the
             # browser, arguments, environment, Actions or returned observations.
@@ -1384,11 +1584,11 @@ class Store:
 
     def issue_context(self, binding):
         profile = binding_valid(binding, self.policy)
-        ci = self.github.qualify(binding)
+        ci = self.qualify_source(binding)
         with self.transaction():
             previous = self.db.execute(
                 "SELECT envelope FROM records WHERE kind='context' AND scope=?",
-                (binding["repository"] + ":" + binding["component"],),
+                (component_scope(binding),),
             ).fetchall()
             count = sum(
                 json.loads(row[0])["record"]["binding"]["candidate_commit"]
@@ -1427,7 +1627,7 @@ class Store:
                 changed == 1, "Context already reserved/consumed; no automatic retry"
             )
         # Reservation commits before the first hosted request, including failures.
-        ci = self.github.qualify(binding)
+        ci = self.qualify_source(binding)
         stage = self.runner("staging", binding, {"context_id": context})
         operations = self.runner("operations", binding, {"context_id": context})
         with self.transaction():
@@ -1454,7 +1654,7 @@ class Store:
                 {"decision": "PENDING"},
                 parent=qualification,
             )
-        ci = self.github.qualify(binding)
+        ci = self.qualify_source(binding)
         operations = self.runner(
             "operations",
             binding,
@@ -1489,13 +1689,13 @@ class Store:
                 "state": existing[1],
                 "action": "INSPECT_ONLY_NO_DUPLICATE_REQUEST",
             }
-        self.github.qualify(binding)
+        self.qualify_source(binding)
         self.runner(
             "operations",
             binding,
             {"authorization_id": authorization, "before_deployment": True},
         )
-        scope = binding["repository"] + ":" + binding["component"]
+        scope = component_scope(binding)
         with self.transaction():
             self.get(authorization, "authorization", binding)
             uncertain = self.db.execute(
@@ -1545,9 +1745,7 @@ class Store:
             self.db.execute(
                 "UPDATE deployments SET state='deployed-unverified' WHERE id=?", (id_,)
             )
-        if binding["repository"] == "DruHustle/onesa-ai-platform" and binding[
-            "component"
-        ] in {"docs-public", "docs-internal"}:
+        if is_docs_binding(binding):
             # Native canonical-browser evidence can only be collected after the
             # provider publication. Preserve its genuine receipt while pending.
             return self.inspect(id_, observe=False)
@@ -1585,11 +1783,7 @@ class Store:
                 "Canonical deployment differs from provider receipt",
             )
         with self.transaction():
-            if (
-                r["binding"]["repository"] == "DruHustle/onesa-ai-platform"
-                and r["binding"]["component"] in {"docs-public", "docs-internal"}
-                and not receipts
-            ):
+            if is_docs_binding(r["binding"]) and not receipts:
                 existing = self.db.execute(
                     "SELECT id FROM records WHERE kind='deployment-receipt' AND parent=?",
                     (operation,),

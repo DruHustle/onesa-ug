@@ -93,23 +93,32 @@ def validate(bundle, manifest_pin, github, *, uid=0):
     verifier.private(bundle, directory=True, uid=uid)
     raw = checked_file(bundle / "manifest.json", manifest_pin, uid)
     m = json.loads(raw)
+    consolidated = m.get("schema_version") == 2
     require(
         set(m)
-        == {
-            "schema_version",
-            "repository",
-            "candidate_commit",
-            "source_tree",
-            "files",
-            "policy_sha256",
-            "tool_source_sha256",
-        },
+        == (
+            {
+                "schema_version",
+                "repository",
+                "candidate_commit",
+                "source_tree",
+                "files",
+                "policy_sha256",
+                "tool_source_sha256",
+            }
+            | (verifier.AI_SOURCE_FIELDS if consolidated else set())
+        ),
         "Installation manifest schema",
     )
     require(
-        m["schema_version"] == 1 and m["repository"] == "DruHustle/onesa-ai-platform",
+        consolidated
+        or (
+            m["schema_version"] == 1
+            and m["repository"] == "DruHustle/onesa-ai-platform"
+        ),
         "Installation repository refused",
     )
+    source_binding = verifier.ai_operational_source(m) if consolidated else None
     is_private_docs = set(m["files"]) == set(PRIVATE_DOCS_ALLOWED)
     is_docs = is_private_docs or set(m["files"]) == set(DOCS_ALLOWED)
     allowed = (
@@ -123,19 +132,62 @@ def validate(bundle, manifest_pin, github, *, uid=0):
         set(m["files"]) == set(allowed),
         "Only reviewed verifier and component runner may be installed",
     )
+    require(
+        not consolidated or not is_private_docs,
+        "Canonical protected Docs installation is not qualified",
+    )
+    policy_bytes = checked_file(bundle / "policy.json", m["policy_sha256"], uid)
+    policy = json.loads(policy_bytes)
+    require(
+        set(policy) == {"schema_version", "components", "toolchain"}
+        and type(policy["schema_version"]) is int
+        and policy["schema_version"] == (2 if consolidated else 1),
+        "Installation policy schema",
+    )
+    archives = None
+    if consolidated:
+        require(
+            policy["toolchain"].get("source_binding") == source_binding,
+            "Canonical installation policy source differs",
+        )
+        archives = verifier.ai_source_archives(
+            bundle / "source-artifacts",
+            verifier.ai_archive_pins(policy["toolchain"]),
+            uid=uid,
+        )
     github.owner()
     # Actual main, owner merge, first-attempt jobs, hygiene and artifacts are fetched
     # by the existing verifier. No supplied PASS receipt is accepted here.
-    ci = github.qualify(
-        {k: m[k] for k in ["repository", "candidate_commit", "source_tree"]}
+    ci = (
+        github.qualify(source_binding, archives)
+        if consolidated
+        else github.qualify(
+            {k: m[k] for k in ["repository", "candidate_commit", "source_tree"]}
+        )
     )
     require(ci, "Current exact-main checks missing")
     source = github.api(
-        "repos/" + m["repository"] + "/git/trees/" + m["source_tree"] + "?recursive=1"
+        "repos/"
+        + m["repository"]
+        + "/git/trees/"
+        + (m["product_source_tree"] if consolidated else m["source_tree"])
+        + "?recursive=1"
     )
     require(not source.get("truncated"), "Source tree incomplete")
+    if consolidated:
+        require(
+            source.get("sha") == m["product_source_tree"],
+            "Canonical installation subtree changed",
+        )
     blobs = {r["path"]: r for r in source["tree"] if r["type"] == "blob"}
-    payloads = {}
+    payloads = (
+        {
+            "source-artifacts/" + name + ".zip": base64.b64decode(data, validate=True)
+            for name, data in archives.items()
+        }
+        if consolidated
+        else {}
+    )
     for local, upstream in allowed.items():
         relative(local)
         checksum = m["files"][local]
@@ -156,13 +208,6 @@ def validate(bundle, manifest_pin, github, *, uid=0):
             "Installation executable differs from current main",
         )
         payloads[local] = data
-    policy_bytes = checked_file(bundle / "policy.json", m["policy_sha256"], uid)
-    policy = json.loads(policy_bytes)
-    require(
-        set(policy) == {"schema_version", "components", "toolchain"}
-        and policy["schema_version"] == 1,
-        "Installation policy schema",
-    )
     legacy = {"api", "frontend"}
     scoped = legacy | {
         "twins-api",
@@ -174,7 +219,7 @@ def validate(bundle, manifest_pin, github, *, uid=0):
     require(
         set(policy["components"])
         in [
-            {m["repository"] + ":" + c for c in names}
+            {verifier.component_scope({**m, "component": c}) for c in names}
             for names in (
                 [{"docs-internal"}]
                 if is_private_docs
@@ -207,12 +252,19 @@ def validate(bundle, manifest_pin, github, *, uid=0):
         else module.profiles.policy_components(policy)
     )
     _app, files = module.source_inventory(
-        bundle / "tool-source.tar", {"source_tree": m["source_tree"]}
+        bundle / "tool-source.tar", source_binding or {"source_tree": m["source_tree"]}
     )
     tool = policy["toolchain"]
     if is_docs:
         target = INSTALL_PARENT / (
-            ("ai-docs-internal-" if is_private_docs else "ai-docs-") + m["source_tree"]
+            (
+                "ai-docs-internal-"
+                if is_private_docs
+                else "ai-docs-canonical-"
+                if consolidated
+                else "ai-docs-"
+            )
+            + m["source_tree"]
         )
         if is_private_docs:
             validate_private_docs_policy(bundle, m, policy, files, target)
@@ -223,17 +275,20 @@ def validate(bundle, manifest_pin, github, *, uid=0):
         return m, target, payloads, ci
     require(
         set(tool)
-        == {
-            "source_commit",
-            "source_tree",
-            "source_sha256",
-            "probe_image",
-            "cli_image",
-            "builder_image",
-            "builder_sha256",
-            "transport_guard_sha256",
-            "probe_files",
-        }
+        == (
+            {
+                "source_commit",
+                "source_tree",
+                "source_sha256",
+                "probe_image",
+                "cli_image",
+                "builder_image",
+                "builder_sha256",
+                "transport_guard_sha256",
+                "probe_files",
+            }
+            | ({"source_binding", "source_archives"} if consolidated else set())
+        )
         and tool["source_commit"] == m["candidate_commit"]
         and tool["source_tree"] == m["source_tree"]
         and tool["source_sha256"] == m["tool_source_sha256"],
@@ -253,25 +308,31 @@ def validate(bundle, manifest_pin, github, *, uid=0):
         ),
         "Literal immutable tool image pins required",
     )
-    target = INSTALL_PARENT / ("ai-" + m["source_tree"])
+    target = INSTALL_PARENT / (
+        ("ai-canonical-" if consolidated else "ai-") + m["source_tree"]
+    )
     for component in sorted(components):
         script = (
             "oracle_ai_runner.py"
             if module.profiles.kind({"component": component}) == "api"
             else "oracle_ai_frontend.py"
         )
-        profile = policy["components"][m["repository"] + ":" + component]
+        profile = policy["components"][
+            verifier.component_scope({**m, "component": component})
+        ]
         probe = {
             "repository": m["repository"],
             "component": component,
             "candidate_commit": m["candidate_commit"],
             "source_tree": m["source_tree"],
-            "source_sha256": "0" * 64,
+            "source_sha256": m["tool_source_sha256"] if consolidated else "0" * 64,
             "build_sha256": "0" * 64,
             "artifact_digest": "sha256:" + "0" * 64,
             "configuration_sha256": {"staging": "0" * 64, "production": "0" * 64},
             "target_environment": "production",
         }
+        if consolidated:
+            probe.update(source_binding)
         verifier.binding_valid(probe, policy)
         require(
             profile["qualification_attempt_limit"] == 1,
@@ -291,21 +352,25 @@ def validate(bundle, manifest_pin, github, *, uid=0):
 def validate_docs_policy(bundle, manifest, policy, files, target):
     """Docs extends this installer; it creates no separate trust or release store."""
     tool = policy["toolchain"]
+    consolidated = manifest["repository"] == verifier.CONSOLIDATED_REPOSITORY
     require(
         set(tool)
-        == {
-            "source_commit",
-            "source_tree",
-            "source_sha256",
-            "cli_image",
-            "cli_image_security_path",
-            "transport_guard_sha256",
-            "docs_project_id",
-            "vercel_team_id",
-            "native_source_pins",
-            "native_runtime_pins",
-            "native_producer_sha256",
-        }
+        == (
+            {
+                "source_commit",
+                "source_tree",
+                "source_sha256",
+                "cli_image",
+                "cli_image_security_path",
+                "transport_guard_sha256",
+                "docs_project_id",
+                "vercel_team_id",
+                "native_source_pins",
+                "native_runtime_pins",
+                "native_producer_sha256",
+            }
+            | ({"source_binding", "source_archives"} if consolidated else set())
+        )
         and tool["source_commit"] == manifest["candidate_commit"]
         and tool["source_tree"] == manifest["source_tree"]
         and tool["source_sha256"] == manifest["tool_source_sha256"]
@@ -334,7 +399,9 @@ def validate_docs_policy(bundle, manifest, policy, files, target):
         == tool["native_producer_sha256"],
         "Native observer source/runtime closure differs from reviewed source",
     )
-    profile = policy["components"][manifest["repository"] + ":docs-public"]
+    profile = policy["components"][
+        verifier.component_scope({**manifest, "component": "docs-public"})
+    ]
     require(
         set(profile)
         == {
@@ -349,6 +416,7 @@ def validate_docs_policy(bundle, manifest, policy, files, target):
     )
     verifier.binding_valid(
         {
+            **(verifier.ai_operational_source(manifest) if consolidated else {}),
             "repository": manifest["repository"],
             "component": "docs-public",
             "candidate_commit": manifest["candidate_commit"],
@@ -529,6 +597,8 @@ def install(bundle, manifest_pin, github, *, dry_run=False, uid=0):
     )  # Atomic no-replace reservation. Interrupted installs are retained.
     try:
         (target / "runners").mkdir(mode=0o700)
+        if manifest["schema_version"] == 2:
+            (target / "source-artifacts").mkdir(mode=0o700)
         for name, data in payloads.items():
             path = target / relative(name)
             with os.fdopen(
@@ -549,6 +619,11 @@ def install(bundle, manifest_pin, github, *, dry_run=False, uid=0):
             "policy_sha256": manifest["policy_sha256"],
             "ci": ci,
             "provider_requests": 0,
+            **(
+                {"source_binding": verifier.ai_operational_source(manifest)}
+                if manifest["schema_version"] == 2
+                else {}
+            ),
         }
         with os.fdopen(
             os.open(
