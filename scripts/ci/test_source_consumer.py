@@ -21,7 +21,7 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PRODUCTS = ("onesa-company-portal", "onesa-ai-platform", "onesa-robot")
+PRODUCTS = ("onesa-company-portal", "onesa-ai-platform", "onesa-robot", "onesa-drone")
 MODULES = []
 for product in PRODUCTS:
     path = ROOT / product / "scripts/release/oracle_owner.py"
