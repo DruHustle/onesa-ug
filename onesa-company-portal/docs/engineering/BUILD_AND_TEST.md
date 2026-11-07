@@ -1124,9 +1124,32 @@ scanner marker mount. Only a failed, malformed or timed-out combined client perm
 one scanner-only fallback, bounded to four seconds. It calls the same consumer
 readiness function; it does not execute the scanner health script or substitute
 Docker health for marker access. An unavailable fallback remains a failed readiness
-observation. The exercised worst-case I/O path includes both client failures,
-retried public probes and notification delivery: 53 seconds against the unchanged
-60-second service deadline, leaving seven seconds of nominal overhead allowance.
+observation. Every disposable client has a fresh invocation name and ownership
+label. A failed or timed-out Docker client must establish that its own container
+is absent or remove the exact inspected container ID before starting the fallback.
+The private pending-probe record is exclusively created and flushed before Docker
+runs, and cleared durably after completion. A later timer tick reconciles only
+that retained invocation after interruption; it does not start another probe in
+the same recovery tick. A nonblocking kernel lock prevents a concurrent observer
+from treating a running invocation as interrupted; process exit releases the lock.
+Changed, malformed, aliased or unresolved custody holds
+future probe creation, preserving the record for owner inspection.
+The inspection also requires the expected image, Node metrics command, read-only
+root and automatic-removal flag. Foreign names, changed identities, daemon errors
+and ambiguous cleanup never authorize removal. Normal exits retain Docker's
+existing automatic removal; historical containers and application services are
+never enumerated or adopted for cleanup. An unresolved cleanup is retained as
+`dependency_probe_cleanup_failed` in private metrics and cannot report a successful
+database/scanner observation or start another probe while its retained outcome
+is unresolved.
+
+The exercised worst-case I/O path includes both client failures, up to two
+one-second cleanup commands per failed client, retried public probes and
+notification delivery: 57 seconds against the unchanged 60-second service
+deadline, leaving three seconds of nominal overhead allowance. The existing
+twenty-second combined probe, four-second fallback and notification timeouts
+remain unchanged. Focused ownership, interruption, removal-race and failure tests
+run with `python3 -m unittest discover -s scripts -p test_oracle_operations.py`.
 This budget test is not a hosted latency guarantee or a reason to extend the service
 deadline. The healthy path adds no container or database query.
 

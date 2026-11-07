@@ -2,6 +2,7 @@
 
 import argparse
 import datetime
+import fcntl
 import hashlib
 import hmac
 import html
@@ -12,12 +13,14 @@ import os
 import re
 import shutil
 import sqlite3
+import stat
 import subprocess
 import tempfile
 import time
 import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 STATE = Path("/var/lib/onesa/operations")
@@ -29,6 +32,15 @@ MAX_SAMPLE_GAP_SECONDS = 120
 TRANSPORT_FAILURE_SECONDS = 120
 TRANSPORT_FAILURE_SAMPLES = 3
 SCANNER_FALLBACK_SECONDS = 4
+PROBE_CLEANUP_COMMAND_SECONDS = 1
+PROBE_OWNER_LABEL = "org.onesa.operations-metrics-probe"
+PROBE_INSPECT_FORMAT = (
+    '{"id":{{json .Id}},"name":{{json .Name}},'
+    '"image":{{json .Config.Image}},"entrypoint":{{json .Config.Entrypoint}},'
+    '"command":{{json .Config.Cmd}},"auto_remove":{{json .HostConfig.AutoRemove}},'
+    '"read_only":{{json .HostConfig.ReadonlyRootfs}},'
+    '"owner":{{json (index .Config.Labels "' + PROBE_OWNER_LABEL + '")}}}'
+)
 NOTIFICATION_SCOPE = "production-and-shared-v1"
 # Provider keys last 24 hours; leave an hour before manual reconciliation is needed.
 PENDING_RETRY_SECONDS = 23 * 60 * 60
@@ -426,7 +438,207 @@ def dependency_metrics(raw, *, scanner_only=False):
     return value
 
 
+class ProbeCleanupFailed(ValueError):
+    """An interrupted disposable probe was not proved absent or removed."""
+
+
+def dependency_probe_marker():
+    state = STATE.lstat()
+    if (not stat.S_ISDIR(state.st_mode) or state.st_uid != os.geteuid()
+            or stat.S_IMODE(state.st_mode) != 0o700):
+        raise ProbeCleanupFailed("Private metric probe custody required")
+    return STATE / "dependency-probe.json"
+
+
+@contextmanager
+def dependency_probe_lock():
+    path = dependency_probe_marker().with_suffix(".lock")
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
+            raise ProbeCleanupFailed("Private metric probe lock required")
+        # A concurrent observer cannot mistake a currently running probe for an
+        # interrupted one. The kernel releases this lock if the process dies.
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def validate_dependency_probe(value):
+    if not (
+        isinstance(value, dict)
+        and set(value) == {"schema_version", "name", "owner", "image", "command"}
+        and type(value["schema_version"]) is int and value["schema_version"] == 1
+        and isinstance(value["owner"], str) and re.fullmatch(r"[a-f0-9]{32}", value["owner"])
+        and value["name"] == "onesa-metrics-" + value["owner"]
+        and isinstance(value["image"], str) and len(value["image"]) <= 256
+        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/:+-]*(?:@sha256:[a-f0-9]{64})?", value["image"])
+        and value["command"] in (["metrics.mjs"], ["metrics.mjs", "--scanner-only"])
+    ):
+        raise ProbeCleanupFailed("Metric probe custody invalid")
+    return value
+
+
+def read_dependency_probe():
+    path = dependency_probe_marker()
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1
+                or not 0 < info.st_size <= 4096):
+            raise ProbeCleanupFailed("Private metric probe record required")
+        raw = stream.read(4097)
+    if len(raw) > 4096:
+        raise ProbeCleanupFailed("Metric probe record too large")
+    return validate_dependency_probe(json.loads(raw))
+
+
+def sync_dependency_probe_directory():
+    descriptor = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def retain_dependency_probe(value):
+    validate_dependency_probe(value)
+    path = dependency_probe_marker()
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(json.dumps(value, sort_keys=True, separators=(",", ":")).encode())
+        stream.flush()
+        os.fsync(stream.fileno())
+    sync_dependency_probe_directory()
+
+
+def clear_dependency_probe(value):
+    if read_dependency_probe() != value:
+        raise ProbeCleanupFailed("Metric probe custody changed")
+    dependency_probe_marker().unlink()
+    sync_dependency_probe_directory()
+
+
+def cleanup_dependency_probe(name, owner, image, command):
+    """Remove only this invocation's positively identified disposable probe.
+
+    Docker --rm handles normal exits, but a killed CLI can leave a Created
+    container. Never enumerate, adopt or remove a historical probe or service.
+    Only bounded metadata is read; environment values cannot enter diagnostics.
+    """
+    if not (isinstance(owner, str) and re.fullmatch(r"[a-f0-9]{32}", owner)
+            and name == "onesa-metrics-" + owner
+            and command in (["metrics.mjs"], ["metrics.mjs", "--scanner-only"])):
+        return False
+    try:
+        inspected = subprocess.run(
+            ["docker", "inspect", "--type=container", "--format", PROBE_INSPECT_FORMAT, name],
+            capture_output=True, timeout=PROBE_CLEANUP_COMMAND_SECONDS, check=False,
+        )
+        if inspected.returncode:
+            # A daemon/transport/permission failure is not evidence of absence.
+            return inspected.stderr.strip() in {
+                ("Error: No such object: " + name).encode(),
+                ("Error: No such container: " + name).encode(),
+            }
+        if len(inspected.stdout) > 4096:
+            return False
+        value = json.loads(inspected.stdout)
+        if not (
+            isinstance(value, dict)
+            and isinstance(value.get("id"), str)
+            and re.fullmatch(r"[a-f0-9]{64}", value["id"])
+            and value.get("name") == "/" + name
+            and value.get("owner") == owner
+            and value.get("image") == image
+            and value.get("entrypoint") == ["node"]
+            and value.get("command") == command
+            and value.get("auto_remove") is True
+            and value.get("read_only") is True
+        ):
+            return False
+        removed = subprocess.run(
+            ["docker", "rm", "--force", value["id"]],
+            capture_output=True, timeout=PROBE_CLEANUP_COMMAND_SECONDS, check=False,
+        )
+        if removed.returncode == 0:
+            return removed.stdout.strip() == value["id"].encode()
+        # The original --rm can finish between inspection and exact-ID removal.
+        return removed.stderr.strip() in {
+            ("Error: No such object: " + value["id"]).encode(),
+            ("Error: No such container: " + value["id"]).encode(),
+        }
+    except (ValueError, TypeError, OSError, subprocess.SubprocessError):
+        return False
+
+
+def run_dependency_probe(command, *, timeout):
+    owner = uuid.uuid4().hex
+    name = "onesa-metrics-" + owner
+    owned_command = command[:3] + [
+        "--name", name, "--label", PROBE_OWNER_LABEL + "=" + owner,
+    ] + command[3:]
+    image_index = command.index("--entrypoint") + 2
+    pending = {
+        "schema_version": 1, "name": name, "owner": owner,
+        "image": command[image_index], "command": command[image_index + 1:],
+    }
+    try:
+        retain_dependency_probe(pending)
+    except (ValueError, TypeError, OSError):
+        raise ProbeCleanupFailed("Metric probe intent not durably retained") from None
+    try:
+        raw = run(owned_command, timeout=timeout)
+    except BaseException as error:
+        try:
+            if not cleanup_dependency_probe(name, owner, pending["image"], pending["command"]):
+                raise ProbeCleanupFailed("Disposable metric probe cleanup unresolved")
+            clear_dependency_probe(pending)
+        except (ValueError, TypeError, OSError):
+            if isinstance(error, Exception):
+                raise ProbeCleanupFailed("Disposable metric probe cleanup unresolved") from None
+        raise
+    try:
+        clear_dependency_probe(pending)
+    except (ValueError, TypeError, OSError):
+        raise ProbeCleanupFailed("Metric probe completion not durably retained") from None
+    return raw
+
+
 def sample_dependencies(config):
+    try:
+        with dependency_probe_lock():
+            return sample_dependencies_locked(config)
+    except BlockingIOError:
+        return {"database_available": False, "scanner_ready": False,
+                "dependency_probe_busy": True}
+    except (ValueError, TypeError, OSError):
+        return {"database_available": False, "scanner_ready": False,
+                "dependency_probe_cleanup_failed": True}
+
+
+def sample_dependencies_locked(config):
+    try:
+        pending = read_dependency_probe()
+        if pending is not None:
+            if not cleanup_dependency_probe(
+                pending["name"], pending["owner"], pending["image"], pending["command"],
+            ):
+                raise ProbeCleanupFailed("Pending metric probe cleanup unresolved")
+            clear_dependency_probe(pending)
+            # Keep recovery's I/O separate from a new probe's deadline budget.
+            return {"database_available": False, "scanner_ready": False,
+                    "dependency_probe_recovery_only": True}
+    except (ValueError, TypeError, OSError):
+        return {"database_available": False, "scanner_ready": False,
+                "dependency_probe_cleanup_failed": True}
     command = [
         "docker", "run", "--rm", "-i", "--read-only", "--tmpfs", "/tmp",
         "--memory", "128m", "--cpus", "0.1", "--cap-drop", "ALL",
@@ -438,7 +650,11 @@ def sample_dependencies(config):
         + ":/app/metrics.mjs:ro", "--entrypoint", "node", config["image"], "metrics.mjs",
     ]
     try:
-        return dependency_metrics(run(command, timeout=20))
+        return dependency_metrics(run_dependency_probe(command, timeout=20))
+    except ProbeCleanupFailed:
+        # Do not create a second probe when the first one's outcome is unknown.
+        return {"database_available": False, "scanner_ready": False,
+                "dependency_probe_cleanup_failed": True}
     except (ValueError, TypeError, OverflowError, OSError, subprocess.SubprocessError):
         # A whole-client failure says nothing about the scanner. One short,
         # database-free attempt uses the same image, consumer permissions and
@@ -446,9 +662,11 @@ def sample_dependencies(config):
         result = {"database_available": False, "scanner_ready": False}
         try:
             result.update(dependency_metrics(
-                run(command + ["--scanner-only"], timeout=SCANNER_FALLBACK_SECONDS),
+                run_dependency_probe(command + ["--scanner-only"], timeout=SCANNER_FALLBACK_SECONDS),
                 scanner_only=True,
             ))
+        except ProbeCleanupFailed:
+            result["dependency_probe_cleanup_failed"] = True
         except (ValueError, TypeError, OverflowError, OSError, subprocess.SubprocessError):
             pass
         return result
