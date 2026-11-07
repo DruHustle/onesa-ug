@@ -5,6 +5,7 @@ import datetime
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import tempfile
 import threading
@@ -492,10 +493,10 @@ class DependencyProbeCleanup(unittest.TestCase):
                 "onesa-portal-oracle-production-worker-1", self.owner, self.image, self.command))
             execute.assert_not_called()
 
-    def test_absence_is_distinct_from_an_ambiguous_inspection(self):
+    def test_absence_without_a_positive_id_cannot_resolve_creation_custody(self):
         for message, expected in (
-            (("Error: No such object: " + self.name).encode(), True),
-            (("Error: No such container: " + self.name).encode(), True),
+            (("Error: No such object: " + self.name).encode(), False),
+            (("Error: No such container: " + self.name).encode(), False),
             (b"Cannot connect to the Docker daemon", False),
             (b"Error: No such container: unrelated-name", False),
             (b"permission denied", False),
@@ -571,6 +572,54 @@ class DependencyProbeCleanup(unittest.TestCase):
                 "dependency_probe_cleanup_failed": True,
             })
             self.assertEqual(acquire.call_count, 1, "Future ticks must not accumulate unresolved probes")
+
+    def test_late_daemon_registration_remains_owned_across_timer_ticks(self):
+        calls = []
+        current = None
+        visible = False
+        recovered = False
+
+        def execute(command, *, timeout, **_kwargs):
+            nonlocal current, recovered
+            calls.append(command)
+            if command[:2] == ["docker", "run"]:
+                if recovered:
+                    return self.result(out=json.dumps(DEPENDENCY_SUCCESS).encode())
+                name = command[command.index("--name") + 1]
+                owner = command[command.index("--label") + 1].split("=", 1)[1]
+                current = {**self.row, "name": "/" + name, "owner": owner}
+                raise subprocess.TimeoutExpired(command, timeout)
+            if command[:2] == ["docker", "inspect"]:
+                self.assertEqual(command[-1], current["name"].removeprefix("/"))
+                if visible:
+                    return self.result(row=current)
+                return self.result(code=1, error=("Error: No such object: " + command[-1]).encode())
+            self.assertEqual(command, ["docker", "rm", "--force", self.identifier])
+            recovered = True
+            return self.result(out=self.identifier.encode())
+
+        with patch.object(monitor.subprocess, "run", side_effect=execute):
+            self.assertTrue(monitor.sample_dependencies({"image": self.image})["dependency_probe_cleanup_failed"])
+            pending = monitor.read_dependency_probe()
+            self.assertIsNotNone(pending)
+            self.assertTrue(monitor.sample_dependencies({"image": self.image})["dependency_probe_cleanup_failed"])
+            self.assertEqual(monitor.read_dependency_probe(), pending)
+            visible = True
+            self.assertTrue(monitor.sample_dependencies({"image": self.image})["dependency_probe_recovery_only"])
+            self.assertIsNone(monitor.read_dependency_probe())
+            self.assertEqual([command[1] for command in calls], ["run", "inspect", "inspect", "inspect", "rm"])
+            self.assertEqual(monitor.sample_dependencies({"image": self.image}), DEPENDENCY_SUCCESS)
+        self.assertEqual(calls[-1][1], "run")
+        self.assertNotEqual(calls[-1][4], calls[0][4])
+
+    def test_fifo_pending_marker_is_refused_without_blocking_or_docker(self):
+        path = monitor.dependency_probe_marker()
+        os.mkfifo(path, 0o600)
+        with patch.object(monitor, "run") as acquire, \
+             patch.object(monitor, "cleanup_dependency_probe") as cleanup:
+            self.assertTrue(monitor.sample_dependencies({"image": self.image})["dependency_probe_cleanup_failed"])
+            acquire.assert_not_called()
+            cleanup.assert_not_called()
 
     def test_interrupted_intent_recovers_only_its_retained_probe_before_future_sampling(self):
         pending = {"schema_version": 1, "name": self.name, "owner": self.owner,

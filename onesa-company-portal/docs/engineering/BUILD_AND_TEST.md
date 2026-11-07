@@ -1125,8 +1125,10 @@ one scanner-only fallback, bounded to four seconds. It calls the same consumer
 readiness function; it does not execute the scanner health script or substitute
 Docker health for marker access. An unavailable fallback remains a failed readiness
 observation. Every disposable client has a fresh invocation name and ownership
-label. A failed or timed-out Docker client must establish that its own container
-is absent or remove the exact inspected container ID before starting the fallback.
+label. A failed or timed-out Docker client must positively identify and remove its
+own exact container ID before starting the fallback; an automatic-removal race is
+accepted only for that already inspected ID. An absent name does not prove that an
+interrupted create request cannot appear later, so it retains unresolved custody.
 The private pending-probe record is exclusively created and flushed before Docker
 runs, and cleared durably after completion. A later timer tick reconciles only
 that retained invocation after interruption; it does not start another probe in
@@ -1134,6 +1136,8 @@ the same recovery tick. A nonblocking kernel lock prevents a concurrent observer
 from treating a running invocation as interrupted; process exit releases the lock.
 Changed, malformed, aliased or unresolved custody holds
 future probe creation, preserving the record for owner inspection.
+An interrupted invocation that never becomes visible stays held for explicit
+reconciliation; repeated absence is never recorded as successful cleanup.
 The inspection also requires the expected image, Node metrics command, read-only
 root and automatic-removal flag. Foreign names, changed identities, daemon errors
 and ambiguous cleanup never authorize removal. Normal exits retain Docker's

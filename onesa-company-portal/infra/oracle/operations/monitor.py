@@ -485,7 +485,7 @@ def validate_dependency_probe(value):
 def read_dependency_probe():
     path = dependency_probe_marker()
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
         return None
     with os.fdopen(descriptor, "rb") as stream:
@@ -543,11 +543,10 @@ def cleanup_dependency_probe(name, owner, image, command):
             capture_output=True, timeout=PROBE_CLEANUP_COMMAND_SECONDS, check=False,
         )
         if inspected.returncode:
-            # A daemon/transport/permission failure is not evidence of absence.
-            return inspected.stderr.strip() in {
-                ("Error: No such object: " + name).encode(),
-                ("Error: No such container: " + name).encode(),
-            }
+            # A killed CLI can leave a create request running in the daemon.
+            # The name may not be inspectable until later registration. Absence
+            # without a positively observed ID never resolves creation custody.
+            return False
         if len(inspected.stdout) > 4096:
             return False
         value = json.loads(inspected.stdout)
