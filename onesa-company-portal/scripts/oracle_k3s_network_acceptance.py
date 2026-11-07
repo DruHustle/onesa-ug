@@ -104,6 +104,17 @@ def source_pins():
     return {path.name: digest(path.read_bytes()) for path in paths}
 
 
+def bridge_prerequisites():
+    # Called only after source custody checks; importing the reviewed installer
+    # performs no operations. Share its read-only prerequisite and exact refusal.
+    sys.path.insert(0, str(ROOT / "infra/oracle"))
+    import k3s_first_install as installer
+    try:
+        return installer.require_bridge_netfilter()
+    except installer.Refused as error:
+        raise Failed(str(error)) from None
+
+
 def plan():
     return {"private_ip": NODE, "pod_cidr": PODS, "service_cidr": SERVICES,
             "dns_upstream_ipv4": [UPSTREAM],
@@ -402,12 +413,18 @@ def route_mark_counts():
     return result
 
 
-def child(parent):
+def child(parent, progress):
+    progress.update(phase="CHILD_ISOLATION", namespace_creation_attempted=True)
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     for namespace in ("net", "mnt", "pid"):
         require(os.readlink("/proc/self/ns/" + namespace) != parent["namespaces"][namespace], "ISOLATION_NOT_ESTABLISHED")
     require(os.getpid() == 1, "PRIVATE_PID_NAMESPACE_REQUIRED")
     require(source_pins() == parent["source_sha256"], "CHILD_SOURCE_CHANGED")
+    progress.update(phase="CHILD_BRIDGE_PREREQUISITES", isolated_child_verified=True)
+    # Recheck inside the child before its first mutation. The fixture never
+    # loads a module or changes either host or child bridge-filter sysctls.
+    bridge_prerequisites()
+    progress["phase"] = "ISOLATED_NETWORK_SETUP"
     # Every following mutation is inside all three verified namespaces.
     require(not str(ROOT).startswith("/run/"), "SOURCE_MUST_REMAIN_OUTSIDE_PRIVATE_RUN_MOUNT")
     run(["mount", "-t", "tmpfs", "-o", "mode=0700", "onesa-net-test", "/run"])
@@ -416,9 +433,6 @@ def child(parent):
     run(["ip", "addr", "add", NODE + "/32", "dev", "lo"])
     run(["sysctl", "-q", "-w", "net.ipv4.ip_forward=1"])
     run(["sysctl", "-q", "-w", "net.ipv6.conf.all.forwarding=1"])
-    # This existing host prerequisite is read only: bridge sysctls are not
-    # assumed namespace-local and are never changed by the packet fixture.
-    require(Path("/proc/sys/net/bridge/bridge-nf-call-iptables").read_text().strip() == "1", "BRIDGE_NETFILTER_REQUIRED")
     network("owner", "tailscale0", "100.64.10.1/24", OWNER + "/24", 1, ("100.64.10.99/24",))
     network("router", "owner-hub", "10.90.254.1/24", PEERS[0] + "/24", 2, (PEERS[1] + "/24",))
     run(["ip", "link", "add", "cni0", "type", "bridge"])
@@ -468,7 +482,9 @@ def child(parent):
                 check(f"{prefix}/service-control-{index}", True, None, peer, 443, source="10.91.254.1")
             check(prefix + "/radius-wrong-interface", False, "owner", "10.91.254.1", 1812, protocol="udp")
 
+        progress.update(phase="RETAINED_PACKET_BASELINE", packet_cases_started=True)
         retained("baseline")
+        progress["phase"] = "LEGACY_PROXY_COUNTEREXAMPLE"
         # Keep a real conntrack entry alive while removing its authorization.
         # This must fail with the old unscoped iptables kube-proxy ACCEPTs, so a
         # test that never creates established traffic cannot produce a false pass.
@@ -494,6 +510,7 @@ def child(parent):
         run(["iptables", "-F", "KUBE-FORWARD"])
         run(["iptables", "-X", "KUBE-FORWARD"])
         observed_case("revocation/unsafe-proxy-removed", not persistent_probe(persistent))
+        progress["phase"] = "CANDIDATE_NETWORK_SETUP"
         policy_routing_fixture()
         routes = installer.snapshot_policy_routes()
         # Cold-start ordering: the persistent native guard is installed before
@@ -507,6 +524,7 @@ def child(parent):
         installer.ensure_native_guard(plan(), receipt, first_install=True)
         installer.apply_private_firewall(plan(), ["172.18.0.0/16"])
         cluster_policy()
+        progress["phase"] = "CANDIDATE_PACKET_CASES"
         retained("nftables-candidate")
         observed_case("revocation/nftables-keeps-established-marked-denial", not persistent_probe(persistent))
         for namespace in ("pod", "dns"):
@@ -531,6 +549,7 @@ def child(parent):
         check("host/portainer-private-access", True, None, POD, 9443)
         check("ipv6/pod-egress-denied", False, "pod", "2001:db8:5::2", 443)
         check("ipv6/portainer-ingress-denied", False, "wan", "2001:db8:3::2", 9443)
+        progress["phase"] = "POLICY_ROUTING_MARKS"
         before_routes = route_mark_counts()
         for destination, family in ((WAN, "ipv4"), ("2001:db8:5::2", "ipv6")):
             check(f"{family}/injected-mark-routes-before-clear", True, "docker", destination, 9998, protocol="udp")
@@ -553,6 +572,7 @@ def child(parent):
                       and all(after_routes[family + "/unexpected-output-route"] == 0 for family in ("ip", "ip6")))
         # Owner reconcile and then kube-router reconcile deliberately change
         # relative parent-chain order. Native restrictions must stay authoritative.
+        progress["phase"] = "CONTROLLER_RECONCILIATION"
         for rule in reversed(owner_rules()):
             run(["iptables", "-D", "FORWARD", *rule])
             run(["iptables", "-I", "FORWARD", "1", *rule])
@@ -564,6 +584,7 @@ def child(parent):
         check("reconcile/non-coredns-upstream-denied", False, "pod", UPSTREAM, 53, protocol="udp")
         # Only our new table is removed, in this disposable namespace, to model
         # restoration of its retained source after a cold kernel restart.
+        progress["phase"] = "GUARD_RESTORATION"
         run(["nft", "delete", "table", "inet", installer.NATIVE_TABLE])
         installer.ensure_native_guard(plan(), receipt)
         installer.apply_private_firewall(plan(), ["172.18.0.0/16"])
@@ -571,6 +592,7 @@ def child(parent):
         check("guard-restore/coredns-upstream", True, "dns", UPSTREAM, 53, protocol="udp")
         check("guard-restore/metadata-denied", False, "dns", UPSTREAM, 80)
         observed_case("guard-restore/legacy-established-denial", not persistent_probe(persistent))
+        progress["phase"] = "FINAL_ISOLATED_VERIFICATION"
         run(["iptables", "-D", "FORWARD", *temporary[1]])
         require(installer.snapshot_native_guards() == original_native, "ORIGINAL_NATIVE_GUARDS_CHANGED")
         require(installer.snapshot_policy_routes() == routes, "POLICY_ROUTE_SELECTORS_CHANGED")
@@ -598,21 +620,34 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--isolated-child")
     args = parser.parse_args()
+    progress = {"phase": "PARENT_IDENTITY", "namespace_creation_attempted": False,
+                "isolated_child_verified": False, "packet_cases_started": False}
+    evidence = {}
     try:
         if args.isolated_child:
-            result = child(json.loads(args.isolated_child))
+            progress["phase"] = "CHILD_ARGUMENTS"
+            result = child(json.loads(args.isolated_child), progress)
+            result.update(progress)
         else:
             require(os.geteuid() == 0, "ROOT_REQUIRED_FOR_NAMESPACE_TEST")
+            progress["phase"] = "PARENT_SOURCE_CUSTODY"
             pins = source_pins()
+            evidence["source_sha256"] = pins
+            progress["phase"] = "PARENT_BRIDGE_PREREQUISITES"
+            bridge_prerequisites()
+            progress["phase"] = "PARENT_NETWORK_FINGERPRINT"
             before = fingerprints()
             namespaces = {name: os.readlink("/proc/self/ns/" + name) for name in ("net", "mnt", "pid")}
             unshare = shutil.which("unshare", path=SAFE_PATH)
             require(unshare, "UNSHARE_UNAVAILABLE")
             started = time.monotonic()
+            progress.update(phase="ISOLATED_CHILD_EXECUTION", namespace_creation_attempted=True,
+                            isolated_child_verified=None, packet_cases_started=None)
             completed = subprocess.run([unshare, "--mount", "--net", "--pid", "--fork", "--kill-child=KILL", "--mount-proc", "--propagation", "private",
                                         sys.executable, "-I", "-B", "-S", str(Path(__file__).resolve()),
                                         "--isolated-child", json.dumps({"namespaces": namespaces, "source_sha256": pins})],
                                        capture_output=True, timeout=150, env=ENV, check=False)
+            progress["phase"] = "PARENT_POST_RUN_VERIFICATION"
             require(source_pins() == pins, "PARENT_SOURCE_CHANGED")
             require(fingerprints() == before, "HOST_NETWORK_CONFIGURATION_CHANGED_DURING_TEST")
             require(len(completed.stdout) <= 65536, "OVERSIZED_CHILD_RESULT")
@@ -627,7 +662,8 @@ def main():
         return 0 if result["status"].endswith("PASS") else 2
     except (Failed, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
         reason = str(error) if isinstance(error, Failed) else type(error).__name__
-        print(json.dumps({"status": "BLOCKED", "reason": reason, "installation_performed": False}))
+        print(json.dumps({"status": "BLOCKED", "reason": reason, "error_type": type(error).__name__,
+                          "installation_performed": False, **progress, **evidence}, sort_keys=True))
         return 2
 
 

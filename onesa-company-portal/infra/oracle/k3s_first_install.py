@@ -732,6 +732,22 @@ def unoccupied_boundary(firewall):
                         for table in tables.values() for name in table["chains"]), "EXISTING_CLUSTER_RULES_REFUSED")
 
 
+def require_bridge_netfilter():
+    """Read existing prerequisites only; loading the module affects live bridges."""
+    observed = {}
+    for name in ("bridge-nf-call-iptables", "bridge-nf-call-ip6tables"):
+        try:
+            value = (Path("/proc/sys/net/bridge") / name).read_text().strip()
+        except FileNotFoundError:
+            raise Refused("BRIDGE_NETFILTER_SYSCTL_MISSING:" + name) from None
+        except OSError:
+            raise Refused("BRIDGE_NETFILTER_SYSCTL_UNREADABLE:" + name) from None
+        require(value in {"0", "1"}, "BRIDGE_NETFILTER_SYSCTL_INVALID:" + name)
+        require(value == "1", "BRIDGE_NETFILTER_SYSCTL_DISABLED:" + name)
+        observed[name] = 1
+    return observed
+
+
 def collect_first_install(plan, artifact_dir, lock):
     current_identity(plan)
     observation = preflight.collect()
@@ -742,8 +758,7 @@ def collect_first_install(plan, artifact_dir, lock):
     blockers = set(result["blockers"]) - {"EXISTING_ONESA_FIREWALL_INTEGRATION_REQUIRED"}
     require(not blockers, "HOST_PREFLIGHT_BLOCKED")
     require(observation["memory_total_mib"] >= 5632, "EXISTING_SIX_GIB_HOST_MEMORY_REQUIRED")
-    require(Path("/proc/sys/net/bridge/bridge-nf-call-iptables").read_text().strip() == "1",
-            "BRIDGE_NETFILTER_PREREQUISITE_REQUIRED")
+    require_bridge_netfilter()
     firewall = snapshot_firewall()
     require_existing_firewall(firewall)
     require_nftables_support()

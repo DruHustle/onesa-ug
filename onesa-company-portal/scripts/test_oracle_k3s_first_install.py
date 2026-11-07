@@ -16,6 +16,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "infra/oracle"))
 import k3s_first_install as installer
+import oracle_k3s_network_acceptance as acceptance
 
 
 def plan():
@@ -135,6 +136,55 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(arguments, [str(installer.BINARY), "server", "--config", str(installer.CONFIG)])
         self.assertEqual(set(environment), {"PATH", "LANG", "LC_ALL", "NOTIFY_SOCKET"})
         self.assertNotIn("synthetic-token", repr(environment))
+
+
+class BridgePrerequisiteTests(unittest.TestCase):
+    def test_missing_disabled_and_unreadable_bridge_prerequisites_are_distinct(self):
+        for observed, reason in ((FileNotFoundError(), "MISSING"), (PermissionError(), "UNREADABLE"),
+                                 ("0\n", "DISABLED"), ("unexpected\n", "INVALID")):
+            arguments = {"side_effect": observed} if isinstance(observed, Exception) else {"return_value": observed}
+            with self.subTest(reason=reason), patch.object(installer.Path, "read_text", **arguments), \
+                    self.assertRaisesRegex(installer.Refused, "BRIDGE_NETFILTER_SYSCTL_" + reason + ":bridge-nf-call-iptables"):
+                installer.require_bridge_netfilter()
+        with patch.object(installer.Path, "read_text", side_effect=["1\n", FileNotFoundError()]), \
+                self.assertRaisesRegex(installer.Refused, "BRIDGE_NETFILTER_SYSCTL_MISSING:bridge-nf-call-ip6tables"):
+            installer.require_bridge_netfilter()
+        with patch.object(installer.Path, "read_text", return_value="1\n"):
+            self.assertEqual(installer.require_bridge_netfilter(),
+                             {"bridge-nf-call-iptables": 1, "bridge-nf-call-ip6tables": 1})
+
+    def test_parent_refuses_missing_bridge_filter_before_any_namespace_or_packet_work(self):
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["acceptance"]), patch.object(acceptance.os, "geteuid", return_value=0), \
+                patch.object(acceptance, "source_pins", return_value={"synthetic": "a" * 64}), \
+                patch.object(installer.Path, "read_text", side_effect=FileNotFoundError()), \
+                patch.object(acceptance, "fingerprints") as fingerprint, \
+                patch.object(acceptance.subprocess, "run") as execute, contextlib.redirect_stdout(output):
+            self.assertEqual(acceptance.main(), 2)
+        fingerprint.assert_not_called()
+        execute.assert_not_called()
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["phase"], "PARENT_BRIDGE_PREREQUISITES")
+        self.assertEqual(result["reason"], "BRIDGE_NETFILTER_SYSCTL_MISSING:bridge-nf-call-iptables")
+        self.assertFalse(result["namespace_creation_attempted"])
+        self.assertFalse(result["isolated_child_verified"])
+        self.assertFalse(result["packet_cases_started"])
+        self.assertFalse(result["installation_performed"])
+        self.assertNotIn("host_network_configuration_unchanged", result)
+
+    def test_child_rechecks_bridge_prerequisite_before_first_isolated_mutation(self):
+        progress = {}
+        parent = {"namespaces": {name: "parent" for name in ("net", "mnt", "pid")},
+                  "source_sha256": {"synthetic": "a" * 64}}
+        with patch.object(acceptance.os, "geteuid", return_value=0), patch.object(acceptance.os, "getpid", return_value=1), \
+                patch.object(acceptance.os, "readlink", return_value="child"), \
+                patch.object(acceptance, "source_pins", return_value=parent["source_sha256"]), \
+                patch.object(installer.Path, "read_text", return_value="0\n"), \
+                patch.object(acceptance, "run") as execute, self.assertRaisesRegex(acceptance.Failed, "SYSCTL_DISABLED"):
+            acceptance.child(parent, progress)
+        execute.assert_not_called()
+        self.assertEqual(progress["phase"], "CHILD_BRIDGE_PREREQUISITES")
+        self.assertTrue(progress["isolated_child_verified"])
 
 
 class FirewallTests(unittest.TestCase):

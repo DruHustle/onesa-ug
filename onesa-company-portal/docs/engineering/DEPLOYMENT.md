@@ -231,8 +231,14 @@ backup/restore qualification remain explicit commissioning steps.
 
 `scripts/oracle_k3s_network_acceptance.py` is a separate, bounded packet diagnostic
 for reviewed root-owned source. Its parent reads host fingerprints and source
-hashes; mutations run only after fresh network, mount and PID namespace identities
-and private PID 1 are verified. It uses private `/run` mounts and synthetic
+hashes. Before creating namespaces, it requires the existing IPv4 and IPv6
+bridge-filter sysctls to be readable and enabled. A missing, disabled, invalid or
+unreadable value has a distinct refusal code and named phase; the receipt states
+whether namespace creation was attempted and packet cases began. The child
+rechecks this prerequisite before its first mutation. The diagnostic never loads
+`br_netfilter` or changes bridge-filter sysctls. Mutations run only after fresh
+network, mount and PID namespace identities and private PID 1 are verified.
+It uses private `/run` mounts and synthetic
 addresses. The fixture first reproduces the old established-flow bypass, then
 checks the standard proxy design, policy-routing mark behavior in both IP
 families, CoreDNS versus other pod egress, metadata denial, bridged pod policy,
@@ -240,6 +246,69 @@ retained owner/service paths and controller/guard reconciliation. It compares
 IPv4/IPv6 rules and routes and source custody before and after. Passing this
 fixture does not claim a running K3s cluster, authenticated service-account API
 traffic, a real reboot, owner UI access or live application qualification.
+
+### Bridge filtering maintenance qualification
+
+The locked K3s agent loads `br_netfilter` and enables IPv4 bridge filtering when
+its bundled proxy or Flannel is used. Linux initializes the IPv4 and IPv6 bridge
+filter switches to enabled when this module is loaded. Loading it on an existing
+Docker host therefore changes the paths traversed by already running bridged
+traffic. A missing prerequisite is a maintenance dependency, not permission for
+the installer or packet diagnostic to load the module. A read-only sysctl mount,
+custom node namespace or per-bridge workaround is not part of this deployment.
+
+The supported qualification sequence is:
+
+1. Verify source-VM and destination access, the actual remaining consumers and
+   their data, canonical source/artifact custody, current backups and tested
+   recovery. Complete the required migrations before source-VM retirement or
+   destination resizing. Confirm tenancy-wide free allowance and measured CPU,
+   available memory and disk after the approved resize; a source check or a
+   repository archive does not establish any of these facts. Retain the failed
+   packet attempt and its exact sources without overwriting or relabeling it.
+2. Through the protected operating procedure, retain the exact pre-maintenance
+   bridge topology, per-bridge settings, IPv4/IPv6 filtering and NAT rules, native
+   guards, policy routes, effective Docker network options and existing startup
+   configuration. Determine Docker's actual inter-container and userland-proxy
+   settings; its bridge driver can also enable this module. Record approved
+   positive and negative application paths, including same-bridge service/data
+   access, Docker isolation, public HTTPS, database denial, owner management and
+   router/RADIUS traffic. Do not infer coverage from unchanged rule text alone.
+3. Prepare the existing authenticated recovery path, exact previous boot
+   configuration and a rollback window before entering shared host maintenance.
+   Keep the new K3s service unstarted. Qualify the standard module and enabled
+   bridge filtering at the controlled reboot boundary, with the reviewed module
+   and sysctl startup configuration applied before Docker creates live bridges.
+   Verify the actual systemd ordering and boot readback. This is a shared host
+   interruption governed by the protected service recovery procedure; it is not
+   an isolated Kubernetes restart or a routine live `modprobe` operation.
+4. Before any K3s install, verify all retained applications, databases, workers,
+   ingress and tunnel guards against the recorded paths. Include same-bridge,
+   cross-bridge, DNS and hairpin flows where existing consumers use them, and
+   check new connections as well as established-flow revocation. Retain the
+   actual rules, bridge values and application results. If any required path or
+   denial changes, keep the maintenance hold and use the rollback below.
+5. Only after these checks pass, run the revised disposable packet diagnostic
+   from a new root-owned source directory and retain its new receipt. An earlier
+   prerequisite refusal does not count as a packet pass. The exact pinned K3s
+   and Portainer artifacts still need their separate security, runtime and
+   recovery qualification before installation. During that qualification verify
+   real controller convergence, CoreDNS identity and upstream DNS, authenticated
+   pod-to-API traffic, metadata denial, private owner access and retained Docker
+   paths. Repeat the required preservation checks after controller/owner-guard
+   reconciliation and a controlled reboot before accepting the deployment.
+
+If global filtering changes a required existing path, do not start K3s or mark
+the fixture accepted. Retain the hold and both before/after evidence. Use the
+verified recovery access to restore the exact previous boot configuration,
+removing only the newly owned module/sysctl startup additions, then perform a
+controlled reboot and verify the original module/bridge state and all protected
+service paths. Do not unload a shared module while live bridges use it. If K3s
+has subsequently been started, first use its ownership-checked recovery path;
+retained containerd workloads require explicit recovery accounting before the
+reboot. No broad uninstall, Docker cleanup, database recreation or deletion of
+K3s/Portainer recovery data is part of this rollback. Failure to verify the
+original service state keeps the maintenance hold in place.
 
 Failure handling stops only the installer-owned service when its file and effective
 systemd identity still match. A receipt-write failure does not suppress that stop
@@ -261,6 +330,9 @@ Primary references: [K3s configuration](https://docs.k3s.io/installation/configu
 [network services](https://docs.k3s.io/networking/networking-services),
 [Kubernetes 1.36 nftables proxy](https://v1-36.docs.kubernetes.io/docs/reference/networking/virtual-ips/#proxy-mode-nftables),
 [locked K3s proxy arguments](https://github.com/k3s-io/k3s/blob/v1.36.5%2Bk3s1/pkg/daemons/agent/agent.go),
+[locked K3s kernel setup](https://github.com/k3s-io/k3s/blob/v1.36.5%2Bk3s1/pkg/agent/syssetup/setup.go),
+[Linux 7.0 bridge filtering](https://github.com/torvalds/linux/blob/v7.0/net/bridge/br_netfilter_hooks.c),
+[Docker 29.1.3 bridge setup](https://github.com/moby/moby/blob/docker-v29.1.3/daemon/libnetwork/drivers/bridge/bridge_linux.go),
 [locked network-policy controller](https://github.com/k3s-io/kube-router/blob/v2.6.3-k3s1/pkg/controllers/netpol/network_policy_controller.go),
 [datastore backup](https://docs.k3s.io/datastore/backup-restore),
 [Portainer compatibility](https://docs.portainer.io/start/requirements-and-prerequisites),
