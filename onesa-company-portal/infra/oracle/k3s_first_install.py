@@ -46,6 +46,7 @@ UNIT = "onesa-k3s.service"
 FIREWALL_UNIT = "onesa-k3s-firewall.service"
 INPUT_CHAIN = "ONESA_K3S_INPUT"
 FORWARD_CHAIN = "ONESA_K3S_FORWARD"
+NATIVE_TABLE = "onesa_k3s"
 LOCK = Path("/var/lib/onesa/runtime-recovery/kubernetes-install.lock")
 STORAGE_CLASS = "onesa-portainer-retain"
 VOLUME = "onesa-portainer-local"
@@ -55,7 +56,7 @@ SOURCE_FILES = ("k3s_first_install.py", "kubernetes_preflight.py", "portainer_pr
 LEASE_KIND = "owner-kubernetes-first-install"
 LEASE_SCOPE = "OnesaUGBackend:kubernetes"
 PLAN_KEYS = {"instance_id", "machine_id_sha256", "private_ip", "pod_cidr", "service_cidr",
-             "reserved_cidrs", "workload_memory_mib", "workload_disk_gib"}
+             "reserved_cidrs", "dns_upstream_ipv4", "workload_memory_mib", "workload_disk_gib"}
 
 
 def digest(value):
@@ -138,6 +139,16 @@ def validate_plan(plan):
     require(any(address in network for network in networks), "NODE_SUBNET_RESERVATION_REQUIRED")
     require(not any(candidate.overlaps(network) for candidate in (pods, services) for network in networks),
             "RESERVED_NETWORK_OVERLAP")
+    upstream = plan["dns_upstream_ipv4"]
+    require(isinstance(upstream, list) and 1 <= len(upstream) <= 3
+            and len(set(upstream)) == len(upstream), "OBSERVED_UPSTREAM_DNS_REQUIRED")
+    for value in upstream:
+        try:
+            resolver = ipaddress.IPv4Address(value)
+        except (ValueError, TypeError):
+            raise Refused("OBSERVED_UPSTREAM_DNS_REQUIRED") from None
+        require(not resolver.is_loopback and not resolver.is_unspecified and not resolver.is_multicast
+                and resolver not in pods and resolver not in services, "OBSERVED_UPSTREAM_DNS_REQUIRED")
     for key in ("workload_memory_mib", "workload_disk_gib"):
         require(type(plan[key]) is int and 0 <= plan[key] <= 1048576, "WORKLOAD_BUDGET_INVALID")
     return copy.deepcopy(plan)
@@ -330,6 +341,147 @@ def snapshot_firewall():
     return {family: parse_rules(command([family + "-save"])) for family in ("iptables", "ip6tables")}
 
 
+def snapshot_policy_routes():
+    return {family: json.loads(command(["ip", "-json", family, "rule", "show"])) for family in ("-4", "-6")}
+
+
+def native_tables():
+    rows = json.loads(command(["nft", "--json", "list", "tables"]))["nftables"]
+    require(isinstance(rows, list) and len(rows) <= 256, "NATIVE_FIREWALL_INVENTORY_INVALID")
+    names = []
+    for row in rows:
+        table = row.get("table")
+        if table and table.get("family") == "inet":
+            name = table.get("name", "")
+            require(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name), "NATIVE_FIREWALL_TABLE_INVALID")
+            names.append(name)
+    require(len(names) == len(set(names)), "NATIVE_FIREWALL_INVENTORY_INVALID")
+    return sorted(names)
+
+
+def native_digest(name):
+    require(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name), "NATIVE_FIREWALL_TABLE_INVALID")
+    # No counters or handles are introduced in the new guard. Existing native
+    # tables are retained verbatim; a changed rule requires a fresh review.
+    return digest(command(["nft", "--numeric", "list", "table", "inet", name]).encode())
+
+
+def snapshot_native_guards():
+    return {name: native_digest(name) for name in native_tables() if name != NATIVE_TABLE}
+
+
+def protected_networks(plan, docker_subnets):
+    networks = sorted(set(plan["reserved_cidrs"] + docker_subnets + ["169.254.0.0/16"]))
+    for value in networks:
+        preflight.network(value)
+    return networks
+
+
+def require_netpol_mark_reservation(firewall, native_rules):
+    """The bundled policy controller owns bit 0x20000; never steal a host mark.
+
+    This first-install proof deliberately refuses an existing netfilter mark
+    writer or consumer. Policy-routing rules are observed separately: routing
+    has already occurred at the INPUT/FORWARD hooks where we clear this bit.
+    No OUTPUT mark is changed, so policy-route selection is not rewritten.
+    """
+    for tables in firewall.values():
+        for table in tables.values():
+            for rule in table["rules"]:
+                tokens = list(rule)
+                if "--comment" in tokens:
+                    offset = tokens.index("--comment")
+                    del tokens[offset:offset + 2]
+                require(not any("mark" in token.lower() for token in tokens),
+                        "EXISTING_NETFILTER_MARK_REQUIRES_REVIEW")
+        output = tables["filter"]
+        require(output["chains"].get("OUTPUT") == "ACCEPT"
+                and not any(rule[1] == "OUTPUT" for rule in output["rules"]),
+                "EXISTING_OUTPUT_POLICY_REQUIRES_REVIEW")
+    # Native table text is retained privately, never emitted as diagnostic text.
+    require(not re.search(r"\b(?:meta|ct)\s+mark\b", native_rules),
+            "EXISTING_NETFILTER_MARK_REQUIRES_REVIEW")
+
+
+def require_nftables_support():
+    version = re.search(r"nftables v(\d+)\.(\d+)\.(\d+)", command(["nft", "--version"]))
+    require(version is not None and tuple(map(int, version.groups())) >= (1, 0, 1),
+            "NFTABLES_USERSPACE_VERSION_UNSUPPORTED")
+    kernel = re.match(r"(\d+)\.(\d+)", os.uname().release)
+    require(kernel is not None and tuple(map(int, kernel.groups())) >= (5, 13),
+            "NFTABLES_KERNEL_VERSION_UNSUPPORTED")
+
+
+def require_observed_dns(plan):
+    observed = []
+    # systemd's stub is not reachable from a pod; retain its actual upstream.
+    source = Path("/run/systemd/resolve/resolv.conf")
+    if not source.is_file():
+        source = Path("/etc/resolv.conf")
+    for line in source.read_text().splitlines():
+        fields = line.split()
+        if fields and fields[0] == "nameserver":
+            require(len(fields) == 2, "UPSTREAM_DNS_OBSERVATION_INVALID")
+            observed.append(fields[1])
+    require(observed == plan["dns_upstream_ipv4"], "UPSTREAM_DNS_CHANGED_OR_UNAPPROVED")
+
+
+def native_guard_source(plan, docker_subnets):
+    pods, services, private_ip = plan["pod_cidr"], plan["service_cidr"], plan["private_ip"]
+    protected = ", ".join(protected_networks(plan, docker_subnets))
+    dns = ", ".join(plan["dns_upstream_ipv4"])
+    # Separate base-chain drops remain final regardless of the relative order
+    # of kube-router, Flannel, Docker and the retained owner reconciler. The
+    # standard nftables proxier never inserts a global iptables ESTABLISHED
+    # accept. The reserved network-policy accept bit cannot authorize unrelated
+    # packets; every other mark bit remains intact and OUTPUT is untouched.
+    return (f"create table inet {NATIVE_TABLE}\n"
+            f"add chain inet {NATIVE_TABLE} input {{ type filter hook input priority -75; policy accept; }}\n"
+            f"add rule inet {NATIVE_TABLE} input iifname lo return\n"
+            f"add rule inet {NATIVE_TABLE} input iifname != cni0 ip saddr {pods} drop\n"
+            f"add rule inet {NATIVE_TABLE} input iifname != cni0 meta mark set meta mark & 0xfffdffff\n"
+            f"add rule inet {NATIVE_TABLE} input iifname cni0 ip saddr {pods} ip daddr {private_ip} tcp dport {{ 6443, 10250 }} return\n"
+            f"add rule inet {NATIVE_TABLE} input iifname cni0 drop\n"
+            f"add rule inet {NATIVE_TABLE} input tcp dport {{ 6443, 10250 }} drop\n"
+            f"add chain inet {NATIVE_TABLE} forward {{ type filter hook forward priority -75; policy accept; }}\n"
+            f"add rule inet {NATIVE_TABLE} forward iifname cni0 meta nfproto ipv6 drop\n"
+            f"add rule inet {NATIVE_TABLE} forward oifname cni0 meta nfproto ipv6 drop\n"
+            f"add rule inet {NATIVE_TABLE} forward iifname != cni0 ip saddr {pods} drop\n"
+            f"add rule inet {NATIVE_TABLE} forward iifname cni0 ip saddr != {pods} drop\n"
+            f"add rule inet {NATIVE_TABLE} forward iifname cni0 ip daddr {{ {dns} }} udp dport 53 return\n"
+            f"add rule inet {NATIVE_TABLE} forward iifname cni0 ip daddr {{ {dns} }} tcp dport 53 return\n"
+            f"add rule inet {NATIVE_TABLE} forward iifname cni0 ip daddr {{ {protected} }} drop\n"
+            f"add rule inet {NATIVE_TABLE} forward iifname cni0 return\n"
+            f"add rule inet {NATIVE_TABLE} forward ip daddr {pods} ct state established,related ct original ip saddr {pods} ct direction reply return\n"
+            f"add rule inet {NATIVE_TABLE} forward ip daddr {{ {pods}, {services} }} drop\n"
+            f"add rule inet {NATIVE_TABLE} forward oifname cni0 drop\n"
+            f"add rule inet {NATIVE_TABLE} forward meta mark set meta mark & 0xfffdffff\n").encode()
+
+
+def ensure_native_guard(plan, receipt, *, first_install=False):
+    require(snapshot_native_guards() == receipt["native_before"], "EXISTING_NATIVE_FIREWALL_CHANGED")
+    path = STATE / "private-firewall.nft"
+    require(private_file(path) == native_guard_source(plan, receipt["docker_subnets"]), "PRIVATE_NATIVE_SOURCE_DRIFT")
+    present = NATIVE_TABLE in native_tables()
+    if first_install:
+        require(not present and "native_guard_sha256" not in receipt, "EXISTING_PRIVATE_NATIVE_GUARD_REFUSED")
+    elif present:
+        require(native_digest(NATIVE_TABLE) == receipt.get("native_guard_sha256"), "PRIVATE_NATIVE_FIREWALL_DRIFT")
+        return
+    else:
+        require(re.fullmatch(r"[0-9a-f]{64}", receipt.get("native_guard_sha256", "")), "PRIVATE_NATIVE_CUSTODY_REQUIRED")
+    # nft submits the new table as one transaction; never flush or replace an
+    # existing table. A missing retained table may be restored after reboot.
+    command(["nft", "--file", str(path)])
+    observed = native_digest(NATIVE_TABLE)
+    if first_install:
+        receipt["native_guard_sha256"] = observed
+        save_receipt(receipt)
+    else:
+        require(observed == receipt["native_guard_sha256"], "PRIVATE_NATIVE_FIREWALL_DRIFT")
+    require(snapshot_native_guards() == receipt["native_before"], "EXISTING_NATIVE_FIREWALL_CHANGED")
+
+
 def require_existing_firewall(snapshot):
     for family, tables in snapshot.items():
         current = tables["filter"]
@@ -365,6 +517,8 @@ def preserved_firewall(before, after):
                 target = rule[rule.index("-j") + 1] if "-j" in rule else None
                 if chain in new_chains or target in new_chains:
                     continue
+                if table == "filter" and netpol_accept(rule):
+                    continue
                 retained.append(rule)
             require(retained == old["rules"], "EXISTING_FIREWALL_CHANGED")
     # Any entirely new table is accepted only with cluster-owned chains/rules.
@@ -384,15 +538,28 @@ def firewall_rules(plan, docker_subnets):
     v6_input = [["-i", "lo", "-j", "RETURN"],
                 ["-p", "tcp", "-m", "multiport", "--dports", "6443,10250", "-j", "DROP"], ["-j", "RETURN"]]
     # Refuse new pod-to-Docker traffic before an existing Docker user ACCEPT can
-    # terminate traversal. Other traffic retains the unmodified Docker policy.
-    v4_forward = [["-i", "tailscale0", "-j", "DROP"]]
-    for subnet in sorted(docker_subnets):
-        preflight.network(subnet)
+    # terminate traversal. Unrelated traffic must return to the retained parent
+    # policy, including scoped owner tunnels before its final Tailscale drop.
+    v4_forward = []
+    for upstream in plan["dns_upstream_ipv4"]:
+        for protocol in ("tcp", "udp"):
+            v4_forward.append(["-d", upstream + "/32", "-i", "cni0", "-p", protocol,
+                               "-m", protocol, "--dport", "53", "-j", "RETURN"])
+    for subnet in protected_networks(plan, docker_subnets):
         v4_forward.append(["-d", subnet, "-i", "cni0", "-j", "DROP"])
-    v4_forward.extend([["-j", "DOCKER-USER"], ["-j", "RETURN"]])
+    # Preserve replies to pod-initiated egress after reverse NAT, without allowing
+    # a new connection into the cluster. These still traverse the Docker guard.
+    reply = ["-d", pods, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED",
+             "--ctorigsrc", pods, "--ctdir", "REPLY"]
+    v4_forward.extend([[*reply, "-j", "DOCKER-USER"], [*reply, "-j", "RETURN"],
+                       ["-i", "cni0", "-j", "DOCKER-USER"], ["-i", "cni0", "-j", "RETURN"]])
+    # This single-node management cluster has no external ingress. Deny traffic
+    # entering its networks from any other interface before KUBE/FLANNEL accepts.
+    v4_forward.extend([["-d", cidr, "-j", "DROP"] for cidr in (pods, plan["service_cidr"])])
+    v4_forward.extend([["-o", "cni0", "-j", "DROP"], ["-j", "RETURN"]])
     return {"iptables": {INPUT_CHAIN: v4_input, FORWARD_CHAIN: v4_forward},
             "ip6tables": {INPUT_CHAIN: v6_input,
-                           FORWARD_CHAIN: [["-i", "tailscale0", "-j", "DROP"], ["-j", "RETURN"]]}}
+                           FORWARD_CHAIN: [["-j", "RETURN"]]}}
 
 
 def apply_private_firewall(plan, docker_subnets):
@@ -429,8 +596,102 @@ def verify_firewall(plan, docker_subnets, baseline):
         for chain, desired in chains.items():
             require([row[2:] for row in rows if row[1] == chain] == desired, "PRIVATE_FIREWALL_DRIFT")
             parent = "INPUT" if chain == INPUT_CHAIN else "FORWARD"
-            require([row for row in rows if row[1] == parent][0] == ["-A", parent, "-j", chain],
+            parent_rows = [row for row in rows if row[1] == parent]
+            jump = ["-A", parent, "-j", chain]
+            require(parent_rows.count(jump) == 1, "PRIVATE_FIREWALL_ORDER_CHANGED")
+            preceding = parent_rows[:parent_rows.index(jump)]
+            # The bundled policy controller and the retained owner reconciler
+            # legitimately prepend their own jumps/permits. Independent native
+            # base-chain restrictions remain authoritative through either order.
+            old_rows = baseline[family]["filter"]["rules"]
+            allowed_controller = "KUBE-ROUTER-" + parent
+            require(all((chain == FORWARD_CHAIN and family == "iptables"
+                         and row in old_rows and outside_cluster_permit(row, plan))
+                        or controller_jump(row, allowed_controller) or netpol_accept(row) for row in preceding),
                     "PRIVATE_FIREWALL_ORDER_CHANGED")
+    verify_scoped_forward_controllers(current, plan)
+
+
+def without_comment(rule):
+    result = list(rule)
+    if "--comment" in result:
+        index = result.index("--comment")
+        require(index >= 2 and result[index - 2:index] == ["-m", "comment"]
+                and index + 1 < len(result), "CLUSTER_RULE_SHAPE_CHANGED")
+        del result[index - 2:index + 2]
+    return result
+
+
+def controller_jump(rule, target):
+    return without_comment(rule)[2:] == ["-j", target]
+
+
+def netpol_accept(rule):
+    if rule[1] not in {"INPUT", "FORWARD", "OUTPUT"} or "--comment" not in rule:
+        return False
+    comment = rule[rule.index("--comment") + 1]
+    return (comment == "KUBE-ROUTER rule to explicitly ACCEPT traffic that comply to network policies"
+            and without_comment(rule)[2:] == ["-m", "mark", "--mark", "0x20000/0x20000", "-j", "ACCEPT"])
+
+
+def verify_scoped_forward_controllers(snapshot, plan):
+    """Qualify the locked controllers' outer selectors, not arbitrary KUBE names."""
+    pods = preflight.network(plan["pod_cidr"])
+    for family, tables in snapshot.items():
+        current = tables["filter"]
+        require("KUBE-FORWARD" not in current["chains"], "IPTABLES_KUBE_PROXY_REFUSED")
+        for original in current["rules"]:
+            rule = without_comment(original)
+            if rule[1] == "FORWARD" and "-j" in rule:
+                target = rule[rule.index("-j") + 1]
+                if target.startswith(("KUBE-", "FLANNEL-")):
+                    require(target in {"KUBE-ROUTER-FORWARD", "FLANNEL-FWD"}
+                            and rule[2:] == ["-j", target], "CLUSTER_FORWARD_DISPATCH_CHANGED")
+            if rule[1] == "FLANNEL-FWD":
+                require(family == "iptables" and rule[2:] in
+                        (["-s", str(pods), "-j", "ACCEPT"], ["-d", str(pods), "-j", "ACCEPT"]),
+                        "FLANNEL_FORWARD_SCOPE_CHANGED")
+            if rule[1] != "KUBE-ROUTER-FORWARD":
+                continue
+            body = rule[2:]
+            for flag in ("-s", "-d"):
+                if flag in body and body.count(flag) == 1:
+                    address = preflight.network(body[body.index(flag) + 1])
+                    if address.prefixlen == 32 and address.subnet_of(pods):
+                        break
+            else:
+                raise Refused("NETWORK_POLICY_FORWARD_SCOPE_CHANGED")
+            require("-j" in body and body[-2] == "-j" and body[-1].startswith("KUBE-POD-FW-")
+                    and "!" not in body and "-g" not in body, "NETWORK_POLICY_FORWARD_SCOPE_CHANGED")
+
+
+def verify_nftables_proxy():
+    rows = json.loads(command(["nft", "--json", "list", "table", "ip", "kube-proxy"]))["nftables"]
+    forward = [item["chain"] for item in rows if item.get("chain", {}).get("name") == "filter-forward"]
+    require(len(forward) == 1 and forward[0].get("hook") == "forward"
+            and forward[0].get("type") == "filter" and forward[0].get("prio") == 0,
+            "NFTABLES_PROXY_RUNTIME_UNVERIFIED")
+
+
+def outside_cluster_permit(rule, plan):
+    if "!" in rule or "-g" in rule or rule[-2:] != ["-j", "ACCEPT"]:
+        return False
+    try:
+        for flag in ("-i", "-o"):
+            if rule.count(flag) != 1:
+                return False
+            interface = rule[rule.index(flag) + 1]
+            if interface == "cni0" or not re.fullmatch(r"[A-Za-z0-9_.-]{1,15}", interface):
+                return False
+        for flag in ("-s", "-d"):
+            if rule.count(flag) != 1:
+                return False
+            address = preflight.network(rule[rule.index(flag) + 1])
+            if any(address.overlaps(preflight.network(value)) for value in (plan["pod_cidr"], plan["service_cidr"])):
+                return False
+    except (IndexError, Refused):
+        return False
+    return True
 
 
 def local_address(plan):
@@ -485,13 +746,19 @@ def collect_first_install(plan, artifact_dir, lock):
             "BRIDGE_NETFILTER_PREREQUISITE_REQUIRED")
     firewall = snapshot_firewall()
     require_existing_firewall(firewall)
+    require_nftables_support()
+    require_observed_dns(plan)
+    require_netpol_mark_reservation(firewall, command(["nft", "list", "ruleset"]))
     unoccupied_boundary(firewall)
+    require(NATIVE_TABLE not in native_tables(), "EXISTING_PRIVATE_NATIVE_GUARD_REFUSED")
+    native = snapshot_native_guards()
     sources = artifacts(artifact_dir, observation["architecture"], lock)
     interface = local_address(plan)
     node = portainer.name(command(["hostname"]).strip().lower())
     networks = docker_networks()
     return {"observation": observation, "firewall": firewall, "sources": sources,
-            "interface": interface, "node": node, "docker_subnets": networks}
+            "interface": interface, "node": node, "docker_subnets": networks, "native": native,
+            "policy_routes": snapshot_policy_routes()}
 
 
 def configuration(plan, node, interface):
@@ -501,8 +768,9 @@ def configuration(plan, node, interface):
             "cluster-cidr": plan["pod_cidr"], "service-cidr": plan["service_cidr"],
             "cluster-dns": str(services.network_address + 10), "flannel-iface": interface,
             "flannel-backend": "host-gw", "write-kubeconfig-mode": "0600", "secrets-encryption": True,
+            "resolv-conf": str(STATE / "resolv.conf"),
             "disable": ["traefik", "servicelb", "local-storage"], "disable-helm-controller": True,
-            "kube-proxy-arg": ["nodeport-addresses=127.0.0.0/8", "healthz-bind-address=127.0.0.1:10256", "metrics-bind-address=127.0.0.1:10249"],
+            "kube-proxy-arg": ["proxy-mode=nftables", "nodeport-addresses=127.0.0.0/8", "healthz-bind-address=127.0.0.1:10256", "metrics-bind-address=127.0.0.1:10249"],
             "kubelet-arg": ["address=" + plan["private_ip"], "read-only-port=0"]}
 
 
@@ -517,6 +785,90 @@ def manifests(lock, node):
                          "local": {"path": str(STATE / "portainer")}, "nodeAffinity": {"required": {"nodeSelectorTerms": [
                              {"matchExpressions": [{"key": "kubernetes.io/hostname", "operator": "In", "values": [node]}]}]}}}}]
     return base, {"apiVersion": "v1", "kind": "List", "items": storage + base["items"]}
+
+
+def network_policies(plan):
+    """Initial management namespaces; only CoreDNS may use the host upstream.
+
+    Namespace and pod selectors form one identity. A same-labelled application
+    in another namespace cannot inherit the CoreDNS exception. Future workload
+    namespaces require their own reviewed egress policy before admission.
+    """
+    def policy(namespace, name, selector, egress):
+        return {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+                "metadata": {"namespace": namespace, "name": name},
+                "spec": {"podSelector": selector, "policyTypes": ["Egress"], "egress": egress}}
+
+    api_address = str(preflight.network(plan["service_cidr"]).network_address + 1)
+    api = {"to": [{"ipBlock": {"cidr": plan["private_ip"] + "/32"}},
+                  {"ipBlock": {"cidr": api_address + "/32"}}],
+           "ports": [{"protocol": "TCP", "port": port} for port in (443, 6443)]}
+    dns_ports = [{"protocol": protocol, "port": 53} for protocol in ("UDP", "TCP")]
+    upstream = {"to": [{"ipBlock": {"cidr": value + "/32"}} for value in plan["dns_upstream_ipv4"]],
+                "ports": dns_ports}
+    cluster_dns = {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+                           "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}], "ports": dns_ports}
+    policies = [policy(namespace, "onesa-default-deny-egress", {}, [])
+                for namespace in ("default", "kube-system", "kube-public", "kube-node-lease", "portainer")]
+    policies += [
+        policy("kube-system", "onesa-coredns-egress", {"matchLabels": {"k8s-app": "kube-dns"}}, [api, upstream]),
+        policy("kube-system", "onesa-metrics-egress", {"matchLabels": {"k8s-app": "metrics-server"}},
+               [api, {"to": [{"ipBlock": {"cidr": plan["private_ip"] + "/32"}}],
+                      "ports": [{"protocol": "TCP", "port": 10250}]}]),
+        policy("portainer", "onesa-portainer-egress", {"matchLabels": dict(portainer.LABELS)}, [api, cluster_dns]),
+    ]
+    return {"apiVersion": "v1", "kind": "List", "items": policies}
+
+
+def verify_network_policies(plan):
+    expected = network_policies(plan)
+    allowed_namespaces = {item["metadata"]["namespace"] for item in expected["items"]}
+    actual_namespaces = {item["metadata"]["name"] for item in get_resource("namespaces")["items"]}
+    require(actual_namespaces == allowed_namespaces, "NEW_WORKLOAD_NAMESPACE_REQUIRES_NETWORK_REVIEW")
+    for namespace in sorted(allowed_namespaces):
+        actual = get_resource("networkpolicies", namespace)["items"]
+        desired = [item for item in expected["items"] if item["metadata"]["namespace"] == namespace]
+        if namespace == "portainer":
+            desired += [item for item in portainer.manifest("portainer/portainer-ce@" + releases()["portainer"]["index_digest"],
+                                                          STORAGE_CLASS, "unused", "4Gi")["items"]
+                        if item["kind"] == "NetworkPolicy"]
+        # Policies combine additively. A competing allow cannot silently widen
+        # the upstream DNS exception while the expected deny policy still exists.
+        require(len(actual) == len(desired), "UNREVIEWED_NETWORK_POLICY")
+        for wanted in desired:
+            found = [item for item in actual if item["metadata"]["name"] == wanted["metadata"]["name"]]
+            require(len(found) == 1, "NETWORK_POLICY_DRIFT")
+            observed = copy.deepcopy(found[0])
+            # Kubernetes omits empty ingress/egress arrays when serializing a
+            # deny-all policy. Normalize only those intentionally empty fields.
+            for direction in ("ingress", "egress"):
+                if wanted["spec"].get(direction) == []:
+                    observed.setdefault("spec", {}).setdefault(direction, [])
+            require(portainer.includes(wanted, observed), "NETWORK_POLICY_DRIFT")
+            require(observed.get("spec") == wanted["spec"], "NETWORK_POLICY_RULES_WIDENED")
+    dns = get_resource("deployment/coredns", "kube-system")
+    template = dns["spec"]["template"]
+    require(template["metadata"].get("labels", {}).get("k8s-app") == "kube-dns"
+            and template["spec"].get("serviceAccountName") == "coredns"
+            and not template["spec"].get("hostNetwork"), "COREDNS_WORKLOAD_IDENTITY_CHANGED")
+    require(dns.get("status", {}).get("availableReplicas", 0) >= 1,
+            "COREDNS_API_SYNCHRONIZATION_UNVERIFIED")
+
+
+def verify_api_service(plan):
+    service = get_resource("service/kubernetes", "default")
+    address = str(preflight.network(plan["service_cidr"]).network_address + 1)
+    require(service["spec"].get("type") == "ClusterIP" and service["spec"].get("clusterIP") == address
+            and service["spec"].get("ports") == [{"name": "https", "port": 443, "protocol": "TCP", "targetPort": 6443}],
+            "KUBERNETES_API_SERVICE_CHANGED")
+    slices = get_resource("endpointslices", "default")["items"]
+    selected = [item for item in slices if item["metadata"].get("labels", {}).get("kubernetes.io/service-name") == "kubernetes"]
+    addresses = [value for item in selected for endpoint in item.get("endpoints", [])
+                 if endpoint.get("conditions", {}).get("ready") is True for value in endpoint.get("addresses", [])]
+    require(addresses == [plan["private_ip"]]
+            and all(item.get("addressType") == "IPv4" and item.get("ports") ==
+                    [{"name": "https", "port": 6443, "protocol": "TCP"}] for item in selected),
+            "POD_API_ENDPOINT_UNREACHABLE_OR_CHANGED")
 
 
 def service_files():
@@ -686,7 +1038,13 @@ def verify_installation(plan, receipt, lock):
     require(private_file(KUBECONFIG, 1024 * 1024), "PRIVATE_KUBECONFIG_REQUIRED")
     verify_node(plan, receipt, lock)
     verify_portainer(receipt, lock)
+    verify_network_policies(plan)
+    verify_api_service(plan)
+    verify_nftables_proxy()
     require(preflight.docker_snapshot() == receipt["docker"], "EXISTING_DOCKER_RUNTIME_CHANGED")
+    require(snapshot_native_guards() == receipt["native_before"], "EXISTING_NATIVE_FIREWALL_CHANGED")
+    require(native_digest(NATIVE_TABLE) == receipt.get("native_guard_sha256"), "PRIVATE_NATIVE_FIREWALL_DRIFT")
+    require(snapshot_policy_routes() == receipt["policy_routes_before"], "EXISTING_POLICY_ROUTING_CHANGED")
     verify_firewall(plan, receipt["docker_subnets"], receipt["firewall_before"])
     rows = command(["ss", "--no-header", "--listening", "--numeric", "--tcp", "--udp"])
     required = {6443: plan["private_ip"], 10250: plan["private_ip"]}
@@ -744,6 +1102,8 @@ def install(plan, facts, lock, maintenance_token):
                "plan_sha256": digest(encoded(plan)), "release_lock_sha256": digest(encoded(lock)),
                "maintenance_token": maintenance_token,
                "node": facts["node"], "architecture": facts["observation"]["architecture"],
+               "native_before": facts["native"],
+               "policy_routes_before": facts["policy_routes"],
                "docker_subnets": facts["docker_subnets"], "firewall_before": facts["firewall"],
                "docker": preflight.docker_snapshot(), "files": {}}
     write_new(RECEIPT, encoded(receipt))
@@ -753,6 +1113,7 @@ def install(plan, facts, lock, maintenance_token):
         secure_directory(LIB)
         secure_directory(STATE / "portainer")
         secure_directory(DATA / "agent" / "images")
+        secure_directory(DATA / "server" / "manifests")
         record_new_file(receipt, STATE / "plan.json", encoded(plan))
         for filename in SOURCE_FILES:
             record_new_file(receipt, LIB / filename, (Path(__file__).parent / filename).read_bytes())
@@ -760,6 +1121,15 @@ def install(plan, facts, lock, maintenance_token):
         require(digest(shared_source) == lock["shared_lifecycle_sha256"], "SHARED_LIFECYCLE_SOURCE_DRIFT")
         record_new_file(receipt, LIB / "runtime_lifecycle.py", shared_source)
         record_new_file(receipt, CONFIG, encoded(configuration(plan, facts["node"], facts["interface"])))
+        record_new_file(receipt, STATE / "resolv.conf", "".join("nameserver " + address + "\n"
+                        for address in plan["dns_upstream_ipv4"]).encode())
+        # Bootstrap policies are present before packaged workloads are started;
+        # Portainer is admitted only after these exact policies are applied.
+        # Namespace creation is declarative and does not change other namespaces.
+        policy_bundle = network_policies(plan)
+        policy_bundle["items"].insert(0, {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "portainer"}})
+        record_new_file(receipt, DATA / "server" / "manifests" / "onesa-network-policy.json", encoded(policy_bundle))
+        record_new_file(receipt, STATE / "private-firewall.nft", native_guard_source(plan, receipt["docker_subnets"]))
         # All release bytes are rehashed immediately before copying and then the
         # installed copies are hashed. No installer is downloaded or executed.
         platform = {"aarch64": "arm64", "x86_64": "amd64"}[receipt["architecture"]]
@@ -775,12 +1145,14 @@ def install(plan, facts, lock, maintenance_token):
         command(["systemctl", "daemon-reload"])
         for unit in (UNIT, FIREWALL_UNIT):
             effective_owned_unit(unit)
+        ensure_native_guard(plan, receipt, first_install=True)
         apply_private_firewall(plan, receipt["docker_subnets"])
         verify_firewall(plan, receipt["docker_subnets"], receipt["firewall_before"])
         receipt["phase"] = "STARTING"
         save_receipt(receipt)
         command(["systemctl", "start", UNIT], timeout=360)
         wait_ready(lambda: verify_node(plan, receipt, lock))
+        kubectl("apply", "--server-side", "--field-manager=onesa-first-install", "-f", "-", input_bytes=encoded(policy_bundle))
         expected, full = manifests(lock, receipt["node"])
         del expected
         receipt["phase"] = "APPLYING_PORTAINER"
@@ -831,6 +1203,8 @@ def main():
                     clean_server_exec()
                     raise Refused("SERVER_EXEC_RETURNED")
                 else:
+                    ensure_native_guard(plan, receipt)
+                    require(snapshot_policy_routes() == receipt["policy_routes_before"], "EXISTING_POLICY_ROUTING_CHANGED")
                     apply_private_firewall(plan, receipt["docker_subnets"])
                     verify_firewall(plan, receipt["docker_subnets"], receipt["firewall_before"])
                     result = {"status": "PRIVATE_FIREWALL_PASS"}
