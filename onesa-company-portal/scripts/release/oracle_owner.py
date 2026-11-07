@@ -667,7 +667,13 @@ class GitHub:
             "verification_only": True, "release_authorized": False,
         }
 
-    def qualify(self, binding):
+    def qualify(self, binding, archives=None):
+        if binding.get("repository") == CONSOLIDATED_REPOSITORY:
+            # This remains an unsigned source observation. Only the separately
+            # commissioned Store can combine it with hosted/owner observations.
+            source = portal_operational_source(binding)
+            return [self.verify_source(source, archives)]
+        require(archives is None, "Legacy qualification does not accept source archives")
         repo, sha = binding["repository"], binding["candidate_commit"]
         prefix = "repos/" + repo + "/"
         require(
@@ -813,6 +819,75 @@ class GitHub:
         return references
 
 
+PORTAL_SOURCE_FIELDS = {
+    "schema_version", "repository", "repository_id", "product", "source_path",
+    "candidate_commit", "source_tree", "product_source_tree", "branch",
+}
+
+
+def portal_operational_source(value):
+    """The sole canonical operational opt-in is exact-main Portal frontend."""
+    require(isinstance(value, dict) and PORTAL_SOURCE_FIELDS <= set(value),
+            "Complete canonical Portal source identity required")
+    source = {key: value[key] for key in PORTAL_SOURCE_FIELDS}
+    require(type(source["schema_version"]) is int and source["schema_version"] == 2
+            and source["repository"] == CONSOLIDATED_REPOSITORY
+            and type(source["repository_id"]) is int
+            and source["repository_id"] == CONSOLIDATED_REPOSITORY_ID
+            and source["product"] == "portal"
+            and source["source_path"] == CONSOLIDATED_PRODUCTS["portal"]
+            and source["branch"] == "main"
+            and value.get("component", "frontend") == "frontend"
+            and all(isinstance(source[key], str) and re.fullmatch(r"[a-f0-9]{40}", source[key])
+                    for key in ("candidate_commit", "source_tree", "product_source_tree")),
+            "Canonical exact-main Portal frontend scope refused")
+    return source
+
+
+def component_scope(binding):
+    if binding.get("repository") == CONSOLIDATED_REPOSITORY:
+        portal_operational_source(binding)
+        return CONSOLIDATED_REPOSITORY + ":portal:frontend"
+    return binding["repository"] + ":" + binding["component"]
+
+
+def lifecycle_scope(binding):
+    if binding.get("repository") == CONSOLIDATED_REPOSITORY:
+        portal_operational_source(binding)
+        # Repository migration cannot create a second controller for the same
+        # resource or discard an old controller's unresolved global hold.
+        return "DruHustle/onesa-company-portal:frontend"
+    return component_scope(binding)
+
+
+def portal_archive_pins(tool):
+    pins = tool.get("source_archives")
+    require(isinstance(pins, dict) and set(pins) == set(CONSOLIDATED_ARTIFACTS["portal"])
+            and all(isinstance(pin, str) and HEX.fullmatch(pin) for pin in pins.values()),
+            "All exact Portal source artifact archives must be pinned")
+    return pins
+
+
+def portal_source_archives(directory, pins, *, uid=0):
+    """Read only fixed installed ZIP names, without fetching or extracting them."""
+    directory = Path(directory)
+    private(directory, directory=True, uid=uid)
+    require(set(pins) == set(CONSOLIDATED_ARTIFACTS["portal"]),
+            "Exact Portal source archive names required")
+    archives = {}
+    for name, pin in pins.items():
+        path = directory / (name + ".zip")
+        private(path, uid=uid)
+        require(0 < path.stat().st_size <= SOURCE_ARCHIVE_LIMIT,
+                "Installed source archive exceeds bound")
+        data = path.read_bytes()
+        require(isinstance(pin, str) and HEX.fullmatch(pin)
+                and hashlib.sha256(data).hexdigest() == pin,
+                "Installed source archive changed")
+        archives[name] = base64.b64encode(data).decode()
+    return archives
+
+
 def binding_valid(value, policy):
     fields = {
         "repository",
@@ -825,12 +900,15 @@ def binding_valid(value, policy):
         "configuration_sha256",
         "target_environment",
     }
+    consolidated = isinstance(value, dict) and value.get("repository") == CONSOLIDATED_REPOSITORY
+    if consolidated:
+        fields |= PORTAL_SOURCE_FIELDS
     require(
         isinstance(value, dict) and set(value) == fields,
         "Complete exact component binding required",
     )
     require(
-        value["repository"] in {OWNER + "/" + r for r in POLICIES}
+        (consolidated or value["repository"] in {OWNER + "/" + r for r in POLICIES})
         and value["target_environment"] == "production",
         "Repository/target scope refused",
     )
@@ -852,7 +930,17 @@ def binding_valid(value, policy):
         and all(HEX.fullmatch(x) for x in value["configuration_sha256"].values()),
         "Separate configuration bindings required",
     )
-    profile = policy["components"].get(value["repository"] + ":" + value["component"])
+    if consolidated:
+        source = portal_operational_source(value)
+        tool = policy.get("toolchain", {})
+        require(type(policy.get("schema_version")) is int and policy["schema_version"] == 2
+                and tool.get("source_binding") == source
+                and tool.get("source_commit") == value["candidate_commit"]
+                and tool.get("source_tree") == value["source_tree"]
+                and tool.get("source_sha256") == value["source_sha256"],
+                "Separately commissioned exact canonical component source required")
+        portal_archive_pins(tool)
+    profile = policy["components"].get(component_scope(value))
     require(
         profile and set(profile["runners"]) == set(PHASES),
         "Component is not commissioned",
@@ -937,6 +1025,16 @@ class Store:
             "policy_sha256": self.trust["policy_sha256"],
         }
 
+    def qualify_source(self, binding):
+        if binding.get("repository") != CONSOLIDATED_REPOSITORY:
+            return self.github.qualify(binding)
+        binding_valid(binding, self.policy)
+        archives = portal_source_archives(
+            Path(__file__).resolve().parent / "source-artifacts",
+            portal_archive_pins(self.policy["toolchain"]), uid=self.root.stat().st_uid,
+        )
+        return self.github.qualify(binding, archives)
+
     @contextmanager
     def transaction(self):
         self.db.execute("BEGIN IMMEDIATE")
@@ -985,7 +1083,7 @@ class Store:
             (
                 record["id"],
                 kind,
-                binding["repository"] + ":" + binding["component"],
+                component_scope(binding),
                 canonical(envelope).decode(),
                 parent,
                 record["issued_at"],
@@ -1020,7 +1118,7 @@ class Store:
             and r["kind"] == row[3]
             and r["parent"] == row[2]
             and r["issued_at"] == row[5]
-            and r["binding"]["repository"] + ":" + r["binding"]["component"] == row[4],
+            and component_scope(r["binding"]) == row[4],
             "Signed record and custody index differ",
         )
         issued, expiry = (
@@ -1122,11 +1220,11 @@ class Store:
 
     def issue_context(self, binding):
         profile = binding_valid(binding, self.policy)
-        ci = self.github.qualify(binding)
+        ci = self.qualify_source(binding)
         with self.transaction():
             previous = self.db.execute(
                 "SELECT envelope FROM records WHERE kind='context' AND scope=?",
-                (binding["repository"] + ":" + binding["component"],),
+                (component_scope(binding),),
             ).fetchall()
             count = sum(
                 json.loads(row[0])["record"]["binding"]["candidate_commit"]
@@ -1155,7 +1253,7 @@ class Store:
     def lifecycle_action(self, kind, record, action, *, complete=lambda result: True):
         """Hold across reservation, provider work and acceptance; interruption stays held."""
         binding = record["binding"]
-        scope = binding["repository"] + ":" + binding["component"]
+        scope = lifecycle_scope(binding)
         reference = str(self.root) + ":" + record["id"]
         module = lifecycle_module()
         try:
@@ -1186,7 +1284,7 @@ class Store:
                 changed == 1, "Context already reserved/consumed; no automatic retry"
             )
         # Reservation commits before the first hosted request, including failures.
-        ci = self.github.qualify(binding)
+        ci = self.qualify_source(binding)
         stage = self.runner("staging", binding, {"context_id": context})
         operations = self.runner("operations", binding, {"context_id": context})
         with self.transaction():
@@ -1217,7 +1315,7 @@ class Store:
                 {"decision": "PENDING"},
                 parent=qualification,
             )
-        ci = self.github.qualify(binding)
+        ci = self.qualify_source(binding)
         operations = self.runner(
             "operations",
             binding,
@@ -1259,13 +1357,13 @@ class Store:
                 "state": existing[1],
                 "action": "INSPECT_ONLY_NO_DUPLICATE_REQUEST",
             }
-        self.github.qualify(binding)
+        self.qualify_source(binding)
         self.runner(
             "operations",
             binding,
             {"authorization_id": authorization, "before_deployment": True},
         )
-        scope = binding["repository"] + ":" + binding["component"]
+        scope = component_scope(binding)
         with self.transaction():
             self.get(authorization, "authorization", binding)
             uncertain = self.db.execute(
@@ -1370,7 +1468,7 @@ class Store:
         try:
             with module.lifecycle_lock() as guard:
                 binding = r["binding"]
-                guard.mark_revocation(binding["repository"] + ":" + binding["component"], str(self.root) + ":" + record)
+                guard.mark_revocation(lifecycle_scope(binding), str(self.root) + ":" + record)
                 return self._revoke(record, r)
         except module.LifecycleError as error:
             raise Rejected(str(error)) from None

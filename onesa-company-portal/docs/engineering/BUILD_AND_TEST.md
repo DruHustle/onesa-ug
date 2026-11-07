@@ -1311,6 +1311,21 @@ The separate pinned CLI protocol fixture requires the credential-free disposable
 CLI image and synthetic custody/workspaces; the protected guide specifies that
 fixture arrangement. It never accepts provider credentials or authorizes a release.
 
+From the consolidated repository root, run
+`python3 -m unittest discover -s scripts/ci -p 'test_portal_component_consumer.py'`
+for the canonical frontend transition. These tests reuse the original disposable
+installer and Ed25519 Store fixtures with the strict consolidated source API
+fixture. They check root/subtree archive separation, exact-main promotion,
+fixed private artifact pins at all four CI rechecks, source-only refusal,
+unchanged finite contexts, the separate record namespace and retained lifecycle
+holds. They also exercise complete build/preview/provider source identities and
+the canonical provider root without inventing a mandatory Git integration.
+The build protocol fixture writes real Git/tar artifacts with a synthetic
+container response; it does not claim an actual image build or hosted acceptance.
+The existing real loopback transport suite additionally rejects mismatched
+canonical source metadata before the sole provider request. Legacy source,
+signature, custody, uncertain-operation and rollback suites remain required.
+
 The anonymous Portal browser probe checks EN/DE presentation, mobile and desktop,
 system appearance, reduced motion, accessibility, existing contact navigation and
 private anonymous denials in Chromium, Firefox and WebKit. Its explicit synthetic
