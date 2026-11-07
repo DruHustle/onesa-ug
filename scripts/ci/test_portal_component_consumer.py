@@ -69,6 +69,9 @@ class CanonicalInstallTests(unittest.TestCase):
             return self.source.api(path)
 
         self.source.github.api = api
+        # Keep the original installer's explicit synthetic owner identity.
+        # The real Actions custody refusal is checked independently below.
+        self.source.github.owner = legacy.owner
         fixture.github = self.source.github
         fixture.policy["schema_version"] = 2
         profile = fixture.policy["components"].pop("DruHustle/onesa-company-portal:frontend")
@@ -118,6 +121,14 @@ class CanonicalInstallTests(unittest.TestCase):
         self.fixture.seal()
         with self.assertRaises(owner.Rejected):
             self.fixture.validate()
+
+    def test_real_owner_custody_refuses_actions_before_any_api_request(self):
+        github = owner.GitHub("synthetic-owner-refusal")
+        with (patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}),
+              patch.object(github, "api") as api):
+            with self.assertRaisesRegex(owner.Rejected, "Owner custody cannot run in Actions"):
+                github.owner()
+            api.assert_not_called()
 
     def test_other_complete_component_installers_remain_outside_canonical_opt_in(self):
         original = self.fixture.manifest["files"]
@@ -226,7 +237,12 @@ class CanonicalStoreTests(unittest.TestCase):
 
     def setUp(self):
         fixture = self.fixture = legacy_owner.OwnerStoreTests()
-        fixture.setUp()
+        # A real lifecycle fixture needs private ancestors on non-root runners,
+        # where the legacy Store-only fixture otherwise defaults to /tmp.
+        private_temp = legacy_owner.tempfile.TemporaryDirectory(dir=Path.home())
+        self.addCleanup(private_temp.cleanup)
+        with patch.object(legacy_owner.tempfile, "TemporaryDirectory", return_value=private_temp):
+            fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         self.source = SourceFixture(owner, branch="main")
         self.binding = {**fixture.binding, **self.source.source, "component": "frontend"}
@@ -351,6 +367,19 @@ class CanonicalStoreTests(unittest.TestCase):
         self.assertEqual(self.lifecycle.HOLD.read_bytes(), original)
         self.assertEqual(self.store.db.execute("SELECT state FROM contexts WHERE id=?", (context,)).fetchone()[0], "issued")
         self.assertFalse((self.fixture.root / "provider-count").exists())
+
+    def test_real_lifecycle_refuses_a_writable_ancestor(self):
+        ancestor = self.fixture.root / "writable-ancestor"
+        ancestor.mkdir(mode=0o700)
+        child = ancestor / "private.json"
+        child.write_text("{}")
+        child.chmod(0o600)
+        ancestor.chmod(0o777)
+        try:
+            with self.assertRaisesRegex(self.lifecycle.LifecycleError, "LIFECYCLE_ANCESTOR_CUSTODY"):
+                self.lifecycle.private_path(child)
+        finally:
+            ancestor.chmod(0o700)
 
 
 class CanonicalProviderTests(unittest.TestCase):
