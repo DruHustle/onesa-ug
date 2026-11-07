@@ -30,6 +30,12 @@ DEPENDENCY_SUCCESS = {
 
 class OperationsGuards(unittest.TestCase):
     def setUp(self):
+        mail = patch.dict("sys.modules", {"backup": SimpleNamespace(checked_env=lambda: ({
+            "MAIL_PROVIDER": "resend", "NOTIFY_EMAIL": "andrew@onesa.eu",
+            "MAIL_FROM": "synthetic@example.invalid", "RESEND_API_KEY": "synthetic-only",
+        }, None))})
+        mail.start()
+        self.addCleanup(mail.stop)
         self.metrics = {
             "worker_required": True,
             "worker_healthy": True,
@@ -228,7 +234,7 @@ class OperationsGuards(unittest.TestCase):
         self.assertNotIn("unapproved-host", str(result) + str(requests))
         self.assertEqual(list(result["affected_backends"]), ["robot-production"])
 
-    def test_worker_detail_preserves_legacy_payload_bytes_and_rejects_unknown_values(self):
+    def test_worker_detail_preserves_text_and_versioned_bytes_and_rejects_unknown_values(self):
         values = {
             "MAIL_PROVIDER": "resend", "NOTIFY_EMAIL": "andrew@onesa.eu",
             "MAIL_FROM": "synthetic@example.invalid", "RESEND_API_KEY": "synthetic-only",
@@ -271,7 +277,14 @@ class OperationsGuards(unittest.TestCase):
                                        checked_at=checked, reference=reference)
                     expected = {**legacy, "text": legacy["text"].replace(
                         "worker-stopped\n", "worker-stopped" + detail + "\n")}
-                    self.assertEqual(requests[-1].data, json.dumps(expected).encode())
+                    actual = json.loads(requests[-1].data)
+                    self.assertEqual(set(actual), set(expected) | {"html"})
+                    self.assertEqual({key: actual[key] for key in expected}, expected)
+                    self.assertIn("Service needs attention", actual["html"])
+                    self.assertIn("Reference: " + reference, actual["html"])
+                    self.assertNotIn("private-provider-detail", actual["html"])
+                    if detail:
+                        self.assertIn(detail.strip(), actual["html"])
                     self.assertEqual(requests[-1].data, requests[-2].data)
                     self.assertEqual(requests[-1].get_header("Idempotency-key"),
                                      "onesa-operations/" + reference)

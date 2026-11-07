@@ -27183,11 +27183,45 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "catalog": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "product": {
+                            "type": "string",
+                            "enum": [
+                              "ai",
+                              "drone",
+                              "robot",
+                              "farmer",
+                              "logistics",
+                              "factory",
+                              "pasofi",
+                              "mobile"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "connected": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "product",
+                          "name",
+                          "connected"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
                     "enabled",
-                    "applications"
+                    "applications",
+                    "catalog"
                   ],
                   "additionalProperties": false
                 }
@@ -27654,6 +27688,39 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "catalog": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "product": {
+                            "type": "string",
+                            "enum": [
+                              "ai",
+                              "drone",
+                              "robot",
+                              "farmer",
+                              "logistics",
+                              "factory",
+                              "pasofi",
+                              "mobile"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "connected": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "product",
+                          "name",
+                          "connected"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -27661,7 +27728,8 @@
                     "csrf",
                     "access",
                     "memberships",
-                    "applications"
+                    "applications",
+                    "catalog"
                   ],
                   "additionalProperties": false
                 }
@@ -28870,6 +28938,39 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "catalog": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "product": {
+                            "type": "string",
+                            "enum": [
+                              "ai",
+                              "drone",
+                              "robot",
+                              "farmer",
+                              "logistics",
+                              "factory",
+                              "pasofi",
+                              "mobile"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "connected": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "product",
+                          "name",
+                          "connected"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -28877,7 +28978,8 @@
                     "csrf",
                     "access",
                     "memberships",
-                    "applications"
+                    "applications",
+                    "catalog"
                   ],
                   "additionalProperties": false
                 }
@@ -30414,6 +30516,39 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "catalog": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "product": {
+                            "type": "string",
+                            "enum": [
+                              "ai",
+                              "drone",
+                              "robot",
+                              "farmer",
+                              "logistics",
+                              "factory",
+                              "pasofi",
+                              "mobile"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "connected": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "product",
+                          "name",
+                          "connected"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -30421,7 +30556,8 @@
                     "csrf",
                     "access",
                     "memberships",
-                    "applications"
+                    "applications",
+                    "catalog"
                   ],
                   "additionalProperties": false
                 }
@@ -33225,6 +33361,29 @@
                         "email"
                       ],
                       "additionalProperties": false
+                    },
+                    "onesaLink": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string",
+                          "format": "email",
+                          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                        }
+                      },
+                      "required": [
+                        "email"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "onesaSignInPath": {
+                      "type": "string"
+                    },
+                    "onesaReauthRequired": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
                     }
                   },
                   "required": [
@@ -35354,6 +35513,10 @@
                   "rememberBrowser": {
                     "default": false,
                     "type": "boolean"
+                  },
+                  "linkOnesaAccount": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -35725,6 +35888,10 @@
                     "pattern": "^[a-f0-9]{64}$"
                   },
                   "rememberBrowser": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "linkOnesaAccount": {
                     "default": false,
                     "type": "boolean"
                   }
@@ -36108,6 +36275,10 @@
                     "maxLength": 256
                   },
                   "rememberBrowser": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "linkOnesaAccount": {
                     "default": false,
                     "type": "boolean"
                   }

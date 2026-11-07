@@ -1,6 +1,11 @@
 # Onesa Drone
 
-Canonical repository: [DruHustle/onesa-drone](https://github.com/DruHustle/onesa-drone).
+Canonical source: [DruHustle/onesa-ug — Drone](https://github.com/DruHustle/onesa-ug/tree/main/onesa-drone).
+Run product commands from `onesa-drone/` within that checkout. Drone retains its
+independent builds, releases, authentication and data. Repository-root workflows
+execute CI; nested legacy workflows are retained specifications. Historical release
+links and accepted identifiers preserve their original repository provenance.
+Consolidation alone does not migrate live deployment settings or qualify a new release.
 
 **Intelligent Delivery Beyond Roads**
 

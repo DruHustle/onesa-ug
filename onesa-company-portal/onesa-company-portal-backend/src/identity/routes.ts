@@ -46,6 +46,7 @@ import {
   type Product,
 } from "./config.js";
 import { createIdentityProvider } from "./provider.js";
+import { catalogProducts, identityCatalog } from "./catalog.js";
 
 type Guard = (
   roles: readonly Role[],
@@ -99,12 +100,14 @@ const membershipSchema = z.object({
   label: z.string().min(1).max(120),
 });
 const applicationSchema = z.object({ product, url: z.url() });
+const catalogSchema = z.object({ product: z.enum(catalogProducts), name: z.string(), connected: z.boolean() });
 const sessionSchema = z.object({
   account: accountSchema,
   csrf: proof,
   access: z.array(accessSchema),
   memberships: z.array(membershipSchema),
   applications: z.array(applicationSchema),
+  catalog: z.array(catalogSchema),
 });
 const dummyPassword = passwordHash("unusable-shared-account-timing-fixture");
 const cookieOptions = () => ({
@@ -178,6 +181,7 @@ export async function registerIdentity(
       csrf: session.csrf,
       access,
       memberships,
+      catalog: identityCatalog(config),
       applications:
         config?.clients.map((c) => ({
           product: c.product,
@@ -535,6 +539,7 @@ export async function registerIdentity(
           200: z.object({
             enabled: z.boolean(),
             applications: z.array(applicationSchema),
+            catalog: z.array(catalogSchema),
           }),
           ...failures,
         },
@@ -542,6 +547,7 @@ export async function registerIdentity(
     },
     async () => ({
       enabled: Boolean(config),
+      catalog: identityCatalog(config),
       applications:
         config?.clients.map((c) => ({
           product: c.product,
@@ -753,8 +759,7 @@ export async function registerIdentity(
         "Unable to sign in with these credentials.",
       );
     const previous = await currentAccount(req);
-    const authenticatedAt = Math.floor(Date.now() / 1000),
-      raw = token(),
+    const raw = token(),
       csrf = token();
     const result = await transaction(async (c) => {
       // A simultaneous A→B and B→A switch must acquire account locks in one order.
@@ -859,10 +864,11 @@ export async function registerIdentity(
           [previous.sourceHash, previous.account.id],
         );
       }
-      await c.query(
-        "INSERT INTO identity_sessions(token_hash,user_id,csrf,authenticated_at,amr,expires_at) VALUES($1,$2,$3,to_timestamp($4),$5,now()+interval '8 hours')",
-        [hash(raw), user.id, csrf, authenticatedAt, amr],
-      );
+      const authenticated = (await c.query(
+        "INSERT INTO identity_sessions(token_hash,user_id,csrf,authenticated_at,amr,expires_at) VALUES($1,$2,$3,clock_timestamp(),$4,now()+interval '8 hours') RETURNING authenticated_at",
+        [hash(raw), user.id, csrf, amr],
+      )).rows[0];
+      const authenticatedAt=Math.floor(new Date(authenticated.authenticated_at).getTime()/1000);
       if (account.role !== "member")
         await c.query(
           "INSERT INTO sessions(token_hash,user_id,csrf,expires_at) VALUES($1,$2,$3,now()+interval '8 hours')",
@@ -893,7 +899,7 @@ export async function registerIdentity(
         reply,
         raw,
         input.rememberBrowser,
-        authenticatedAt * 1000,
+        result.authenticatedAt * 1000,
       );
     return result;
   }

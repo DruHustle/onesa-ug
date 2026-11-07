@@ -1,6 +1,33 @@
 # Changelog
 
+- Add branded invitation/recovery HTML behind versioned mail queue states and an
+  additive state-constraint migration. Existing attempted messages remain plain;
+  older workers cannot claim branded retries. This does not enable mail delivery.
+
 ## Unreleased
+
+- Source correction: keep MCP stdio input responsive during API calls, honor
+  request-scoped cancellation, and close the owned HTTP response without replay.
+  Bound outstanding work and whole-request duration; preserve initialization,
+  unrelated requests and completed results when a cancellation is invalid or stale.
+
+- Source candidate: add explicitly scoped MCP model/Knowledge resources and a
+  bounded text-summary prompt, with fresh identity/ownership checks on discovery
+  and reads. Preserve empty defaults, exact document scopes, embedding metadata,
+  cancellation and redacted failures. No hosted activation, new provider processing,
+  service-identity commissioning or completed external-client acceptance is implied.
+
+- Source correction: reject unsupported Onesa model IDs and invalid header/cookie
+  credentials before consumer transmission. Preserve supplied backend and request
+  provenance, and reject contradictory mock/real metadata. The independently
+  vendored Drone client retains the same bounded text contract; wider consumer and
+  external MCP qualification remain separate acceptance requirements.
+
+- Source correction: use `notifications-ai@onesa.eu` in mail configuration
+  examples and missing-default preparation, preserving explicit runtime settings.
+  Validate a single sender/reply address without control characters and exclude
+  mail credentials from configuration representations. Domain/key verification,
+  pending-delivery reconciliation and an actual worker rollout remain separate.
 
 - Source candidate: add separately scoped identity API/frontend release profiles
   and real owner-probe PKCE/MFA sign-in, retaining the native API, interface,

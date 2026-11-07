@@ -1,5 +1,77 @@
 # Changelog
 
+- Add a build-only ARM64 K3s runtime recipe with pinned source archives, dependency
+  locks, compiler packages and executable hashes. Retain upstream license notices
+  and selected runtime tests, with bounded archive extraction and source-integrity
+  guards. Require a hash-pinned, readback-verified source/notice bundle covering
+  copied vendor userspace, CNI, `check-config`, recipes and configured dependency
+  closure before any builder execution. Preserve the reviewed payload and wrapper
+  bytes; custody is not legal-completeness or vendor rebuild certification.
+  The recipe grants no installation or deployment authority; cluster,
+  workload and recovery qualification remain separate.
+
+- Add a versioned Onesa email presentation for new account and operations messages,
+  retaining plain alternatives and original bytes for earlier delivery attempts.
+  Mobile/dark rendering and delivery-version regressions are covered locally;
+  deployment and mailbox-client acceptance remain separate release requirements.
+
+## Unreleased — Shared sending domain
+
+- Prepare immutable encrypted Portal mail custody before the first external send.
+  Persist exact Resend JSON or SMTP MIME and bind sender, recipient, provider and
+  credentials across recovery. Hold changed or legacy attempted requests for
+  reconciliation; SMTP ambiguity cannot be safely replayed automatically.
+  Real PostgreSQL and worker regressions cover commit-before-send, competing
+  claims, byte-identical retry, cooldown and expiry. No runtime change is claimed;
+  rollout requires a quiesced, reconciled queue and a compatible retained worker.
+
+- Add pinned, local-only ARM64 builds for dependency-patched CoreDNS, Metrics Server
+  and Local Path Provisioner, retaining upstream race tests and license notices.
+  Source/module/binary hashes and non-root runtime version checks bind each build.
+  This does not change the Kubernetes installer, install a cluster or establish
+  DNS, metrics, storage or workload acceptance.
+
+- Authorize `it-infrastructure@onesa.eu` for infrastructure notifications. Keep
+  its `OPERATIONS_NOTIFY_EMAIL` setting separate from application mail. Keep
+  historical recipients valid for immutable pending-request reconciliation and
+  preserve recipient binding, deduplication and staging suppression. Runtime and
+  provider notification settings require separate readback and delivery checks.
+
+- Add a default-off Drone operations sender route gated by the existing commissioned
+  signed production acceptance chain and exact simulation runtime identity. Keep the
+  original six Portal/AI/Robot slots and approved recipients; reuse durable request
+  bytes, incident timing and mixed/shared sender policy. Invalid or unsupported
+  acceptance performs no Drone observation, and changed/revoked enrollment holds
+  pending delivery for reconciliation. Synthetic signature/runtime tests do not
+  establish installation, commissioning, a deployed Drone service or delivered mail.
+
+- Persist each operations email's exact request body and sending-credential
+  fingerprint before contacting the provider; flush and sync the private file
+  and its atomic replacement before delivery. Retry the same bytes and event
+  identity; hold legacy, altered or credential-mismatched pending requests for
+  reconciliation without resetting receipts or cooldowns. Never store the key.
+  Add optional validated sender mapping for existing single-product Portal, AI
+  and Robot API incidents; shared/mixed incidents and simulations retain the
+  configured Portal sender. Offline regressions do not activate a monitor,
+  change deployed mail configuration or establish inbox delivery.
+- Preserve the reviewed private PostgreSQL CA integration from the pending
+  standalone change. The API, worker and isolated migration helper accept one
+  bounded certificate through existing private configuration, require
+  `verify-full`, reject competing URL overrides and retain blocked-root checks.
+  An unset private CA preserves existing connection behavior. Local parsing and
+  custody regressions do not establish a live database handshake.
+- Preserve the pending scoped Zoho EU inbox observer and reject foreign/admin
+  accounts, malformed delivery records and unsafe TLS. Bind its 90-second wait
+  to the initial freshness admission and pace GET requests so later valid mail
+  does not fail at 60 seconds or overrun the provider's request limit. Offline
+  regressions use synthetic transport and time; no OAuth grant or inbox is used.
+- Use `notifications-portal@onesa.eu` in sender examples, preserving explicitly
+  configured runtime addresses. Validate sender and Reply-To before transport
+  creation, rejecting control characters and multiple addresses. Document the
+  common product naming policy, existing Zoho reply inbox and safe reconciliation
+  of pending messages before a deployed sender/domain change. No DNS change,
+  mailbox creation, external email or live rollout is implied by this source.
+
 ## Unreleased — Optional Onesa Mobile identity
 
 - Add an explicitly configured fourth confidential product client and exact callback

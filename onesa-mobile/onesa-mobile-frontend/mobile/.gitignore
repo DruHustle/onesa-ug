@@ -20,6 +20,7 @@ android/build/
 android/app/.cxx/
 ios/Pods/
 ios/build/
+ios/.xcode.env
 ios/.xcode.env.local
 ios/*.xcworkspace/xcuserdata/
 ios/*.xcodeproj/xcuserdata/

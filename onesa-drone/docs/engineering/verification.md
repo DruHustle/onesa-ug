@@ -1,5 +1,44 @@
 # Verification scope and release gates
 
+## Consolidated-source request and provenance boundaries
+
+Run product checks from `onesa-drone/` in `DruHustle/onesa-ug`. The bounded ASGI
+regressions in `tests/test_request_boundary.py` exercise stalled and trickled request
+bodies, chunked oversize bodies and malformed or excessive Content-Length headers.
+The request reader now has a five-second total deadline and retains the existing
+16 KiB ceiling. It returns HTTP 408 or 413 with the same no-store/security headers
+and bounded request accounting as other responses, before invoking a route.
+These cases reproduced an unbounded body wait and malformed-length exceptions on
+the prior source. Completed valid requests retain the existing authentication and
+command behavior; no physical transport is introduced.
+
+`tests/test_ci_manifests.py` creates actual disposable Git repositories and verifies
+source attribution in both standalone and consolidated layouts. Consolidated build
+manifests identify `DruHustle/onesa-ug`, its exact commit/root tree, the `onesa-drone`
+source path and that product's tree. An unexpected origin, workflow repository,
+source location or uncommitted product change fails before publication. Consolidated
+manifests explicitly mark verification-only scope and no release authorization;
+the old owner release adapters retain their existing repository policy and cannot
+treat a monorepo commit as an accepted old-repository release. Hosted release-path
+migration, pinned browser/container qualification and hardware commissioning remain
+separate requirements.
+
+The 4 November 2026 local source review used Python 3.11.17 and Node 24.22.1.
+The complete suite passed all 251 cases on a newly created disposable PostgreSQL
+17.6 instance, including the restricted-role retained-identity workflows; no case
+was skipped. The SQLite baseline passed 235 cases with two PostgreSQL-only skips,
+and all 14 added boundary/provenance cases passed separately. All 121 release cases,
+34 packaging/transport cases and 13 frontend unit cases passed, alongside Ruff,
+TypeScript/build, exact built-package verification and publication hygiene. Both
+locked dependency audits reported no known vulnerabilities.
+
+The pinned Chromium download returned invalid archives. A separate attempt using
+the installed Chromium failed before all 34 browser cases could create a browser,
+because this execution environment denies the required Unix socket. No browser
+journey or Docker-image security gate is reported as passed from those attempts;
+the complete pinned CI and hosted acceptance gates remain mandatory. The temporary
+PostgreSQL used only loopback TCP and was stopped and removed after verification.
+
 The owner release-plan verifier rejects a secret finding in any scanned API,
 database or probe image. Its synthetic regression also retains the existing
 image-identity, scan-freshness and high/critical vulnerability checks; a passing

@@ -6,6 +6,8 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
+    "prepare:ios": "test -f ios/.xcode.env || cp -n ios/.xcode.env.example ios/.xcode.env",
+    "preios": "npm run prepare:ios",
     "ios": "expo run:ios",
     "assets:build": "node scripts/build-brand-assets.mjs",
     "prebuild": "expo prebuild --no-install",

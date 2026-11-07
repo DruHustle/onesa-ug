@@ -2,11 +2,18 @@
 
 import argparse
 import datetime
+import hashlib
+import hmac
+import html
+import importlib.util
 import json
 import math
 import os
+import re
 import shutil
+import sqlite3
 import subprocess
+import tempfile
 import time
 import urllib.request
 import uuid
@@ -25,6 +32,17 @@ SCANNER_FALLBACK_SECONDS = 4
 NOTIFICATION_SCOPE = "production-and-shared-v1"
 # Provider keys last 24 hours; leave an hour before manual reconciliation is needed.
 PENDING_RETRY_SECONDS = 23 * 60 * 60
+MAIL_ENVELOPE_VERSION = 2
+MAIL_BODY_MAX_BYTES = 32768
+MAIL_PRODUCTS = frozenset({"portal", "ai", "robot"})
+# Historical recipients remain valid so retained immutable attempts can be
+# reconciled. OPERATIONS_NOTIFY_EMAIL separates infrastructure from app mail;
+# legacy profiles retain their NOTIFY_EMAIL fallback until explicitly migrated.
+MAIL_RECIPIENTS = frozenset({
+    "info@onesa.eu", "andrew@onesa.eu", "it-infrastructure@onesa.eu",
+})
+API_ALERT_RULES = frozenset({"backend-api-unavailable", "backend-api-restarted"})
+NOTIFICATION_KINDS = frozenset({"alert", "update", "reminder", "recovery", "simulation"})
 RULES = (
     "worker-stopped",
     "job-retry-exhausted",
@@ -66,6 +84,118 @@ BACKENDS = {
     ]
     for environment in ["staging", "production"]
 }
+# Recognition does not enable sampling. The original six commissioned slots are
+# unchanged; Drone requires its separate private, signed acceptance profile.
+OPTIONAL_BACKENDS = {
+    "drone-production": {
+        "container": "onesa-drone-oracle-production-api-1",
+        "product": "drone", "environment": "production",
+        "url": "https://drone-api.onesa.eu/api/v1/health",
+        "status": "ok", "probe": "liveness",
+    },
+}
+KNOWN_BACKENDS = {**BACKENDS, **OPTIONAL_BACKENDS}
+
+
+def drone_reader():
+    specification = importlib.util.spec_from_file_location(
+        "onesa_optional_drone_monitoring", Path(__file__).with_name("drone_monitoring.py")
+    )
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+def accepted_drone_profile():
+    return drone_reader().accepted_profile()
+
+
+def sample_drone(config, previous):
+    """Default-off; an invalid operator selection cannot cause a Drone request."""
+    if "drone_monitoring_enabled" not in config:
+        return {}
+    if config["drone_monitoring_enabled"] is False:
+        return {"drone_monitoring": {"status": "disabled"}}
+    try:
+        if config["drone_monitoring_enabled"] is not True:
+            raise ValueError("Invalid optional monitor selection")
+        reader = drone_reader()
+        profile = reader.accepted_profile()
+        name = reader.NAME
+        if OPTIONAL_BACKENDS != {name: reader.TARGET}:
+            raise ValueError("Optional target identity changed")
+        row, matched = {}, False
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", "--type=container", reader.TARGET["container"]],
+                capture_output=True, timeout=3, check=False,
+            )
+            rows = json.loads(result.stdout or b"[]") if len(result.stdout) <= 1024 * 1024 else []
+            row = rows[0] if isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict) else {}
+            matched = result.returncode == 0 and reader.runtime_matches(row, profile)
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            pass
+        state = row.get("State", {})
+        if not isinstance(state, dict):
+            state, matched = {}, False
+        health = state.get("Health", {})
+        if not isinstance(health, dict):
+            health, matched = {}, False
+        count = row.get("RestartCount", 0)
+        if type(count) is not int or count < 0:
+            count, matched = 0, False
+        probe = probe_backend(name) if matched else {
+            "http_healthy": False, "http_status": 0, "http_error": "runtime_identity_changed",
+        }
+        if reader.accepted_profile() != profile:
+            raise ValueError("Optional acceptance changed during observation")
+        healthy = matched and state.get("Running") is True and state.get("OOMKilled") is False and (
+            health.get("Status") == "healthy"
+        )
+        return {
+            "drone_monitoring": {"status": "accepted-profile", "acceptance_sha256": profile["acceptance_sha256"]},
+            "backends": {name: {
+                **probe, "container_healthy": healthy, "loopback_only": matched,
+                "restart_count": count, "restarted": count > previous.get(name, count),
+            }},
+            "backend_restart_counts": {name: count},
+        }
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, subprocess.SubprocessError):
+        return {"drone_monitoring": {"status": "activation-held"}}
+
+
+def drone_profile_token(metrics):
+    selected = (metrics or {}).get("drone_monitoring", {})
+    if not isinstance(selected, dict):
+        return None
+    value = selected.get("acceptance_sha256")
+    return value if selected.get("status") == "accepted-profile" and isinstance(value, str) and (
+        re.fullmatch(r"[a-f0-9]{64}", value)
+    ) else None
+
+
+def drone_event(pending, prior=None):
+    details = pending.get("metrics", {}).get("backends", {}).get("drone-production", {})
+    return bool(
+        pending.get("drone_acceptance_required") is True
+        or pending.get("drone_acceptance_sha256")
+        or "drone-production" in pending.get("recovered_backends", [])
+        or details and (details.get("container_healthy") is not True or
+                        details.get("http_healthy") is not True or details.get("restarted") is True)
+        or prior and "drone-production" in prior.get("incident_backends", prior.get("affected_backends", {}))
+    )
+
+
+def drone_pending_hold(pending, metrics):
+    if not drone_event(pending):
+        return False
+    expected = pending.get("drone_acceptance_sha256")
+    if not expected or expected != drone_profile_token(metrics):
+        return True
+    try:
+        return accepted_drone_profile()["acceptance_sha256"] != expected
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, subprocess.SubprocessError):
+        return True
 
 
 def evaluate(metrics):
@@ -131,7 +261,7 @@ def database_backup_health(products, state, now):
 
 
 def probe_backend_attempt(name):
-    target = BACKENDS[name]
+    target = KNOWN_BACKENDS[name]
     result = {"http_healthy": False, "http_status": 0}
     try:
         response = subprocess.run(
@@ -185,6 +315,8 @@ def probe_backend_attempt(name):
                     value.get("mode") == "simulation"
                     and value.get("physical_actuation") is False
                 )
+            if target["product"] == "drone":
+                result["http_healthy"] = result["http_healthy"] and value.get("mode") == "simulation"
     except subprocess.TimeoutExpired:
         result["http_error"] = "timeout"
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
@@ -401,6 +533,19 @@ def sample(config):
         metrics.update(sample_dependencies(config))
         if backends is not None:
             metrics.update(backends.result())
+    optional = sample_drone(config, previous.get("backend_restart_counts", {}))
+    if "drone_monitoring" in optional:
+        metrics["drone_monitoring"] = optional["drone_monitoring"]
+    if "backends" in optional:
+        metrics.setdefault("backends", {}).update(optional["backends"])
+        metrics.setdefault("backend_restart_counts", {}).update(optional["backend_restart_counts"])
+        values = optional["backends"].values()
+        metrics["backend_api_healthy"] = metrics.get("backend_api_healthy", True) and all(
+            value["container_healthy"] and value["http_healthy"] for value in values
+        )
+        metrics["backend_api_restarted"] = metrics.get("backend_api_restarted", False) or any(
+            value["restarted"] for value in optional["backends"].values()
+        )
     return metrics
 
 
@@ -408,7 +553,7 @@ def failed_backends(metrics):
     """Only fixed service identities and bounded health fields leave private metrics."""
     details = metrics.get("backends", {})
     result = {}
-    for name in BACKENDS:
+    for name in KNOWN_BACKENDS:
         value = details.get(name)
         if not isinstance(value, dict):
             continue
@@ -419,16 +564,32 @@ def failed_backends(metrics):
             "container_healthy": value.get("container_healthy") is True,
             "http_healthy": value.get("http_healthy") is True,
             "http_status": status if type(status) is int and 0 <= status <= 599 else 0,
-            "probe": BACKENDS[name]["probe"],
+            "probe": KNOWN_BACKENDS[name]["probe"],
         }
     return result
 
 
 def write_record(path, value):
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(value, indent=2) + "\n")
-    temporary.chmod(0o600)
-    temporary.replace(path)
+    """Persist private bytes and their atomic rename before any provider side effect."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=path.name + ".", suffix=".tmp", delete=False,
+        ) as output:
+            temporary = Path(output.name)
+            output.write(json.dumps(value, indent=2) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.replace(path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def notification_metrics(metrics):
@@ -445,10 +606,10 @@ def notification_metrics(metrics):
         eligible = {
             name: value
             for name, value in details.items()
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         }
         result["backends"] = eligible
-        if details and set(details) <= set(BACKENDS):
+        if details and set(details) <= set(KNOWN_BACKENDS):
             result["backend_api_healthy"] = all(
                 value.get("container_healthy") is True
                 and value.get("http_healthy") is True
@@ -463,7 +624,7 @@ def notification_metrics(metrics):
         result["backend_restart_counts"] = {
             name: count
             for name, count in counts.items()
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         }
     return result
 
@@ -508,12 +669,12 @@ def notification_history(last):
         "affected_backends": {
             name: value
             for name, value in last.get("affected_backends", {}).items()
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         },
         "incident_backends": sorted(
             name
             for name in names
-            if BACKENDS.get(name, {}).get("environment") != "staging"
+            if KNOWN_BACKENDS.get(name, {}).get("environment") != "staging"
         ),
     }
 
@@ -546,7 +707,7 @@ def pending_scope_hold(pending):
         or set(failed_backends(metrics))
         != set(failed_backends(notification_metrics(metrics)))
         or any(
-            BACKENDS.get(name, {}).get("environment") == "staging"
+            KNOWN_BACKENDS.get(name, {}).get("environment") == "staging"
             for name in pending.get("recovered_backends", [])
         )
     )
@@ -681,7 +842,7 @@ def notification_decision(
 
 
 def worker_notification_detail(alerts, metrics):
-    """Old pending payloads lack these fields and keep their exact original body."""
+    """Describe only worker details captured in this event's observation."""
     if "worker-stopped" not in alerts or not isinstance(metrics, dict):
         return ""
     running, health = metrics.get("worker_running"), metrics.get("worker_health_status")
@@ -695,7 +856,223 @@ def worker_notification_detail(alerts, metrics):
     ) + health + "."
 
 
-def notify(
+def unique_mail_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate mail configuration field")
+        result[key] = value
+    return result
+
+
+def sender_mailbox(value):
+    """Accept one mailbox, preserving a valid configured header byte for byte."""
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 320
+        or value != value.strip()
+        or not all(character.isprintable() for character in value)
+    ):
+        raise ValueError("Invalid operations mail sender")
+    address = value
+    if "<" in value or ">" in value:
+        match = re.fullmatch(r'([^<>,;:@"\\]+) <([^<>]+)>', value)
+        if not match or match[1] != match[1].strip():
+            raise ValueError("Invalid operations mail sender")
+        address = match[2]
+    if len(address) > 254 or not re.fullmatch(
+        r"[A-Za-z0-9.!#$%&'*+/=?^_\x60{|}~-]{1,64}@"
+        r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+        r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+",
+        address,
+    ):
+        raise ValueError("Invalid operations mail sender")
+    local = address.split("@", 1)[0]
+    if local.startswith(".") or local.endswith(".") or ".." in local:
+        raise ValueError("Invalid operations mail sender")
+    return address
+
+
+def configured_product_senders(values, *, allow_drone=False):
+    raw = values.get("OPERATIONS_MAIL_FROM_BY_PRODUCT", "")
+    if raw == "":
+        return {}
+    if not isinstance(raw, str) or len(raw) > 4096:
+        raise ValueError("Invalid operations product sender mapping")
+    try:
+        mapping = json.loads(raw, object_pairs_hook=unique_mail_object)
+        allowed = MAIL_PRODUCTS | ({"drone"} if allow_drone else set())
+        if not isinstance(mapping, dict) or not set(mapping) <= allowed:
+            raise ValueError
+        for product, sender in mapping.items():
+            if sender_mailbox(sender) not in {
+                f"notifications-{product}@onesa.eu", f"alerts-{product}@onesa.eu"
+            }:
+                raise ValueError
+    except (ValueError, TypeError):
+        raise ValueError("Invalid operations product sender mapping") from None
+    return mapping
+
+
+def notification_product(alerts, metrics, kind, recovered_backends, prior_incident):
+    """Only a fully known, single-product API incident can select another sender."""
+    if kind == "simulation" or set(alerts) - API_ALERT_RULES:
+        return None
+    details = (metrics or {}).get("backends", {})
+    if (
+        not isinstance(details, dict)
+        or not set(details) <= set(KNOWN_BACKENDS)
+        or any(not isinstance(value, dict) for value in details.values())
+    ):
+        return None
+    names = set(failed_backends(metrics or {}))
+    if "backend-api-unavailable" in alerts and not names:
+        return None
+    if "backend-api-restarted" in alerts:
+        restarted = {
+            name for name, value in details.items()
+            if isinstance(value, dict) and value.get("restarted") is True
+        }
+        if not restarted:
+            return None
+        names.update(restarted)
+    if kind == "recovery":
+        names.update(recovered_backends)
+    products = set()
+    if kind in {"update", "reminder", "recovery"}:
+        if not prior_incident:
+            return None
+        if "notification_product" in prior_incident:
+            previous_product = prior_incident["notification_product"]
+            if previous_product not in MAIL_PRODUCTS | {"drone"}:
+                return None
+            products.add(previous_product)
+        else:
+            previous_rules = prior_incident.get(
+                "incident_rules", prior_incident.get("rules", [])
+            )
+            previous_names = prior_incident.get(
+                "incident_backends", prior_incident.get("affected_backends", {})
+            )
+            if (
+                not previous_rules
+                or set(previous_rules) - API_ALERT_RULES
+                or not previous_names
+            ):
+                return None
+            names.update(previous_names)
+    if any(
+        name not in KNOWN_BACKENDS or KNOWN_BACKENDS[name]["environment"] != "production"
+        for name in names
+    ):
+        return None
+    products.update(KNOWN_BACKENDS[name]["product"] for name in names)
+    if "drone" in products and not drone_profile_token(metrics):
+        return None
+    return next(iter(products)) if len(products) == 1 else None
+
+
+def operations_email_html_v1(subject, text, kind, simulation, product):
+    """New envelopes only. Retained v1/plain or v2/HTML bytes are never re-rendered."""
+    escape = html.escape
+    title = "Notification routing check" if simulation else {
+        "recovery": "Service recovered", "update": "Incident update",
+        "reminder": "An incident still needs attention", "alert": "Service needs attention",
+    }.get(kind, "Infrastructure notification")
+    badge = "Controlled test" if simulation else "Recovered" if kind == "recovery" else "Action required"
+    color, background = ("#1d5275", "#eaf4fa") if simulation else ("#14552d", "#e6f5ec") if kind == "recovery" else ("#684110", "#fff0d6")
+    name = {"portal": "Onesa Portal", "ai": "Onesa AI", "robot": "Onesa Robot", "drone": "Onesa Drone"}.get(product, "Onesa Infrastructure")
+    # Body and event classification are already produced by the existing monitor.
+    # HTML adds hierarchy; it cannot change recipient, event identity or observations.
+    rows = "".join('<p class="copy" style="margin:0 0 12px;color:#10263e;font-size:14px;line-height:23px;overflow-wrap:anywhere;word-break:break-word;">' + escape(line) + '</p>' for line in text.splitlines() if line)
+    return f'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>{escape(subject)}</title><style>table{{border-collapse:collapse}}@media(max-width:480px){{.outer{{padding:20px 10px!important}}.pad{{padding:26px 24px!important}}h1{{font-size:29px!important}}}}@media(prefers-color-scheme:dark){{.canvas{{background-color:#0b1523!important}}.card{{background-color:#14243a!important}}.copy,h1{{color:#e5edf6!important}}.muted{{color:#b4c4d6!important}}.panel{{background-color:#0b1523!important;border-color:#557a9e!important}}}}</style></head>
+<body class="canvas" style="margin:0;background-color:#edf2f7;font-family:Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{escape(title)} · {escape(name)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="outer" align="center" style="padding:40px 16px;">
+<!--[if mso]><table role="presentation" width="600" align="center"><tr><td><![endif]--><table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;table-layout:fixed;background-color:#fff;border:1px solid #dae1e9;border-radius:12px;overflow:hidden;"><tr><td class="pad" bgcolor="#10263e" style="padding:28px 36px;background-color:#10263e;border-bottom:4px solid #2366d1;"><p style="margin:0;color:#fff;font-size:22px;font-weight:bold;letter-spacing:3px;">ONESA</p><p style="margin:12px 0 0;color:#b4c4d6;font-size:13px;line-height:20px;">{escape(name)}</p></td></tr><tr><td class="pad" style="padding:34px 36px;overflow-wrap:anywhere;word-break:break-word;"><p class="muted" style="margin:0 0 14px;color:#56677b;font-size:11px;letter-spacing:1.8px;font-weight:bold;">INFRASTRUCTURE &amp; OPERATIONS</p><h1 style="margin:0 0 20px;color:#10263e;font-size:34px;line-height:1.16;letter-spacing:-0.7px;">{escape(title)}</h1><p style="margin:0 0 24px;"><span style="display:inline-block;padding:7px 11px;border-radius:4px;font-size:12px;line-height:18px;font-weight:bold;color:{color};background-color:{background};">{escape(badge)}</span></p><div class="panel" style="padding:20px;background-color:#f5f7fa;border-left:3px solid #2366d1;">{rows}</div></td></tr><tr><td class="pad panel" style="padding:22px 36px;border-top:1px solid #dae1e9;"><p class="muted" style="margin:0 0 6px;color:#56677b;font-size:11px;line-height:18px;font-weight:bold;">Onesa Infrastructure</p><p class="muted" style="margin:0;color:#56677b;font-size:11px;line-height:18px;">Sent to the configured infrastructure notification mailbox. Keep the event reference when investigating this message.</p></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>'''
+
+
+def mail_credential_fingerprint(values):
+    key = values.get("RESEND_API_KEY")
+    if (
+        values.get("MAIL_PROVIDER") != "resend"
+        or not isinstance(key, str)
+        or not 1 <= len(key) <= 4096
+        or key != key.strip()
+        or not all(33 <= ord(character) <= 126 for character in key)
+    ):
+        raise ValueError("Existing approved Resend configuration required")
+    return hashlib.sha256(
+        b"onesa-operations-resend-credential-v1\0" + key.encode("utf-8")
+    ).hexdigest()
+
+
+def validated_mail_envelope(envelope, reference, kind, simulation=False):
+    """Validate stored bytes without rebuilding them from current code or settings."""
+    if not isinstance(envelope, dict) or set(envelope) != {
+        "version", "reference", "kind", "simulation", "body", "body_sha256",
+        "credential_fingerprint", "notification_product",
+    }:
+        raise ValueError("Unbound operations mail envelope")
+    body = envelope["body"]
+    if (
+        type(envelope["version"]) is not int
+        or envelope["version"] not in {1, MAIL_ENVELOPE_VERSION}
+        or envelope["reference"] != reference
+        or str(uuid.UUID(reference)) != reference
+        or kind not in NOTIFICATION_KINDS
+        or envelope["kind"] != kind
+        or type(envelope["simulation"]) is not bool
+        or envelope["simulation"] != simulation
+        or envelope["notification_product"] not in MAIL_PRODUCTS | {"drone", None}
+        or not isinstance(body, str)
+        or not 0 < len(body.encode("utf-8")) <= MAIL_BODY_MAX_BYTES
+        or not isinstance(envelope["body_sha256"], str)
+        or not hmac.compare_digest(
+            envelope["body_sha256"], hashlib.sha256(body.encode("utf-8")).hexdigest()
+        )
+        or not isinstance(envelope["credential_fingerprint"], str)
+        or not re.fullmatch(r"[a-f0-9]{64}", envelope["credential_fingerprint"])
+    ):
+        raise ValueError("Invalid operations mail envelope")
+    data = json.loads(body, object_pairs_hook=unique_mail_object)
+    if (
+        not isinstance(data, dict)
+        or set(data) != ({"from", "to", "reply_to", "subject", "text"} | ({"html"} if envelope["version"] == 2 else set()))
+        or (envelope["version"] == 2 and (not isinstance(data.get("html"), str) or not data["html"].startswith("<!doctype html>")))
+        or not isinstance(data["to"], list)
+        or len(data["to"]) != 1
+        or not isinstance(data["to"][0], str)
+        or data["to"][0] not in MAIL_RECIPIENTS
+        or data["reply_to"] != "info@onesa.eu"
+        or not isinstance(data["subject"], str)
+        or not 1 <= len(data["subject"]) <= 200
+        or not all(character.isprintable() for character in data["subject"])
+        or not isinstance(data["text"], str)
+        or not data["text"].endswith("\nReference: " + reference)
+    ):
+        raise ValueError("Invalid operations mail envelope")
+    sender_mailbox(data["from"])
+    return data
+
+
+def pending_envelope_hold(pending):
+    try:
+        validated_mail_envelope(
+            pending.get("mail_envelope"), pending["reference"], pending["kind"]
+        )
+        from backup import checked_env
+
+        values, _ = checked_env()
+        return not hmac.compare_digest(
+            pending["mail_envelope"]["credential_fingerprint"],
+            mail_credential_fingerprint(values),
+        )
+    except (ValueError, TypeError, KeyError):
+        # Unknown legacy sender/account cannot be inferred from today's settings.
+        return True
+
+
+def prepare_notification_request(
     alerts,
     simulation=False,
     *,
@@ -704,24 +1081,25 @@ def notify(
     reference=None,
     kind="alert",
     recovered_backends=(),
+    prior_incident=None,
 ):
     from backup import checked_env
 
     values, _ = checked_env()
-    if values.get("MAIL_PROVIDER") != "resend" or values.get("NOTIFY_EMAIL") not in [
-        "info@onesa.eu",
-        "andrew@onesa.eu",
-    ]:
+    fingerprint = mail_credential_fingerprint(values)
+    recipient = values.get("OPERATIONS_NOTIFY_EMAIL", values.get("NOTIFY_EMAIL"))
+    if recipient not in MAIL_RECIPIENTS:
         raise ValueError("Existing approved notification destination required")
+    sender_mailbox(values.get("MAIL_FROM"))
+    # A valid optional sender name does not activate the target or suppress mail
+    # for existing products when Drone enrollment is disabled/held.
+    mapping = configured_product_senders(values, allow_drone=True)
     reference = reference or str(uuid.uuid4())
-    if str(uuid.UUID(reference)) != reference or kind not in {
-        "alert",
-        "update",
-        "reminder",
-        "recovery",
-        "simulation",
-    }:
+    if str(uuid.UUID(reference)) != reference or kind not in NOTIFICATION_KINDS:
         raise ValueError("Invalid notification event")
+    product = None if simulation else notification_product(
+        alerts, metrics, kind, recovered_backends, prior_incident
+    )
     subject = (
         "ONESA operations qualification — synthetic alert"
         if simulation
@@ -730,8 +1108,8 @@ def notify(
         else "ONESA service operations alert"
     )
     data = {
-        "from": values["MAIL_FROM"],
-        "to": [values["NOTIFY_EMAIL"]],
+        "from": mapping.get(product, values["MAIL_FROM"]),
+        "to": [recipient],
         "reply_to": "info@onesa.eu",
         "subject": subject,
         "text": (
@@ -762,15 +1140,56 @@ def notify(
         )
         + "".join(
             "\nRecovered API: " + name
-            for name in BACKENDS
+            for name in KNOWN_BACKENDS
             if name in recovered_backends
         )
         + "\nReference: "
         + reference,
     }
+    data["html"] = operations_email_html_v1(subject, data["text"], kind, simulation, product)
+    body = json.dumps(data)
+    envelope = {
+        "version": MAIL_ENVELOPE_VERSION,
+        "reference": reference,
+        "kind": kind,
+        "simulation": simulation,
+        "notification_product": product,
+        "body": body,
+        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "credential_fingerprint": fingerprint,
+    }
+    validated_mail_envelope(envelope, reference, kind, simulation)
+    return envelope
+
+
+def notify(
+    alerts,
+    simulation=False,
+    *,
+    metrics=None,
+    checked_at=None,
+    reference=None,
+    kind="alert",
+    recovered_backends=(),
+    mail_envelope=None,
+):
+    from backup import checked_env
+
+    if mail_envelope is None:
+        mail_envelope = prepare_notification_request(
+            alerts, simulation, metrics=metrics, checked_at=checked_at,
+            reference=reference, kind=kind, recovered_backends=recovered_backends,
+        )
+        reference = mail_envelope["reference"]
+    data = validated_mail_envelope(mail_envelope, reference, kind, simulation)
+    values, _ = checked_env()
+    if not hmac.compare_digest(
+        mail_envelope["credential_fingerprint"], mail_credential_fingerprint(values)
+    ):
+        raise ValueError("Pending mail credential changed; reconciliation required")
     request = urllib.request.Request(
         "https://api.resend.com/emails",
-        data=json.dumps(data).encode(),
+        data=mail_envelope["body"].encode("utf-8"),
         headers={
             "Authorization": "Bearer " + values["RESEND_API_KEY"],
             "User-Agent": "Onesa-Portal-Operations/1.0",
@@ -794,7 +1213,10 @@ def notify(
         "checked_at": checked_at,
         "affected_backends": failed_backends(metrics or {}),
         "provider_receipt_id": receipt["id"],
-        "recipient": values["NOTIFY_EMAIL"],
+        "recipient": data["to"][0],
+        "sender": data["from"],
+        "mail_body_sha256": mail_envelope["body_sha256"],
+        "notification_product": mail_envelope["notification_product"],
         "provider_accepted": True,
         "delivery_verified": False,
         "rules": alerts,
@@ -890,6 +1312,7 @@ def main():
         not args.simulate and previous.get("notification_reconciliation_required")
     )
     scope_hold = False
+    envelope_hold = False
     if pending:
         # A prior ambiguous provider result must reuse the same idempotency key.
         if str(uuid.UUID(pending["reference"])) != pending["reference"]:
@@ -900,8 +1323,11 @@ def main():
         scope_hold = bool(
             previous.get("notification_pending_policy_hold")
         ) or pending_scope_hold(pending)
+        envelope_hold = bool(
+            previous.get("notification_pending_envelope_hold")
+        ) or pending_envelope_hold(pending)
         reconciliation_required |= (
-            scope_hold or not 0 <= pending_age < PENDING_RETRY_SECONDS
+            scope_hold or envelope_hold or not 0 <= pending_age < PENDING_RETRY_SECONDS
         )
     elif (args.simulate or kind) and not reconciliation_required:
         pending = {
@@ -919,10 +1345,23 @@ def main():
             if kind == "recovery"
             else [],
         }
+        if not args.simulate and drone_event(pending, last_notification):
+            pending["drone_acceptance_required"] = True
+            pending["drone_acceptance_sha256"] = (
+                last_notification.get("drone_acceptance_sha256")
+                if pending["kind"] in {"update", "reminder", "recovery"} and
+                "drone-production" in last_notification.get(
+                    "incident_backends", last_notification.get("affected_backends", {})
+                ) else drone_profile_token(metrics)
+            )
+    if pending and not args.simulate and drone_pending_hold(pending, metrics):
+        scope_hold = True
+        reconciliation_required = True
     should_send = pending is not None and not reconciliation_required
     if pending and not args.simulate:
         record["notification_pending"] = pending
     record["notification_pending_policy_hold"] = scope_hold
+    record["notification_pending_envelope_hold"] = envelope_hold
     record["notification_reconciliation_required"] = reconciliation_required
     # Preserve the latest observed failure even if notification delivery fails.
     # A cleared sample is recorded separately; it never converts a failed sample to PASS.
@@ -943,8 +1382,25 @@ def main():
                 },
             )
     if should_send:
+        if "mail_envelope" not in pending:
+            try:
+                pending["mail_envelope"] = prepare_notification_request(
+                    pending["alerts"], args.simulate,
+                    metrics=pending["metrics"], checked_at=pending["checked_at"],
+                    reference=pending["reference"], kind=pending["kind"],
+                    recovered_backends=pending["recovered_backends"],
+                    prior_incident=last_notification,
+                )
+            except (ValueError, TypeError, KeyError, OSError):
+                # Keep the observed failure and event identity even when preparation
+                # fails. An interrupted/unbound event is never guessed safe to retry.
+                record["notification_pending_envelope_hold"] = True
+                record["notification_reconciliation_required"] = True
+                if not args.simulate:
+                    write_record(path, record)
+                raise
         if not args.simulate:
-            # Persist identity before sending: timeouts/crashes must not create new mail.
+            # Persist exact bytes/account binding before sending, not just the UUID.
             record["notification_pending"] = pending
             write_record(path, record)
         record["notification"] = notify(
@@ -955,6 +1411,7 @@ def main():
             reference=pending["reference"],
             kind=pending["kind"],
             recovered_backends=pending["recovered_backends"],
+            mail_envelope=pending["mail_envelope"],
         )
         record.pop("notification_pending", None)
         if pending["kind"] == "recovery":
@@ -963,6 +1420,8 @@ def main():
         # Retain the observation time/type even with a minimal provider receipt.
         record["notification"].setdefault("checked_at", pending["checked_at"])
         record["notification"].setdefault("kind", pending["kind"])
+        if pending.get("drone_acceptance_required") is True:
+            record["notification"]["drone_acceptance_sha256"] = pending["drone_acceptance_sha256"]
         # Remember previously emailed failures within this incident. A rule that
         # clears then returns is not a new update on every cooldown boundary.
         prior = last_notification if pending["kind"] in {"update", "reminder"} else {}
@@ -1001,6 +1460,7 @@ def main():
                 "notification_accepted": bool(should_send),
                 "notification_reconciliation_required": reconciliation_required,
                 "notification_pending_policy_hold": scope_hold,
+                "notification_pending_envelope_hold": envelope_hold,
                 "notification_scope": NOTIFICATION_SCOPE,
                 "notification_alerts": scoped_alerts,
                 "notification_kind": pending["kind"] if should_send else None,

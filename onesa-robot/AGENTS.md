@@ -1,6 +1,7 @@
 # Onesa engineering and agent policies
 
-Authoritative agent/contribution/security policy for this independent repository.
+Authoritative agent/contribution/security policy for the Robot product in
+`DruHustle/onesa-ug`, under `onesa-robot/`.
 Read README, release checklist and relevant code/runbooks before edits. Continue
 incomplete work; preserve concurrent changes, history, data and credentials. Stage
 only reviewed paths. Update contracts/docs/changelog with behavior changes; report
@@ -10,8 +11,13 @@ setup/status/handoff checklists or first-party SECURITY.md/CONTRIBUTING.md.
 
 ## Contribution rules
 
-Keep this repository independent within `onesa-ug`: retain component directories,
-separate releases and no workspace Git repository or sibling submodules.
+The owner has consolidated source into `DruHustle/onesa-ug`. Retain Robot's component
+directories, independent builds and releases, authentication/data boundaries and
+runtime dependency isolation. Do not recreate nested Git repositories or sibling
+submodules. Run product commands from `onesa-robot/` unless their component directory
+is specified. GitHub executes the repository-root workflows; nested legacy workflow
+files remain product specifications and do not execute by themselves. A shared Git
+commit does not qualify an old release adapter or change a deployed component's identity.
 
 Keep exactly three permanent branches: `dev`, `staging`, `main`. Normal integration
 is `dev → staging → main`. Temporary Dependabot security-update PR branches and
@@ -25,7 +31,8 @@ authentication, personal data, infrastructure or robot actuation when available.
 Describe the problem, resulting behavior, validation and deployment/rollback impact.
 Update API contracts, migrations and documentation with behavior changes.
 
-Before staging run BUILD_AND_TEST and `python3 scripts/repository_hygiene.py`;
+Before staging run BUILD_AND_TEST and
+`python3 scripts/repository_hygiene.py --monorepo-root ..`;
 inspect exact cached diff/status. Synthetic fixtures only; never stage private data,
 models, uploads, backups or secrets. Keep examples placeholder-only and dependencies
 locked with provenance/license review. Do not assign a project license without approval.
@@ -58,7 +65,7 @@ If credentials are committed/exposed, notify the owner and use scoped authorized
 revocation/rotation with access-log assessment. Untracking is not revocation or history
 removal. Historical rewrite requires separate coordinated approval; never force-push.
 
-`python3 scripts/repository_hygiene.py --history` checks reachable history,
+`python3 scripts/repository_hygiene.py --monorepo-root .. --history` checks reachable history,
 index and publishable files without printing values; it cannot prove confidentiality.
 Preserve available secret scanning/push protection and inspect classifications.
 Confidential history blocks publication pending actual owner remediation authority.
@@ -144,7 +151,7 @@ an unapproved reviewer or assert independent approval of your own implementation
 | Appearance / root | `node --test scripts/test_system_appearance.mjs` | Node 24; offline shared digest/system-preference/public isolation checks |
 | Repository docs / root | `python3 scripts/check_repository_docs.py` | Offline root policies, references and true release-baseline checks |
 | Browser / frontend | `npm run test:e2e` | Isolated simulator and three installed browsers; synthetic account, no live hardware |
-| Hygiene / root | `python3 scripts/repository_hygiene.py` | Read-only source/index scan; private values are never printed |
+| Hygiene / product root | `python3 scripts/repository_hygiene.py --monorepo-root ..` | Read-only source/index scan; private values are never printed |
 
 The backend README defines secure local environment startup. The root README and
 onboarding define the smallest local path; provider/recovery procedures belong in
