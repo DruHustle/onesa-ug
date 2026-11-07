@@ -1197,6 +1197,23 @@ NVIDIA_DRONE_LAYOUT = NVIDIA_PREFIX + "src/components/drone-product.module.css"
 NVIDIA_DRONE_LAYOUT_SHA256 = "4bac1e38ccf8f481005de7143f1c1a89f21b0a5b49c34c192a348e6cb912beb7"
 NVIDIA_DRONE_DIAGNOSTIC_TEST = NVIDIA_PREFIX + "scripts/test-drone-product.mjs"
 NVIDIA_DRONE_DIAGNOSTIC_TEST_SHA256 = "3bea2bb2b51e6747df223101970218c080b10fcc3c4d1ac719a61cc164a40d3f"
+NVIDIA_DRONE_DIAGNOSTIC_HELPER = NVIDIA_PREFIX + "scripts/drone-product-diagnostics.mjs"
+NVIDIA_DRONE_DIAGNOSTIC_UNIT = NVIDIA_PREFIX + "unit/drone-product-diagnostics.test.mjs"
+# Two complete reviewed variants, not independent per-file alternatives. Keep
+# these local: NVIDIA installations do not import the identity-profile helper.
+NVIDIA_DRONE_DIAGNOSTIC_VARIANTS = (
+    (
+        "node scripts/test-drone-product.mjs",
+        ((NVIDIA_DRONE_DIAGNOSTIC_TEST, NVIDIA_DRONE_DIAGNOSTIC_TEST_SHA256),
+         (NVIDIA_DRONE_DIAGNOSTIC_HELPER, None), (NVIDIA_DRONE_DIAGNOSTIC_UNIT, None)),
+    ),
+    (
+        "node --test unit/drone-product-diagnostics.test.mjs && node scripts/test-drone-product.mjs",
+        ((NVIDIA_DRONE_DIAGNOSTIC_TEST, "6533b4c8dc26f76bb92848476394a07ccabcca9d78e3935295f2dfbd80cd6d98"),
+         (NVIDIA_DRONE_DIAGNOSTIC_HELPER, "0b3227e7cff9fd89c47cfa69903dcd9ddeac13660b1c04de0533e3d1d9ce96e5"),
+         (NVIDIA_DRONE_DIAGNOSTIC_UNIT, "d275551e151b636a0342f4a2d0264afb4456a587ccf917717388f30c73a38eaf")),
+    ),
+)
 NVIDIA_ASSET_IDS = [
     "nvidia-transfer-conveyor",
     "nvidia-mobile-cart",
@@ -1519,6 +1536,14 @@ def nvidia_dependency_pins(files):
     )
 
 
+def nvidia_drone_diagnostic_command(files):
+    for command, pins in NVIDIA_DRONE_DIAGNOSTIC_VARIANTS:
+        if all(name not in files if digest is None else files.get(name) == digest
+               for name, digest in pins):
+            return command
+    require(False, "NVIDIA_REVIEWED_DRONE_DIAGNOSTICS_ONLY")
+
+
 def source_scope(folder, binding, plan):
     # No fallback: absence of an explicitly commissioned new profile keeps the
     # original presentation dependency/build/auth/hero gate exactly as before.
@@ -1572,10 +1597,7 @@ def source_scope(folder, binding, plan):
         new.get(NVIDIA_DRONE_LAYOUT) == NVIDIA_DRONE_LAYOUT_SHA256,
         "NVIDIA_REVIEWED_DRONE_REFLOW_ONLY",
     )
-    require(
-        new.get(NVIDIA_DRONE_DIAGNOSTIC_TEST) == NVIDIA_DRONE_DIAGNOSTIC_TEST_SHA256,
-        "NVIDIA_REVIEWED_DRONE_DIAGNOSTICS_ONLY",
-    )
+    diagnostic_command = nvidia_drone_diagnostic_command(new)
     metadata = nvidia_source_metadata(folder / "source.tar", new)
     require(
         all(new.get(name) == digest for name, digest in tool["probe_files"].items()),
@@ -1596,7 +1618,8 @@ def source_scope(folder, binding, plan):
             "public/brand/sources.json", "public/images/drone-cargo-1280.webp",
             "public/images/drone-cargo-640.webp", "public/images/drone-flight-1280.webp",
             "public/images/drone-flight-640.webp", "public/media/onesa-drone-concept.mp4",
-            "scripts/test-drone-product.mjs", "src/app/[locale]/products/onesa-ai-drone/page.tsx",
+            "scripts/test-drone-product.mjs", "scripts/drone-product-diagnostics.mjs",
+            "unit/drone-product-diagnostics.test.mjs", "src/app/[locale]/products/onesa-ai-drone/page.tsx",
             "src/app/[locale]/products/onesa-drone/page.tsx", "src/components/drone-film.tsx",
             "src/components/drone-image.tsx", "src/components/drone-product.module.css",
             "src/components/drone-product.tsx", "src/components/drone-visual.tsx",
@@ -1626,7 +1649,7 @@ def source_scope(folder, binding, plan):
         expected = json.loads(json.dumps(previous))
         expected["scripts"].update({
             "build": "node scripts/validate-nvidia-assets.mjs && next build --webpack",
-            "test:drone-product": "node scripts/test-drone-product.mjs",
+            "test:drone-product": diagnostic_command,
             "test:nvidia-assets": "node scripts/validate-nvidia-assets.mjs && node --test unit/nvidia-assets.test.mjs",
             "test:nvidia-browser": "node scripts/test-nvidia-library.mjs",
             "test:dependency-security": "node --test unit/dependency-security.test.mjs",

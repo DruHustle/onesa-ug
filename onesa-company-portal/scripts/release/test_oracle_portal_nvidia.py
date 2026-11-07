@@ -84,6 +84,8 @@ class NvidiaScopeTests(unittest.TestCase):
         self.files[PREFIX + "src/proxy.ts"] = current_proxy
         self.files[r.NVIDIA_DRONE_LAYOUT] = (ROOT / r.NVIDIA_DRONE_LAYOUT).read_bytes()
         self.files[r.NVIDIA_DRONE_DIAGNOSTIC_TEST] = (ROOT / r.NVIDIA_DRONE_DIAGNOSTIC_TEST).read_bytes()
+        for name in [r.NVIDIA_DRONE_DIAGNOSTIC_HELPER, r.NVIDIA_DRONE_DIAGNOSTIC_UNIT]:
+            self.files[name] = (ROOT / name).read_bytes()
         for name in set(installer.NVIDIA_ALLOWED.values()) | {
             "scripts/check_tls_bundle.mjs", PREFIX + "package.json", PREFIX + "package-lock.json",
             PREFIX + "vendor/onesa-portal-minimatch-callable-1.0.0.tgz",
@@ -104,6 +106,88 @@ class NvidiaScopeTests(unittest.TestCase):
     def scope(self, plan=None):
         with patch.object(r, "private", side_effect=lambda path, **_kw: Path(path)), patch.object(r, "trusted_toolchain", return_value=self.tool):
             return r.source_scope(self.folder, self.binding, self.plan if plan is None else plan)
+
+    def original_diagnostic_script(self):
+        # Reverse only the reviewed observer insertion, then prove the complete
+        # original bytes by their retained pin; no historical checkout is needed.
+        source = (ROOT / r.NVIDIA_DRONE_DIAGNOSTIC_TEST).read_bytes()
+        for after, before in [
+            (b"import {createInteractionRecorder, installAircraftInteractionObserver, recordSyntheticPageObservation} from './drone-product-diagnostics.mjs';\n", b""),
+            (b"schema_version:2", b"schema_version:1"),
+            (b",interaction:active.interaction.snapshot()", b""),
+            (b",interaction:createInteractionRecorder()", b""),
+            (b"  await page.exposeBinding('__onesaDroneProductObservation',(source,value)=>recordSyntheticPageObservation(source,page,observed.interaction,value));\n", b""),
+            (b"  await page.addInitScript(installAircraftInteractionObserver);\n", b""),
+            (b"  observed.interaction.beforeCommand();\n", b""),
+        ]:
+            self.assertEqual(source.count(after), 1)
+            source = source.replace(after, before)
+        self.assertEqual(hashlib.sha256(source).hexdigest(), r.NVIDIA_DRONE_DIAGNOSTIC_TEST_SHA256)
+        return source
+
+    def original_diagnostic_closure(self):
+        self.files[r.NVIDIA_DRONE_DIAGNOSTIC_TEST] = self.original_diagnostic_script()
+        for name in [r.NVIDIA_DRONE_DIAGNOSTIC_HELPER, r.NVIDIA_DRONE_DIAGNOSTIC_UNIT]:
+            self.files.pop(name)
+            (self.source / name).unlink()
+        package = (ROOT / PREFIX / "package.json").read_bytes()
+        command = r.NVIDIA_DRONE_DIAGNOSTIC_VARIANTS[1][0].encode()
+        self.assertEqual(package.count(command), 1)
+        self.files[PREFIX + "package.json"] = package.replace(
+            command, r.NVIDIA_DRONE_DIAGNOSTIC_VARIANTS[0][0].encode())
+        self.assertEqual(hashlib.sha256(self.files[PREFIX + "package.json"]).hexdigest(),
+                         "9c4874f6953dac58774541b216ddc1c8c072cd62d8ebfeb64fe0394d7b43ed48")
+        self.refresh()
+
+    def test_original_reviewed_diagnostic_closure_still_passes_without_new_members(self):
+        self.original_diagnostic_closure()
+        self.assertEqual(self.scope()["qualification_profile"], r.NVIDIA_PROFILE)
+        for name in [r.NVIDIA_DRONE_DIAGNOSTIC_HELPER, r.NVIDIA_DRONE_DIAGNOSTIC_UNIT]:
+            self.files[name] = (ROOT / name).read_bytes()
+            self.refresh()
+            with self.subTest(added=name), self.assertRaisesRegex(r.Refused, "NVIDIA_REVIEWED_DRONE_DIAGNOSTICS_ONLY"):
+                self.scope()
+            self.files.pop(name)
+            (self.source / name).unlink()
+        self.refresh()
+
+    def test_final_diagnostic_helpers_are_required_exactly_even_when_candidate_and_tools_are_repinned(self):
+        for name in [r.NVIDIA_DRONE_DIAGNOSTIC_HELPER, r.NVIDIA_DRONE_DIAGNOSTIC_UNIT]:
+            original = self.files[name]
+            self.files[name] += b"\n// unreviewed output or behavior\n"
+            self.refresh()
+            with self.subTest(mutated=name), self.assertRaisesRegex(r.Refused, "NVIDIA_REVIEWED_DRONE_DIAGNOSTICS_ONLY"):
+                self.scope()
+            self.files.pop(name)
+            (self.source / name).unlink()
+            self.refresh()
+            with self.subTest(missing=name), self.assertRaisesRegex(r.Refused, "NVIDIA_REVIEWED_DRONE_DIAGNOSTICS_ONLY"):
+                self.scope()
+            self.files[name] = original
+        self.refresh()
+        self.files[PREFIX + "scripts/drone-product-extra.mjs"] = b"// unreviewed helper\n"
+        self.refresh()
+        with self.assertRaisesRegex(r.Refused, "CHANGED_SCOPE"):
+            self.scope()
+
+    def test_diagnostic_package_commands_cannot_be_mixed_between_reviewed_closures(self):
+        package = json.loads(self.files[PREFIX + "package.json"])
+        package["scripts"]["test:drone-product"] = "node scripts/test-drone-product.mjs"
+        self.files[PREFIX + "package.json"] = json.dumps(package).encode()
+        self.refresh()
+        with self.assertRaisesRegex(r.Refused, "DEPENDENCY_BUILD_DELTA_ONLY"):
+            self.scope()
+        self.files[r.NVIDIA_DRONE_DIAGNOSTIC_TEST] = self.original_diagnostic_script()
+        self.refresh()
+        with self.assertRaisesRegex(r.Refused, "NVIDIA_REVIEWED_DRONE_DIAGNOSTICS_ONLY"):
+            self.scope()
+        self.original_diagnostic_closure()
+        package = json.loads(self.files[PREFIX + "package.json"])
+        package["scripts"]["test:drone-product"] = r.NVIDIA_DRONE_DIAGNOSTIC_VARIANTS[1][0]
+        self.files[PREFIX + "package.json"] = json.dumps(package).encode()
+        self.refresh()
+        with self.assertRaisesRegex(r.Refused, "DEPENDENCY_BUILD_DELTA_ONLY"):
+            self.scope()
 
     def test_explicit_profile_accepts_only_reviewed_renderer_delta_and_old_gate_still_refuses(self):
         result = self.scope()

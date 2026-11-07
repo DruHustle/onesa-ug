@@ -12,7 +12,7 @@ PROFILE = "frontend-identity-v1"
 PINS = {
     "onesa-company-portal-frontend/Dockerfile": "e13d6a1e450723a6d8d6aa64c81504f7aebb4983d3fec01016e88ec6257c7f29",
     "onesa-company-portal-frontend/package-lock.json": "a14df9606964f633c89d4237cb99b182767f6dbd47adfde92835f2b0d96bd4f1",
-    "onesa-company-portal-frontend/package.json": "9c4874f6953dac58774541b216ddc1c8c072cd62d8ebfeb64fe0394d7b43ed48",
+    "onesa-company-portal-frontend/package.json": "e3cbc621f1713824ec3f621588ac0d13e0c3cd6d6c7688e7d64dfe85aa00774e",
     "onesa-company-portal-frontend/public/brand/icons/v1/onesa-robot.svg": "35fb7e0ac799a345ef567d230ae9e6f07f95f470499af7f4c2e536c57beee771",
     "onesa-company-portal-frontend/public/brand/icons/v1/sources.json": "20a2216e9f4b6f0fcb3e67a1e5fd28757435de7d5a19c0a02eb4481504367179",
     "onesa-company-portal-frontend/public/brand/sources.json": "feacf92edbd620e3c86af5546a5eb7f0df6423af389eb568f1b29735cd3c5e8c",
@@ -36,7 +36,8 @@ PINS = {
     "onesa-company-portal-frontend/public/models/nvidia/nvidia-transfer-conveyor/compact.3f73d759f3f6f233.glb": "3f73d759f3f6f233d5b3196951bf1ade77e163c14576bccdceddebe9e3ebe0f0",
     "onesa-company-portal-frontend/public/models/nvidia/nvidia-transfer-conveyor/preview.png": "920b611de2d96aac5af92e80f2352eda64417abd4a940ac44314de8e8857489a",
     "onesa-company-portal-frontend/scripts/public-shell-ready.mjs": "bd84fdafa98f8f0e59c7955475c58b75d21ad2eef3378a7a80244fde4f12e4c5",
-    "onesa-company-portal-frontend/scripts/test-drone-product.mjs": "3bea2bb2b51e6747df223101970218c080b10fcc3c4d1ac719a61cc164a40d3f",
+    "onesa-company-portal-frontend/scripts/drone-product-diagnostics.mjs": "0b3227e7cff9fd89c47cfa69903dcd9ddeac13660b1c04de0533e3d1d9ce96e5",
+    "onesa-company-portal-frontend/scripts/test-drone-product.mjs": "6533b4c8dc26f76bb92848476394a07ccabcca9d78e3935295f2dfbd80cd6d98",
     "onesa-company-portal-frontend/scripts/test-engineering-sign-in.mjs": "33b6b31a69763986837b3a902328534404e6ceb56ea3e33bb86a9068b85afd1c",  # gitleaks:allow -- SHA-256 of reviewed public source.
     "onesa-company-portal-frontend/scripts/test-nvidia-library.mjs": "ef7842475ddf585159da65c30d905c9f7e9970094ecdd07942a34c5afc8e72df",
     "onesa-company-portal-frontend/scripts/test-onesa-account.mjs": "fdd380ccad7ebef858697155c0cd235e8d62d824d54dafcea6ac3edaa24a63e0",
@@ -95,17 +96,38 @@ PINS = {
     "onesa-company-portal-frontend/tests/product-evidence.spec.ts": "b20e9de5778d825e87c5521c506e243a2c40a67f201776067254a8184915cd36",
     "onesa-company-portal-frontend/unit/account-return.test.ts": "10a0af98ef261f9b282d039b4a210c8701c6be2ee15b7cf415857dd8380cfa5f",  # gitleaks:allow -- SHA-256 of reviewed public source.
     "onesa-company-portal-frontend/unit/dependency-security.test.mjs": "6385e1186038f6f7eb64f40d42793012d6590bf6785011a79f55798e9f356e4b",
+    "onesa-company-portal-frontend/unit/drone-product-diagnostics.test.mjs": "d275551e151b636a0342f4a2d0264afb4456a587ccf917717388f30c73a38eaf",
     "onesa-company-portal-frontend/unit/engineering-sign-in-errors.test.ts": "d8638a27e239d3712d2e469635eddae3f0615f9264f2745a04b151e98899aa9f",  # gitleaks:allow -- SHA-256 of reviewed public source.
     "onesa-company-portal-frontend/unit/nvidia-assets.test.mjs": "81483abd13d83e3ddc348cb084411b0c029861738ddb5a432c80f934c5d40bf3",
     "onesa-company-portal-frontend/unit/onesa-identity.test.ts": "4005525a4cd4b5dc34cb402d12ea8842c6f24e8e6ffc7b2ac5d70e195024e112",
     "onesa-company-portal-frontend/vendor/onesa-portal-minimatch-callable-1.0.0.tgz": "c532a6f7105c1934d4b0852881a59b981dd68217663debdee1a919a9a9de493c"
 }
 
+# The original reviewed source remains valid only as its complete old closure.
+# The new observer, its fixture and package command cannot be mixed with it.
+DIAGNOSTIC_PATHS = (
+    PREFIX + "package.json", PREFIX + "scripts/test-drone-product.mjs",
+    PREFIX + "scripts/drone-product-diagnostics.mjs",
+    PREFIX + "unit/drone-product-diagnostics.test.mjs",
+)
+DIAGNOSTIC_VARIANTS = (
+    tuple((name, PINS[name]) for name in DIAGNOSTIC_PATHS),
+    (
+        (DIAGNOSTIC_PATHS[0], "9c4874f6953dac58774541b216ddc1c8c072cd62d8ebfeb64fe0394d7b43ed48"),
+        (DIAGNOSTIC_PATHS[1], "3bea2bb2b51e6747df223101970218c080b10fcc3c4d1ac719a61cc164a40d3f"),
+        (DIAGNOSTIC_PATHS[2], None), (DIAGNOSTIC_PATHS[3], None),
+    ),
+)
+
 
 def reviewed_delta(old, new):
     if not isinstance(old, dict) or not isinstance(new, dict):
         raise ValueError("IDENTITY_FRONTEND_SOURCE_INVENTORY")
-    if not all(new.get(name) == checksum for name, checksum in PINS.items()):
+    common = all(new.get(name) == checksum for name, checksum in PINS.items()
+                 if name not in DIAGNOSTIC_PATHS)
+    diagnostic = any(all(name not in new if checksum is None else new.get(name) == checksum
+                         for name, checksum in variant) for variant in DIAGNOSTIC_VARIANTS)
+    if not common or not diagnostic:
         raise ValueError("IDENTITY_FRONTEND_REVIEWED_SOURCE_CHANGED")
     changed = {name for name in old.keys() | new.keys()
                if name.startswith(PREFIX) and old.get(name) != new.get(name)}
