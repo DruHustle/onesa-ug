@@ -1439,6 +1439,17 @@ product. Prompts, image/video hashes and processing are in
 `onesa-company-portal-frontend/public/brand/sources.json`.
 It does not submit a live enquiry or establish hosted publication approval.
 
+If the product interaction fails, its existing optional diagnostic also retains
+bounded native summary/input, gallery-state and scroll observations collected in
+Node before any failed post-timeout DOM read. Passive listeners only read fixed
+numeric geometry and state enums; they add no wait before the original click.
+Per-document sampling and the retained queue are bounded, and the diagnostic keeps
+its 8 KiB limit and exclusive output file. The last observation's type and time
+remain explicit: absent or stale data does not prove a renderer or layout cause.
+The original click timeout, actionability and product assertions remain required.
+The recorder's privacy, ownership and resource bounds run before the browser
+fixture; `node --test unit/drone-product-diagnostics.test.mjs` runs them separately.
+
 Worker process regressions use `node --test scripts/release/oracle_portal_worker_fixture.test.mjs scripts/release/oracle_portal_worker_smtp.test.mjs scripts/release/oracle_portal_worker_probe.test.mjs`.
 The backend image-security job additionally runs `sudo -n python3 scripts/release/worker_fixture_smoke.py "$image" --worker-workflows --synthetic-scanner` on the disposable GitHub-hosted runner. It uses an internal Docker network, temporary PostgreSQL/TLS, loopback S3/SMTP protocol fixtures, and a synthetic scanner protocol fixture. The original seven-case database fixture test remains separate.
 
