@@ -6,6 +6,15 @@
 
 ## Unreleased
 
+- Source candidate: add an independent canonical protected Docs consumer with
+  exact repository, main commit, root tree and Platform subtree binding. Preserve
+  the original approved document map, separate private builds, provider project,
+  native commissioning, shared journal and one-use release authority. Read original
+  signed history through its retained installation and key without executing an
+  old issuer. Unknown, unaccepted or revoked outcomes keep their holds. A manual
+  read-only workflow retains sanitized qualification/decision metadata only;
+  private hosted acceptance, controller migration and deployment remain unclaimed.
+
 - Source correction: keep MCP stdio input responsive during API calls, honor
   request-scoped cancellation, and close the owned HTTP response without replay.
   Bound outstanding work and whole-request duration; preserve initialization,

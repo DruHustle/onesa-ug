@@ -1110,12 +1110,12 @@ def ai_operational_source(value):
 
 
 def docs_operational_source(value):
-    """A separate public Docs scope; never expand the AI application profile set."""
+    """Separate Docs identities; never expand the AI application profile set."""
     require(
         isinstance(value, dict)
-        and value.get("component") == "docs-public"
+        and value.get("component") in {"docs-public", "docs-internal"}
         and AI_SOURCE_FIELDS <= set(value),
-        "Canonical public Docs component source required",
+        "Canonical independent Docs component source required",
     )
     return ai_operational_source({key: value[key] for key in AI_SOURCE_FIELDS})
 
@@ -1123,7 +1123,7 @@ def docs_operational_source(value):
 def operational_source(value):
     return (
         docs_operational_source(value)
-        if value.get("component") == "docs-public"
+        if value.get("component") in {"docs-public", "docs-internal"}
         else ai_operational_source(value)
     )
 
@@ -1134,7 +1134,7 @@ def is_docs_binding(value):
         and value.get("component") in {"docs-public", "docs-internal"}
     ) or (
         value.get("repository") == CONSOLIDATED_REPOSITORY
-        and value.get("component") == "docs-public"
+        and value.get("component") in {"docs-public", "docs-internal"}
     )
 
 
@@ -1243,8 +1243,8 @@ def binding_valid(value, policy):
             (
                 names
                 for names in (
-                    ({"docs-public"},)
-                    if value["component"] == "docs-public"
+                    ({value["component"]},)
+                    if value["component"] in {"docs-public", "docs-internal"}
                     else ({"api", "frontend"}, AI_NATIVE_COMPONENTS, AI_COMPONENTS)
                 )
                 if set(policy.get("components", {}))
@@ -1253,7 +1253,7 @@ def binding_valid(value, policy):
             None,
         )
         require(selected is not None, "Canonical AI literal profile set required")
-        if selected == {"docs-public"}:
+        if selected in ({"docs-public"}, {"docs-internal"}):
             item = policy["components"][component_scope(value)]
             require(
                 set(item)
@@ -1264,8 +1264,12 @@ def binding_valid(value, policy):
                     "publication_mechanism",
                 }
                 and item["publication_mechanism"]
-                == "existing-isolated-owner-vercel-cli",
-                "Separate canonical public Docs profile required",
+                == (
+                    "existing-isolated-owner-vercel-cli"
+                    if selected == {"docs-public"}
+                    else "existing-isolated-owner-cloudflare-pages-cli"
+                ),
+                "Separate canonical Docs publication profile required",
             )
         for name in selected:
             item = policy["components"][CONSOLIDATED_REPOSITORY + ":platform:" + name]
@@ -1277,7 +1281,8 @@ def binding_valid(value, policy):
             require(
                 (
                     "release_mode" not in item
-                    if selected in ({"api", "frontend"}, {"docs-public"})
+                    if selected
+                    in ({"api", "frontend"}, {"docs-public"}, {"docs-internal"})
                     else item.get("release_mode")
                     == (name.rsplit("-", 1)[0] if "-" in name else "foundation")
                 ),

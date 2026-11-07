@@ -20,15 +20,20 @@ def for_binding(binding):
 
 
 def for_component(store, component=None):
-    canonical = owner.CONSOLIDATED_REPOSITORY + ":platform:docs-public"
-    if canonical in store.policy["components"]:
+    canonical = {
+        owner.CONSOLIDATED_REPOSITORY + ":platform:" + name: name
+        for name in ("docs-public", "docs-internal")
+    }
+    selected = set(store.policy["components"]) & canonical.keys()
+    if selected:
         owner.require(
-            set(store.policy["components"]) == {canonical}
-            and component in {None, "docs-public"},
-            "ONE_CANONICAL_PUBLIC_DOCS_COMPONENT_REQUIRED",
+            len(selected) == 1 and set(store.policy["components"]) == selected,
+            "ONE_CANONICAL_DOCS_COMPONENT_REQUIRED",
         )
+        name = canonical[next(iter(selected))]
+        owner.require(component in {None, name}, "COMMISSIONED_DOCS_COMPONENT_REQUIRED")
         return for_binding(
-            {**store.policy["toolchain"]["source_binding"], "component": "docs-public"}
+            {**store.policy["toolchain"]["source_binding"], "component": name}
         )
     if component is None:
         components = set(store.policy["components"])

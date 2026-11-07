@@ -172,6 +172,33 @@ issuer and observer commissioning, real Preview/native checks, current rollback
 readback and owner authorization remain required. This source support claims no
 controller cutover, provider change, protected-source transition or deployment.
 
+Protected Docs now has a separate schema-2 source consumer for `docs-internal`.
+Its singleton commissioned policy binds the same exact canonical repository,
+Main commit, root tree and Platform subtree. Public Docs, application and foreign
+product grants cannot authorize it. The approved private document map keeps each
+original repository, revision, path and content hash; consolidation does not
+relabel document provenance. Separate staging/production archives, the existing
+private project and Access policy, original issuer/native keys and retained
+publication lock stay independent from public Docs and application releases.
+
+The generated `onesa-protected-docs-metadata.yml` workflow is manual and read-only.
+It verifies the actual owner, main revision, numeric repository identity, workflow
+revision, first-attempt source CI and exact artifact digests. Separate `qualify`,
+`approve` and `revoke` actions retain one bounded count/hash record. Private
+documents, membership lists, signing keys and provider credentials never enter
+this channel. The external commissioned verifier rereads the latest decision,
+exact metadata archive, independent native producer pin and current source/CI.
+All workflow results retain blocked hosted staging and false deployment grants.
+
+The new private controller reads historical records through the original active
+commissioning anchor, key, policy, immutable installation receipt, source archive
+and reconstructed Git tree. Every retained known helper is hash-checked; original
+verifier code is never imported. Signature verification and read-only ledger
+inspection preserve accepted provider identities, revoked chains, failed contexts
+and unresolved publication holds across the shared project journal. This source
+support does not commission an issuer, repeat an old attempt, migrate the isolated
+industrial demo, change Access membership, or establish a live controller cutover.
+
 ## Publication boundaries
 
 The root publication scanner inspects the consolidated Git index and publishable
