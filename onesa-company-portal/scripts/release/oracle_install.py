@@ -191,9 +191,6 @@ def validate(bundle, manifest_pin, github, *, uid=0):
         raise verifier.Rejected(
             "Only complete reviewed component installation profiles are accepted"
         )
-    if consolidated:
-        require(component == "frontend", "Canonical API/worker/scanner/identity installation is not qualified")
-        prefix = "portal-canonical-"
     policy_bytes = checked_file(bundle / "policy.json", m["policy_sha256"], uid)
     policy = json.loads(policy_bytes)
     require(
@@ -201,6 +198,19 @@ def validate(bundle, manifest_pin, github, *, uid=0):
         and type(policy["schema_version"]) is int
         and policy["schema_version"] == (2 if consolidated else 1),
         "Installation policy schema",
+    )
+    if allowed is IDENTITY_ALLOWED and set(policy["components"]) == {
+        verifier.component_scope({**m, "component": "identity-acceptance"})
+    }:
+        component, script, prefix = (
+            "identity-acceptance", "oracle_portal_identity_acceptance.py",
+            "portal-identity-acceptance-",
+        )
+    if consolidated:
+        prefix += "canonical-"
+    require(
+        set(policy["components"]) == {verifier.component_scope({**m, "component": component})},
+        "Only the selected independent Portal component profile is eligible",
     )
     archives = None
     if consolidated:
@@ -212,7 +222,7 @@ def validate(bundle, manifest_pin, github, *, uid=0):
     github.owner()
     # Actual main, owner merge, first-attempt jobs, hygiene and artifacts are fetched
     # by the existing verifier. No supplied PASS receipt is accepted here.
-    ci = (github.qualify({**source_binding, "component": "frontend"}, archives)
+    ci = (github.qualify({**source_binding, "component": component}, archives)
           if consolidated else github.qualify(
               {k: m[k] for k in ["repository", "candidate_commit", "source_tree"]}))
     require(ci, "Current exact-main checks missing")
@@ -246,18 +256,6 @@ def validate(bundle, manifest_pin, github, *, uid=0):
             "Installation executable differs from current main",
         )
         payloads[local] = data
-    if allowed is IDENTITY_ALLOWED and set(policy["components"]) == {
-        "DruHustle/onesa-company-portal:identity-acceptance"
-    }:
-        component, script, prefix = (
-            "identity-acceptance",
-            "oracle_portal_identity_acceptance.py",
-            "portal-identity-acceptance-",
-        )
-    require(
-        set(policy["components"]) == {verifier.component_scope({**m, "component": component})},
-        "Only the selected independent Portal component profile is eligible",
-    )
     # This source archive is data. Reconstruct its Git tree before using any
     # derived probe-code pins. All executable bootstrap modules were compared to
     # genuine current-main Git blobs above, before loading this stdlib parser.
@@ -372,7 +370,8 @@ def validate(bundle, manifest_pin, github, *, uid=0):
             "API comparison baseline must be separately pinned",
         )
         observed = github.api(
-            "repos/" + m["repository"] + "/git/commits/" + baseline["candidate_commit"]
+            "repos/" + ("DruHustle/onesa-company-portal" if consolidated else m["repository"])
+            + "/git/commits/" + baseline["candidate_commit"]
         )
         require(
             observed["sha"] == baseline["candidate_commit"]
