@@ -26,9 +26,57 @@ class WorkflowTests(unittest.TestCase):
 
     def test_generated_files_match_reviewed_inputs(self):
         expected = workflows.rendered()
-        self.assertEqual(len(expected), 11)
+        self.assertEqual(len(expected), 12)
         for name, text in expected.items():
             self.assertEqual((ROOT / ".github/workflows" / name).read_text(), text)
+
+    def test_docs_manual_build_preserves_classified_checks_without_provider_capability(self):
+        source = workflows.load(ROOT / workflows.DOCS_BUILD_SOURCE)
+        before = copy.deepcopy(source)
+        result = workflows.docs_build_workflow(source)
+        self.assertEqual(source, before)
+        self.assertEqual(result["on"], {"workflow_dispatch": {}})
+        self.assertEqual(result["permissions"], {"contents": "read", "actions": "read"})
+        job = result["jobs"]["documentation"]
+        self.assertIn("github.repository_id == '1444746154'", job["if"])
+        self.assertIn("github.ref == 'refs/heads/main'", job["if"])
+        self.assertIn("github.triggering_actor == 'DruHustle'", job["if"])
+        self.assertIn("github.run_attempt == '1'", job["if"])
+        text = workflows.yaml.dump(result)
+        for forbidden in ("secrets.", "inputs.", "deploy --", "prepare-preview-access", "documentation-qualification"):
+            self.assertNotIn(forbidden, text)
+        named = {step.get("name"): step for step in job["steps"]}
+        self.assertFalse(workflows.DOCS_PROVIDER_NAMES.intersection(named))
+        for step in source["jobs"]["documentation"]["steps"]:
+            name = step.get("name")
+            if name in workflows.DOCS_BUILD_NAMES and "run" in step:
+                self.assertEqual(named[name]["run"], step["run"])
+                self.assertEqual(named[name]["working-directory"], "." if name.startswith("Verify GitHub-hosted") else PRODUCTS["platform"])
+        uploads = [step["with"] for step in job["steps"] if step.get("uses") == workflows.UPLOAD_ARTIFACT]
+        self.assertEqual({row["name"] for row in uploads}, {
+            "onesa-public-docs-staging", "onesa-public-docs-production", "onesa-public-docs-local-build-checks",
+        })
+        self.assertFalse(any("internal" in row["path"] for row in uploads))
+        checkouts = [step for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@")]
+        self.assertEqual(len(checkouts), 1)
+        self.assertEqual(checkouts[0]["with"]["fetch-depth"], 0)
+        self.assertIs(checkouts[0]["with"]["persist-credentials"], False)
+        for peer in ("portal", "robot"):
+            self.assertEqual(named[f"Materialize pinned {peer} contracts from imported history"]["run"], f"python3 ../scripts/ci/materialize_docs_source.py --source {peer}")
+
+    def test_docs_workflow_refuses_new_authority_steps_artifacts_or_classification(self):
+        original = workflows.load(ROOT / workflows.DOCS_BUILD_SOURCE)
+        for mutate in [
+            lambda s: s.update(permissions={"contents": "write"}),
+            lambda s: s["jobs"]["documentation"]["steps"].append({"name": "Unreviewed action", "run": "true"}),
+            lambda s: s["jobs"]["documentation"]["env"].update(ONESA_DOCS_SCOPE="internal"),
+            lambda s: next(x for x in s["jobs"]["documentation"]["steps"] if x.get("name") == "Upload public site only")["with"].update(name="protected-docs"),
+            lambda s: next(x for x in s["jobs"]["documentation"]["steps"] if x.get("name") == "Record local public build checks without hosted authority").update(**{"if": "always() && inputs.force"}),
+        ]:
+            source = copy.deepcopy(original)
+            mutate(source)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                workflows.docs_build_workflow(source)
 
     def test_mobile_sources_preserve_every_job_and_trigger_with_only_shared_guard(self):
         generated = workflows.rendered()

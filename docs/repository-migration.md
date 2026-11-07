@@ -152,6 +152,15 @@ new custody separately commissioned; source support does not retire an old
 controller or repository. Source verification alone does not establish hosted
 acceptance, deployment, recovery readiness or hardware qualification.
 
+The generated `onesa-public-docs-build.yml` adds only a credential-free public
+Docs build on owner-dispatched canonical Main. It preserves classified build and
+local acceptance commands and the exact three public artifacts. Its schema-2
+producer and external reader bind the root identity and Platform subtree, reuse
+canonical source/CI verification and retain unsigned, nonauthorizing results.
+Legacy schema-1 evidence remains supported separately. This does not transition
+the Docs installer, owner component policy, provider executor, protected source
+bundle or native hosted acceptance; those operational consumers remain separate.
+
 ## Publication boundaries
 
 The root publication scanner inspects the consolidated Git index and publishable
