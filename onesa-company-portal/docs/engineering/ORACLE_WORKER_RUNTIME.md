@@ -22,6 +22,24 @@ ordinary timer observations; the staging owner test never faults production targ
 This implementation does not commission an existing host or replace the protected
 runtime procedure.
 
+## Disposable monitoring probes
+
+The metrics client now identifies each disposable container by a fresh invocation
+name and ownership label. If its Docker client fails or times out, bounded cleanup
+requires that exact name, label, image and metrics command before removing the
+inspected container ID. A private, durable intent precedes Docker; interrupted or
+ambiguous cleanup retains it and holds new probes across timer ticks. A recovery
+tick only reconciles that recorded invocation before ordinary sampling resumes.
+An absent name cannot resolve a create request that may still be registering in
+the daemon. If the probe never becomes visible, its intent remains held for
+explicit reconciliation; repeated absence does not report successful cleanup.
+A kernel lock prevents overlapping observers from reconciling a probe that is
+still running. An ambiguous result remains an unsuccessful private observation.
+Application containers and historical probe leftovers are outside this cleanup scope. Normal automatic
+removal, the existing probe timeouts and the one-minute timer remain unchanged.
+Source tests do not establish installed behavior; the protected operations
+procedure still requires exact-source qualification and ordinary timer readback.
+
 ## Prepared private PostgreSQL target
 
 The Oracle API Compose source now contains an inert `x-portal-container-primary`
