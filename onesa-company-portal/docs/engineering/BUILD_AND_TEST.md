@@ -1335,6 +1335,13 @@ substitute source dimensions, preserve old lifecycle holds, and verify real
 Ed25519 dependency records with revocation and signed CI-source mismatch cases.
 The Node worker/API/scanner and identity-browser suites also exercise canonical
 source input without changing their original component/environment limits.
+The historical-journal suite uses real disposable Ed25519 stores and reconstructed
+Git archives to read an accepted old installation while a different verifier is
+currently installed. It exercises all three shared backend journals, unchanged
+current invocation refusal, original custody/source tampering, revoked chains,
+unresolved requests, and the scanner's completed, explicitly revoked exception.
+The reader validates the retained closure against its own source; it never
+imports that code, opens an issuing Store, or rewrites the old ledger/trust.
 
 Run the complete release suite and the five affected Node suites:
 `oracle_portal_worker_probe.test.mjs`, `oracle_portal_worker_production.test.mjs`,

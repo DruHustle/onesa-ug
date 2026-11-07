@@ -939,11 +939,8 @@ def acknowledged_completed_request(path, request, next_binding):
         and result["automatic_retry"] is False,
         "PREVIOUS_SCANNER_PROVIDER_OUTCOME_UNRESOLVED",
     )
-    records = r.verify_invocation(
-        binding,
-        {"operation_id": path.name, "read_only": True},
-        "production",
-        {"verifier_store": request["verifier_store"]},
+    records = r.verify_historical_operation(
+        binding, path.name, request["verifier_store"], require_accepted=False,
     )
     intent = next(item for item in records if item["id"] == path.name)
     r.require(
@@ -958,7 +955,7 @@ def acknowledged_completed_request(path, request, next_binding):
     store = r.private(Path(request["verifier_store"]), directory=True)
     trust = r.read(
         store / "trust.json"
-    )  # Invocation above checked the external anchor.
+    )  # The historical reader above checked the original external anchor.
     with closing(
         sqlite3.connect("file:" + str(store / "records.sqlite") + "?mode=ro", uri=True)
     ) as db:
@@ -1054,13 +1051,8 @@ def previous_operations(next_binding=None):
         )
         # Verify the signature chain, binding, revocations and accepted index.
         try:
-            r.verify_invocation(
-                binding,
-                {"operation_id": path.name, "read_only": True},
-                "production",
-                {"verifier_store": request["verifier_store"]},
-                dependency=True,
-            )
+            r.verify_historical_operation(binding, path.name, request["verifier_store"],
+                                          require_accepted=True)
         except r.Refused:
             if not acknowledged_completed_request(path, request, next_binding):
                 raise

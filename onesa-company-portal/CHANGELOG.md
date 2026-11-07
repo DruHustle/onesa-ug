@@ -7,6 +7,10 @@
   are rechecked before observations; private plans retain the existing component
   and environment restrictions. Controller commissioning, hosted qualification
   and original recovery reconciliation remain separate release requirements.
+  Shared API/worker/scanner journals use a separate historical reader that checks
+  the original commissioned installation and signed ledger without opening an
+  issuing Store. Current invocation pins remain strict; unresolved requests and
+  revoked accepted chains continue to block a new release.
 
 - Add a build-only ARM64 K3s runtime recipe with pinned source archives, dependency
   locks, compiler packages and executable hashes. Retain upstream license notices

@@ -523,7 +523,102 @@ def image_security(scan, identity, architecture="arm64"):
     )
 
 
+def historical_verifier(binding, store, trust):
+    """Read the original installation; never load its code or open its Store."""
+    scope = portal_component_scope(binding)
+    component = binding["component"]
+    require(component in {"api", "worker", "scanner"}
+            and binding.get("target_environment") == "production",
+            "HISTORICAL_PORTAL_JOURNAL_SCOPE")
+    policy = read(store / "policy.json")
+    tool = policy.get("toolchain")
+    require(isinstance(tool, dict) and isinstance(policy.get("components"), dict),
+            "HISTORICAL_COMPONENT_POLICY_REQUIRED")
+    consolidated = binding["repository"] == CANONICAL_REPOSITORY
+    require(type(policy.get("schema_version")) is int
+            and policy["schema_version"] == (2 if consolidated else 1)
+            and set(policy["components"]) == {scope}
+            and all(isinstance(tool.get(key), str)
+                    and re.fullmatch(r"[a-f0-9]{40}", tool[key])
+                    for key in ("source_commit", "source_tree"))
+            and isinstance(tool.get("source_sha256"), str)
+            and re.fullmatch(r"[a-f0-9]{64}", tool["source_sha256"]),
+            "HISTORICAL_COMPONENT_POLICY_SCOPE")
+    source = {"repository": binding["repository"],
+              "candidate_commit": tool["source_commit"], "source_tree": tool["source_tree"]}
+    if consolidated:
+        source = portal_source_binding(binding)
+        require(tool.get("source_binding") == source
+                and tool["source_commit"] == source["candidate_commit"]
+                and tool["source_tree"] == source["source_tree"]
+                and tool["source_sha256"] == binding["source_sha256"],
+                "HISTORICAL_CANONICAL_SOURCE_CHANGED")
+    directory = private(INSTALL_PARENT / ("portal-" + component
+                        + ("-canonical-" if consolidated else "-")
+                        + tool["source_tree"]), directory=True)
+    require(trust.get("runner_root") == str(directory / "runners")
+            and sha(private(directory / "policy.json")) == trust["policy_sha256"],
+            "HISTORICAL_INSTALLATION_POLICY_CHANGED")
+    receipt = read(directory / "installation.json")
+    mapping = canonical_install_files(component)
+    files = receipt.get("files")
+    required = {"oracle_owner.py", "oracle_install.py", "runners/oracle_portal.py",
+                "runners/oracle_portal_" + component + ".py"}
+    require(receipt.get("state") == "INSTALLED_NOT_COMMISSIONED"
+            and receipt.get("repository") == binding["repository"]
+            and receipt.get("source") == tool["source_commit"]
+            and receipt.get("source_tree") == tool["source_tree"]
+            and receipt.get("policy_sha256") == trust["policy_sha256"]
+            and type(receipt.get("provider_requests")) is int
+            and receipt["provider_requests"] == 0
+            and (not consolidated or receipt.get("source_binding") == source)
+            and isinstance(files, dict) and required <= set(files) <= set(mapping),
+            "HISTORICAL_INSTALLATION_RECEIPT_CHANGED")
+    profile = policy["components"][scope]
+    script = "runners/oracle_portal_" + component + ".py"
+    require(set(profile["runners"]) == set(CHECKS)
+            and all(item["path"] == str(directory / script)
+                    and item["sha256"] == files[script]
+                    for item in profile["runners"].values()),
+            "HISTORICAL_COMPONENT_RUNNER_CHANGED")
+    archive = private(directory / "tool-source.tar")
+    require(sha(archive) == tool["source_sha256"], "HISTORICAL_TOOL_SOURCE_CHANGED")
+    _, upstream = source_inventory(archive, source)
+    # Older installations retain their own closure. They need not contain
+    # helpers added later, and no retained helper is imported or executed here.
+    for local, pin in files.items():
+        require(isinstance(pin, str) and re.fullmatch(r"[a-f0-9]{64}", pin)
+                and pin == upstream.get(mapping[local])
+                and sha(private(directory / local)) == pin,
+                "HISTORICAL_INSTALLED_HELPER_CHANGED")
+    verifier = private(directory / "oracle_owner.py")
+    require(files["oracle_owner.py"] == trust["verifier_sha256"],
+            "HISTORICAL_VERIFIER_CUSTODY_CHANGED")
+    return verifier
+
+
+def verify_historical_operation(binding, operation_id, store, *, require_accepted=True):
+    """Only inspect retained shared journals; this entry point issues no authority.
+
+    The scanner alone may inspect a completed, explicitly revoked request before
+    its separate exact provider-result and signed-revocation checks. Current
+    staging/deployment invocations always retain the current verifier pin.
+    """
+    require(type(require_accepted) is bool
+            and (require_accepted or binding.get("component") == "scanner"),
+            "HISTORICAL_ACCEPTANCE_SCOPE")
+    return _verify_invocation(
+        binding, {"operation_id": operation_id, "read_only": True}, "production",
+        {"verifier_store": store}, dependency=require_accepted, historical_custody=True,
+    )
+
+
 def verify_invocation(binding, context, phase, plan, *, dependency=False):
+    return _verify_invocation(binding, context, phase, plan, dependency=dependency)
+
+
+def _verify_invocation(binding, context, phase, plan, *, dependency=False,
+                       historical_custody=False):
     if phase == "staging":
         require(set(context) == {"context_id"}, "STAGING_SIGNED_CONTEXT_ONLY")
     elif phase == "deploy":
@@ -565,10 +660,11 @@ def verify_invocation(binding, context, phase, plan, *, dependency=False):
     )
     require(
         sha(store / "public.pem") == trust["key_id"]
-        and sha(store / "policy.json") == trust["policy_sha256"]
-        and sha(VERIFIER) == trust["verifier_sha256"],
+        and sha(store / "policy.json") == trust["policy_sha256"],
         "ISSUER_CUSTODY_PIN_CHANGED",
     )
+    verifier = historical_verifier(binding, store, trust) if historical_custody else VERIFIER
+    require(sha(verifier) == trust["verifier_sha256"], "ISSUER_CUSTODY_PIN_CHANGED")
     require(sha(OPENSSL) == trust["openssl_sha256"], "SIGNATURE_TOOL_CHANGED")
     db = sqlite3.connect(
         "file:" + str(store / "records.sqlite") + "?mode=ro", uri=True, timeout=20

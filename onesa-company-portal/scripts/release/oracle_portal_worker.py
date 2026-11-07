@@ -460,13 +460,8 @@ def previous_operations():
             and request["context"]["operation_id"] == path.name,
             "WORKER_PREVIOUS_OPERATION_SCOPE",
         )
-        r.verify_invocation(
-            request["binding"],
-            {"operation_id": path.name, "read_only": True},
-            "production",
-            {"verifier_store": request["verifier_store"]},
-            dependency=True,
-        )
+        r.verify_historical_operation(request["binding"], path.name,
+                                      request["verifier_store"], require_accepted=True)
 
 
 def production_probe(binding, plan, context, records, target, *, prepare=False):

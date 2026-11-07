@@ -154,6 +154,13 @@ Legacy schema-1 installations and accepted records remain unchanged. Canonical
 Portal component records have distinct product namespaces while sharing each
 existing lifecycle resource, so an old unresolved hold still blocks. The API's
 retained comparison baseline keeps its original repository and artifact identity.
+This baseline supports the first legacy-to-canonical handoff; a later canonical
+comparison baseline needs its own reviewed support. Shared API/worker/scanner
+journals validate each original commissioned verifier, policy, retained source,
+installed helper bytes and signed ledger through a separate historical reader.
+It opens no issuing Store and cannot create authority or change a deployment's
+state. Current invocation pins and the original unresolved/revoked request holds
+remain enforced, including the scanner's exact completed-request revocation rules.
 Integrated identity acceptance reads each product's independently signed original
 or canonical namespace, verifies its exact accepted binding and source proof, and
 does not convert one product's authority into another's.
