@@ -43,7 +43,26 @@ export function validateRequest(value) {
   require(value.schema_version === 1 && ['account', 'integrated'].includes(value.scope) &&
     ['staging', 'production'].includes(value.environment) && UUID.test(value.operation_id), 'IDENTITY_REQUEST_SCOPE');
   const binding = value.binding;
-  require(binding && binding.repository === 'DruHustle/onesa-company-portal' &&
+  if (binding?.repository === 'DruHustle/onesa-ug') {
+    keys(binding, ['schema_version', 'repository', 'repository_id', 'product', 'source_path',
+      'candidate_commit', 'source_tree', 'product_source_tree', 'branch', 'component',
+      'source_sha256', 'build_sha256', 'artifact_digest', 'configuration_sha256',
+      'target_environment'], 'IDENTITY_CANONICAL_BINDING_SCHEMA');
+    require(['candidate_commit', 'source_tree', 'product_source_tree'].every(key =>
+      typeof binding[key] === 'string' && /^[a-f0-9]{40}$/.test(binding[key])) &&
+      ['source_sha256', 'build_sha256'].every(key => typeof binding[key] === 'string' &&
+        /^[a-f0-9]{64}$/.test(binding[key])) && typeof binding.artifact_digest === 'string' &&
+      /^sha256:[a-f0-9]{64}$/.test(binding.artifact_digest), 'IDENTITY_CANONICAL_ARTIFACT_BINDING');
+    keys(binding.configuration_sha256, ['staging', 'production'], 'IDENTITY_CANONICAL_CONFIGURATION');
+    require(Object.values(binding.configuration_sha256).every(pin => typeof pin === 'string' &&
+      /^[a-f0-9]{64}$/.test(pin)), 'IDENTITY_CANONICAL_CONFIGURATION');
+  }
+  require(binding && (binding.repository === 'DruHustle/onesa-company-portal' ||
+    binding.repository === 'DruHustle/onesa-ug' && binding.schema_version === 2 &&
+    binding.repository_id === 1444746154 && binding.product === 'portal' &&
+    binding.source_path === 'onesa-company-portal' && binding.branch === 'main' &&
+    binding.target_environment === 'production' && typeof binding.product_source_tree === 'string' &&
+    /^[a-f0-9]{40}$/.test(binding.product_source_tree)) &&
     binding.component === (value.scope === 'account' ? 'identity' : 'identity-acceptance') &&
     /^[a-f0-9]{40}$/.test(binding.candidate_commit) && /^[a-f0-9]{40}$/.test(binding.source_tree), 'IDENTITY_SOURCE_BINDING');
   keys(value.origins, ['portal', ...PRODUCTS], 'IDENTITY_ORIGIN_SCHEMA');

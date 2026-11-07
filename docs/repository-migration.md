@@ -98,7 +98,7 @@ They require the expected Git origin, the exact workflow revision, and clean
 product source. Drone's manifest producer independently validates its checkout
 identity and records both the root tree and product tree. Consolidated records
 explicitly set `verification_only: true` and `release_authorized: false`.
-The existing Portal, AI Platform, and Robot owner bridges now expose a
+The existing Portal, AI Platform, Robot, and Drone owner bridges now expose a
 `verify-source` entrypoint for these consolidated records. It uses the existing
 private, source-pinned, explicitly commissioned `Store` and authenticated owner.
 An additional pinned `consolidated_sources` policy must name each permitted
@@ -132,24 +132,44 @@ deployment-provider mutation. The existing custody pins and separate owner commi
 still apply. Changing source or policy files in an older installation cannot
 activate it.
 
-The Portal frontend has a separate, explicit schema-2 operational source path.
-Its immutable installer and component policy bind canonical repository ID,
+Portal has separate, explicit schema-2 operational source paths for frontend,
+API, worker, scanner, identity migration and identity acceptance. Each immutable
+installer profile and component policy bind canonical repository ID,
 exact current-main commit/root tree, Portal subtree and the three pinned source
 artifact ZIPs. Every existing owner qualification boundary rereads those private
 installed bytes and reuses the source verifier above. Its unsigned result remains
 verification-only; signed owner contexts, hosted staging, current operations,
 authorization, custody and rollback are still separate gates. The product-relative
 build archive retains the root identity and the fixed canonical provider root.
+Each backend installation contains exactly its reviewed executable closure, one
+component and one qualification context. Canonical backend plans use their
+original fixed filename with `-canonical` before `.json`, schema version 2 and
+the complete `source_binding`. Their artifact directory is under the component's
+`canonical-portal` namespace; deployment journals and lifecycle locks retain the
+original shared component locations. Native build and Node/browser observations
+carry the complete root/product identity while preserving original runtime,
+configuration, migration, processing and environment restrictions.
 
 Legacy schema-1 installations and accepted records remain unchanged. Canonical
-Portal frontend records have a distinct product namespace while sharing the
-existing frontend lifecycle resource, so an old unresolved hold still blocks.
-This source path does not migrate API/worker/scanner/identity controllers, other
-products, historical Git-triggered provider workflows or recovery readers. Those
-consumers retain their original bindings pending their own reviewed transitions.
+Portal component records have distinct product namespaces while sharing each
+existing lifecycle resource, so an old unresolved hold still blocks. The API's
+retained comparison baseline keeps its original repository and artifact identity.
+This baseline supports the first legacy-to-canonical handoff; a later canonical
+comparison baseline needs its own reviewed support. Shared API/worker/scanner
+journals validate each original commissioned verifier, policy, retained source,
+installed helper bytes and signed ledger through a separate historical reader.
+It opens no issuing Store and cannot create authority or change a deployment's
+state. Current invocation pins and the original unresolved/revoked request holds
+remain enforced, including the scanner's exact completed-request revocation rules.
+Integrated identity acceptance reads each product's independently signed original
+or canonical namespace, verifies its exact accepted binding and source proof, and
+does not convert one product's authority into another's.
 Actual controller/provider cutover and retained operations must be inspected and
 new custody separately commissioned; source support does not retire an old
-controller or repository. Source verification alone does not establish hosted
+controller or repository. Historical provider workflows, recovery readers and
+exclusive issuer handoff remain separate transitions; original signed records,
+issuers and valid recovery tools must be retained and reconciled before retirement.
+Source verification alone does not establish hosted
 acceptance, deployment, recovery readiness or hardware qualification.
 
 The generated `onesa-public-docs-build.yml` adds only a credential-free public
@@ -171,6 +191,27 @@ Provider inspection remains read-only outcome evidence, not acceptance. New
 issuer and observer commissioning, real Preview/native checks, current rollback
 readback and owner authorization remain required. This source support claims no
 controller cutover, provider change, protected-source transition or deployment.
+
+Drone now has a separate schema-2 operational consumer for its complete
+`backend`/`frontend` pair. The immutable installer compares every executable with
+the exact current-main product Git blob, reconstructs the product archive's Git
+tree, and retains both genuine CI artifact ZIPs. The new installation starts as
+`INSTALLED_NOT_COMMISSIONED`; it creates no signing key, Store, provider request or
+runtime plan. Canonical contexts retain the root commit/tree and Drone subtree in
+the distinct `DruHustle/onesa-ug:drone:<component>` namespace, with one context per
+component and source. Every existing owner qualification boundary rechecks the
+installed source archives and current full CI evidence.
+
+The runner selects only `/etc/onesa/oracle-drone-canonical-release.json` for that
+consumer. It requires the same source in both component bindings, complete pinned
+helpers, native build provenance, the immutable source archive and both installed
+CI archives. The frontend package and one-create transport retain the literal
+canonical repository ID, product and source path. Legacy plans, signed records and
+simulation-only behavior remain separately bound. Before any live use, the owner
+must reconcile every old controller and unresolved operation, retain independently
+verified accepted recovery evidence, commission the new custody and complete the
+existing hosted staging, operations, rollback and production observations. Source
+support does not establish exclusive controller handoff or repository retirement.
 
 Protected Docs now has a separate schema-2 source consumer for `docs-internal`.
 Its singleton commissioned policy binds the same exact canonical repository,

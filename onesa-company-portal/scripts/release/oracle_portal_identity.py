@@ -207,7 +207,7 @@ def validate_recipe(value, env, kind):
 def validate_plan(binding, plan):
     exact(
         plan,
-        [
+        r.component_plan_fields(binding, [
             "schema_version",
             "qualification_profile",
             "verifier_store",
@@ -217,13 +217,12 @@ def validate_plan(binding, plan):
             "legacy_backup",
             "restore",
             "privacy_decision",
-        ],
+        ]),
         "IDENTITY_PLAN_SCHEMA",
     )
     r.require(
-        plan["schema_version"] == 1
+        r.component_plan_source(binding, plan, "identity")
         and plan["qualification_profile"] == PROFILE
-        and binding["repository"] == common.REPOSITORY
         and binding["component"] == "identity"
         and binding["target_environment"] == "production"
         and re.fullmatch(r"[a-f0-9]{40}", binding["candidate_commit"])
@@ -309,7 +308,7 @@ def validate_plan(binding, plan):
             digest(configuration(plan, env)) == binding["configuration_sha256"][env],
             "IDENTITY_CONFIGURATION_CHANGED",
         )
-    return ROOT / "artifacts" / binding["source_tree"]
+    return r.component_artifact_folder(ROOT, binding)
 
 
 def stable_profile(row):
@@ -416,14 +415,7 @@ def source_and_image(binding, plan, folder):
         r.sha(folder / "build.json") == binding["build_sha256"]
         and all(
             build.get(key) == binding[key]
-            for key in [
-                "repository",
-                "component",
-                "candidate_commit",
-                "source_tree",
-                "source_sha256",
-                "artifact_digest",
-            ]
+            for key in r.build_source_fields(binding)
         )
         and build.get("architecture") == "arm64"
         and build.get("dockerfile_sha256") == files[PREFIX + "Dockerfile"],
@@ -909,7 +901,7 @@ def verify_probe_image(plan):
     r.require(
         r.sha(source) == tool["source_sha256"], "IDENTITY_PROBE_SOURCE_ARCHIVE_CHANGED"
     )
-    _, files = r.source_inventory(source, {"source_tree": tool["source_tree"]})
+    _, files = r.source_inventory(source, tool.get("source_binding") or {"source_tree": tool["source_tree"]})
     image = json.loads(r.docker("image", "inspect", tool["probe_image"]))[0]
     labels = image["Config"].get("Labels") or {}
     r.require(
@@ -1322,9 +1314,10 @@ def production(binding, plan, context, folder, records):
 
 def runner(phase, binding, context):
     r.require(phase in CHECKS, "IDENTITY_PHASE_SCOPE")
-    plan = r.read(PLAN)
+    plan = r.read(r.component_plan_path(binding, PLAN))
     folder = validate_plan(binding, plan)
     records = r.verify_invocation(binding, context, phase, plan)
+    r.verify_canonical_component_custody(binding, plan, CHECKS)
     if phase == "staging":
         observed = staging(binding, plan, context, folder, records)
     elif phase == "operations":
@@ -1350,7 +1343,7 @@ def record_failure(phase, request, error, *, component="identity"):
             and phase in CHECKS
             and isinstance(request, dict)
             and request["binding"]["component"] == component
-            and request["binding"]["repository"] == common.REPOSITORY,
+            and bool(r.portal_component_scope(request["binding"], component)),
             "IDENTITY_DIAGNOSTIC_SCOPE",
         )
         root = r.private(ROOT.parent / component, directory=True)
