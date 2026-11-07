@@ -65,8 +65,19 @@ export function installAircraftInteractionObserver() {
   function sample(kind, event) {
     const input = nativeKinds.includes(kind), now = performance.now();
     if (input ? inputSamples >= 16 : passiveSamples >= 16 || now - lastPassive < 50) return;
+    // A failed or inapplicable optional read still consumes its attempt. Remove
+    // listeners at the limit before entering DOM work that can throw.
+    if (input) {
+      inputSamples++;
+      if (inputSamples === 16) for (const name of nativeKinds) document.removeEventListener(name, native, options);
+    } else {
+      passiveSamples++; lastPassive = now;
+      if (passiveSamples === 16) stopPassive();
+    }
     try {
       const node = summary(); if (!node) return;
+      if (input && (event.type === 'toggle' ? event.target !== node.parentElement
+        : !(event.target instanceof Element) || event.target.closest('summary') !== node)) return;
       const gallery = document.querySelector('#nvidia-environments'), state = gallery?.getAttribute('data-state');
       const box = node.getBoundingClientRect();
       const value = {kind, page_ms: Math.max(0, bounded(now)),
@@ -75,25 +86,11 @@ export function installAircraftInteractionObserver() {
         canvas_count: Math.min(gallery?.querySelectorAll('canvas').length ?? 0, 8),
         scroll_y: bounded(window.scrollY), box: [box.left, box.top, box.width, box.height].map(bounded),
         point: event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY) ? [bounded(event.clientX), bounded(event.clientY)] : null};
-      if (input) {
-        inputSamples++;
-        if (inputSamples === 16) for (const name of nativeKinds) document.removeEventListener(name, native, options);
-      } else {
-        passiveSamples++; lastPassive = now;
-        if (passiveSamples === 16) stopPassive();
-      }
       const deliver = window[binding];
       if (typeof deliver === 'function') void Promise.resolve(deliver(value)).catch(() => {});
     } catch { /* Optional observation cannot affect the interaction under test. */ }
   }
-  function native(event) {
-    try {
-      const node = summary(); if (!node) return;
-      const target = event.target;
-      if (event.type === 'toggle' ? target !== node.parentElement : !(target instanceof Element) || target.closest('summary') !== node) return;
-      sample(event.type, event);
-    } catch { /* Optional listeners cannot fail the page's own event dispatch. */ }
-  }
+  function native(event) {sample(event.type, event);}
   function scroll() {sample('scroll');}
   function ready() {
     sample('document_ready');

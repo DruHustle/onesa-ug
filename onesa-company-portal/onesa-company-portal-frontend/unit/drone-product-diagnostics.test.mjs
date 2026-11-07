@@ -142,6 +142,17 @@ test('scroll and gallery bursts have a time limit and a hard read budget separat
   assert.ok(view.registrations.every(entry => entry.removed));
 });
 
+test('failed geometry attempts consume both budgets and unregister even when every read throws', () => {
+  const view = fixture(); view.breakGeometry(); view.advance(50);
+  for (let i = 0; i < 1000; i++) {view.window.dispatch('scroll'); view.observers[0].callback();}
+  assert.equal(view.reads(), 2, 'a failed passive read still advances the time gate');
+  for (let i = 0; i < 1000; i++) {view.advance(50); view.window.dispatch('scroll'); view.observers[0].callback();}
+  assert.equal(view.reads(), 16); assert.equal(view.observers[0].disconnected, true);
+  for (let i = 0; i < 1000; i++) view.document.dispatch('click', {target: view.summary, clientX: 5, clientY: 6});
+  assert.equal(view.reads(), 32); assert.equal(view.reports.length, 1);
+  assert.ok(view.registrations.every(entry => entry.removed));
+});
+
 test('foreign routes or child frames install nothing and optional observation failures do not escape', async () => {
   for (const config of [{origin: 'https://public.invalid'}, {pathname: '/admin'}, {childFrame: true}, {query: '?token=private'}]) {
     const view = fixture(config); assert.equal(view.registrations.length, 0); assert.equal(view.reads(), 0);
