@@ -181,13 +181,36 @@ enablement, and normal ready-state restarts refuse any remaining maintenance hol
 for the observed architecture, and the compatible Portainer CE image by digest.
 The exact copied artifact bytes are checked through one protected file descriptor.
 K3s uses its own containerd, an explicit private node/API address, single-node
-host-gw networking and private kubeconfig. Traefik, ServiceLB and the default local
-storage provisioner are disabled before startup. Its own narrow firewall chains
-refuse pod traffic to Docker subnets before traversing the retained Docker user
-policy, so existing accepts cannot bypass that isolation. The existing overlay
-guard remains first; no Docker-generated chain is flushed, no application
-container is restarted, and no public control-plane or
-management UI endpoint is provisioned.
+host-gw networking and private kubeconfig. The locked release uses the standard
+`proxy-mode=nftables` kube-proxy implementation; its native base chains cannot
+override a rejection in another base chain. The installer requires a supported
+kernel and nftables userspace, verifies the live native proxy table, and refuses
+the broad iptables `KUBE-FORWARD` proxy. Traefik, ServiceLB and the default local
+storage provisioner are disabled before startup.
+
+An independent native guard rejects spoofed pod sources, pod traffic to retained
+Docker/router/host networks and metadata HTTP, untrusted cluster ingress, and
+IPv6 CNI traffic. It permits the configured private API/kubelet path from local
+pods and conntrack-bound replies to approved pod egress. The bundled network
+policy controller's exact pod selectors and parent-chain mark accepts are
+verified separately. Its accept bit is cleared only for unrelated INPUT/FORWARD
+traffic after routing; other bits and OUTPUT marks are unchanged. First install
+refuses a preexisting netfilter mark writer/consumer or restrictive OUTPUT policy
+that would invalidate this integration. Existing policy-routing selectors are
+retained and compared, including Tailscale's masked mark rules. No Tailscale mask,
+existing owner guard or Docker-generated rule is rewritten.
+
+The private plan includes the observed non-loopback upstream DNS addresses.
+The installer compares them with the system resolver's actual upstream and writes
+a private pod resolver file; it does not choose another DNS provider. Native
+exceptions permit only TCP/UDP port 53 to those addresses. Initial management
+namespaces receive default-deny egress policies, with the upstream exception
+restricted to CoreDNS in `kube-system`. Portainer can reach the Kubernetes API and
+cluster DNS; the metrics service can reach the API and kubelet. Namespace and pod
+selectors are combined, and extra additive policies or workload namespaces fail
+verification until their networking is reviewed. API service endpoints must point
+to the private node address, and CoreDNS must be available with its expected
+service account. Existing Docker applications are not restarted or migrated.
 
 Portainer has HTTPS-only ClusterIP access, denied pod ingress, one observed node,
 and an explicit local PV/PVC and storage class with `Retain`. Its data directory
@@ -196,6 +219,27 @@ or a backup. Portainer initially manages Kubernetes only: existing Docker Compos
 applications need a separately registered, authenticated private Docker environment
 and actual readback before their visualization can be claimed. This installer
 does not mount the Docker socket or expose an agent port.
+
+The management path is the existing authenticated SSH connection followed by
+`kubectl port-forward --address=127.0.0.1 --namespace=portainer service/portainer
+19443:9443` using the private K3s kubeconfig, with the same loopback port forwarded
+through SSH to the owner's computer. No NodePort is required. The locked nftables
+proxy does not support localhost NodePorts: the loopback-only address selection
+has no eligible NodePort addresses and must not be described as a working local
+NodePort service. Owner initialization, authenticated environment readback and
+backup/restore qualification remain explicit commissioning steps.
+
+`scripts/oracle_k3s_network_acceptance.py` is a separate, bounded packet diagnostic
+for reviewed root-owned source. Its parent reads host fingerprints and source
+hashes; mutations run only after fresh network, mount and PID namespace identities
+and private PID 1 are verified. It uses private `/run` mounts and synthetic
+addresses. The fixture first reproduces the old established-flow bypass, then
+checks the standard proxy design, policy-routing mark behavior in both IP
+families, CoreDNS versus other pod egress, metadata denial, bridged pod policy,
+retained owner/service paths and controller/guard reconciliation. It compares
+IPv4/IPv6 rules and routes and source custody before and after. Passing this
+fixture does not claim a running K3s cluster, authenticated service-account API
+traffic, a real reboot, owner UI access or live application qualification.
 
 Failure handling stops only the installer-owned service when its file and effective
 systemd identity still match. A receipt-write failure does not suppress that stop
@@ -215,6 +259,9 @@ reduce the existing host memory/storage, migrate databases or qualify hardware.
 
 Primary references: [K3s configuration](https://docs.k3s.io/installation/configuration),
 [network services](https://docs.k3s.io/networking/networking-services),
+[Kubernetes 1.36 nftables proxy](https://v1-36.docs.kubernetes.io/docs/reference/networking/virtual-ips/#proxy-mode-nftables),
+[locked K3s proxy arguments](https://github.com/k3s-io/k3s/blob/v1.36.5%2Bk3s1/pkg/daemons/agent/agent.go),
+[locked network-policy controller](https://github.com/k3s-io/kube-router/blob/v2.6.3-k3s1/pkg/controllers/netpol/network_policy_controller.go),
 [datastore backup](https://docs.k3s.io/datastore/backup-restore),
 [Portainer compatibility](https://docs.portainer.io/start/requirements-and-prerequisites),
 [Docker firewall policy](https://docs.docker.com/engine/network/firewall-iptables/),
