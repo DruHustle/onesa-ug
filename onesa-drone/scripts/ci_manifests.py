@@ -45,8 +45,8 @@ def source_binding(root=ROOT):
     if path != ".":
         value["source_path"] = path
         value["product_source_tree"] = command("git", "-C", str(root), "rev-parse", f"HEAD:{path}")
-        # Legacy owner adapters deliberately retain their original repository
-        # policy until the consolidated release path is separately qualified.
+        # Build provenance remains non-authorizing. Only the separately installed
+        # canonical owner consumer can bind it to hosted release qualification.
         value["verification_only"] = True
         value["release_authorized"] = False
     return value

@@ -104,6 +104,24 @@ test("foreign backend, environment swaps and missing source identities fail befo
     await assert.rejects(packageVercel({ ...args, ...patch }));
 });
 
+test("canonical packages retain the complete product source identity", async (t) => {
+  const { args } = await fixture(t);
+  const sourceBinding = {
+    schema_version: 2, repository: "DruHustle/onesa-ug", repository_id: 1444746154,
+    product: "drone", source_path: "onesa-drone", candidate_commit: args.sourceCommit,
+    source_tree: "b".repeat(40), product_source_tree: "c".repeat(40), branch: "main",
+  };
+  for (const change of [{ repository_id: 1 }, { product: "robot" }, { branch: "staging" },
+    { source_path: "onesa-robot" }, { candidate_commit: "d".repeat(40) }, { release_authorized: true }]) {
+    await assert.rejects(packageVercel({ ...args, sourceBinding: { ...sourceBinding, ...change } }), /canonical Drone/);
+    await assert.rejects(access(args.output));
+  }
+  const result = await packageVercel({ ...args, sourceBinding });
+  assert.deepEqual(result.source_binding, sourceBinding);
+  assert.deepEqual(JSON.parse(await readFile(join(args.output, "release.json"))).source_binding, sourceBinding);
+  assert.equal(Object.hasOwn(result, "release_authorized"), false);
+});
+
 test("hidden credentials and symlinks cannot enter a public artifact", async (t) => {
   const { args } = await fixture(t);
   await writeFile(join(args.dist, ".env"), "synthetic-private-fixture");

@@ -98,7 +98,7 @@ They require the expected Git origin, the exact workflow revision, and clean
 product source. Drone's manifest producer independently validates its checkout
 identity and records both the root tree and product tree. Consolidated records
 explicitly set `verification_only: true` and `release_authorized: false`.
-The existing Portal, AI Platform, and Robot owner bridges now expose a
+The existing Portal, AI Platform, Robot, and Drone owner bridges now expose a
 `verify-source` entrypoint for these consolidated records. It uses the existing
 private, source-pinned, explicitly commissioned `Store` and authenticated owner.
 An additional pinned `consolidated_sources` policy must name each permitted
@@ -191,6 +191,27 @@ Provider inspection remains read-only outcome evidence, not acceptance. New
 issuer and observer commissioning, real Preview/native checks, current rollback
 readback and owner authorization remain required. This source support claims no
 controller cutover, provider change, protected-source transition or deployment.
+
+Drone now has a separate schema-2 operational consumer for its complete
+`backend`/`frontend` pair. The immutable installer compares every executable with
+the exact current-main product Git blob, reconstructs the product archive's Git
+tree, and retains both genuine CI artifact ZIPs. The new installation starts as
+`INSTALLED_NOT_COMMISSIONED`; it creates no signing key, Store, provider request or
+runtime plan. Canonical contexts retain the root commit/tree and Drone subtree in
+the distinct `DruHustle/onesa-ug:drone:<component>` namespace, with one context per
+component and source. Every existing owner qualification boundary rechecks the
+installed source archives and current full CI evidence.
+
+The runner selects only `/etc/onesa/oracle-drone-canonical-release.json` for that
+consumer. It requires the same source in both component bindings, complete pinned
+helpers, native build provenance, the immutable source archive and both installed
+CI archives. The frontend package and one-create transport retain the literal
+canonical repository ID, product and source path. Legacy plans, signed records and
+simulation-only behavior remain separately bound. Before any live use, the owner
+must reconcile every old controller and unresolved operation, retain independently
+verified accepted recovery evidence, commission the new custody and complete the
+existing hosted staging, operations, rollback and production observations. Source
+support does not establish exclusive controller handoff or repository retirement.
 
 ## Publication boundaries
 
