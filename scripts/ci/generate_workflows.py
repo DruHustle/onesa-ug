@@ -90,6 +90,112 @@ def mobile_workflow(source):
     return document
 
 
+DOCS_BUILD_SOURCE = Path("onesa-ai-platform/.github/workflows/docs-hosting.yml")
+DOCS_BUILD_NAMES = {
+    "Verify GitHub-hosted execution and actual visibility",
+    "Install locked build dependencies",
+    "Read reviewed cross-project source revisions",
+    "Verify pinned Portal and Robot source contracts",
+    "Capture fresh synthetic application screenshots",
+    "Verify dependency security and build classified public documentation",
+    "Verify public documentation interactions and accessibility",
+    "Qualify production-context public bytes before credentials and restore staging Preview",
+    "Build and verify classified protected Docs before provider credentials",
+    "Verify emitted favicon link and bundled icon",
+    "Stop isolated screenshot fixture",
+    "Record local public build checks without hosted authority",
+    "Upload local public build checks only",
+    "Upload public site only",
+    "Upload qualified production-context public site only",
+}
+DOCS_PROVIDER_NAMES = {
+    "Require exact reviewed CI before Preview provider credentials",
+    "Prepare pinned isolated CLI before deployment credentials",
+    "Inspect existing public docs project and source revisions",
+    "Prepare separate Vercel documentation project",
+    "Read owner-managed public Docs Preview test credential without mutation",
+    "Publish verified public build as Preview only without dependency installation",
+    "Verify actual deployment identity, readiness and source revision",
+    "Verify actual public Preview interactions and boundary",
+    "Remove private runner-owned Preview test credential",
+    "Record source-bound independent Docs Preview qualification",
+}
+
+
+def docs_build_workflow(source):
+    """Select the reviewed public build branch; no provider branch is generated."""
+    if source.get("permissions") != {"contents": "read", "actions": "read"} or set(source.get("jobs", {})) != {"documentation"}:
+        raise ValueError("Docs build authority requires explicit migration review")
+    original = source["jobs"]["documentation"]
+    if set(original) != {"name", "if", "runs-on", "timeout-minutes", "env", "steps"}:
+        raise ValueError("Docs job structure requires explicit migration review")
+    named = [step["name"] for step in original["steps"] if "name" in step]
+    if len(named) != len(set(named)) or set(named) != DOCS_BUILD_NAMES | DOCS_PROVIDER_NAMES:
+        raise ValueError("Docs build/provider step inventory changed")
+    selected = []
+    unnamed = []
+    for original_step in original["steps"]:
+        step = copy.deepcopy(original_step)
+        name = step.get("name")
+        if name in DOCS_PROVIDER_NAMES:
+            continue
+        if name is None:
+            if step.get("uses") == UPLOAD_ARTIFACT:
+                if step.get("if") != "inputs.target == 'preview'" or step.get("with", {}).get("name") != "documentation-qualification":
+                    raise ValueError("Unexpected Docs authority artifact")
+                continue
+            uses = step.get("uses", "")
+            if not uses.startswith(("actions/checkout@", "actions/setup-python@", "actions/setup-node@")):
+                raise ValueError("Unexpected unnamed Docs build step")
+            unnamed.append(uses.split("@")[0])
+        condition = step.get("if")
+        if condition == "inputs.target == 'build'":
+            del step["if"]
+        elif condition not in {None, "always()", "github.event.repository.private == false"}:
+            raise ValueError("Docs build condition requires explicit review")
+        selected.append(step)
+    if sorted(unnamed) != ["actions/checkout"] * 3 + ["actions/setup-node", "actions/setup-python"]:
+        raise ValueError("Docs checkout/toolchain inventory changed")
+    steps = adapt_steps(selected, "platform")
+    for before, after in zip(selected, steps):
+        if before.get("uses") == UPLOAD_ARTIFACT:
+            # This is its own manual run, with the existing closed artifact trio.
+            after["with"]["name"] = before["with"]["name"]
+    if {step["with"]["name"] for step in steps if step.get("uses") == UPLOAD_ARTIFACT} != {
+        "onesa-public-docs-staging", "onesa-public-docs-production", "onesa-public-docs-local-build-checks",
+    }:
+        raise ValueError("Only the three public Docs build artifacts are allowed")
+    env = copy.deepcopy(original["env"])
+    env["ONESA_DOCS_URL"] = "https://docs.onesa.eu"
+    env["ONESA_APPLICATION_URL"] = "https://platform.onesa.eu"
+    if env != {
+        "ONESA_DOCS_SCOPE": "public", "ONESA_DOCS_ENVIRONMENT": "staging",
+        "ONESA_DOCS_EXPECTED_ENVIRONMENT": "staging", "ONESA_DOCS_STATIC_HOSTING": "true",
+        "ONESA_DOCS_URL": "https://docs.onesa.eu", "ONESA_APPLICATION_URL": "https://platform.onesa.eu",
+        "ONESA_DOCS_API_URL": "",
+    }:
+        raise ValueError("Public Docs classification/target settings changed")
+    return {
+        "name": "Onesa public Docs build",
+        "on": {"workflow_dispatch": {}},
+        "permissions": copy.deepcopy(source["permissions"]),
+        "concurrency": {"group": "onesa-public-docs-build", "cancel-in-progress": False},
+        "jobs": {"documentation": {
+            "name": "docs-hosting",
+            "if": (
+                "github.event_name == 'workflow_dispatch' && github.event.repository.private == false && "
+                "github.repository == 'DruHustle/onesa-ug' && github.repository_id == '1444746154' && "
+                "github.ref == 'refs/heads/main' && github.actor == 'DruHustle' && "
+                "github.triggering_actor == 'DruHustle' && github.run_attempt == '1'"
+            ),
+            "runs-on": original["runs-on"],
+            "timeout-minutes": original["timeout-minutes"],
+            "env": env,
+            "steps": steps,
+        }},
+    }
+
+
 def workspace_strings(value, product):
     if isinstance(value, dict):
         return {key: workspace_strings(item, product) for key, item in value.items()}
@@ -467,6 +573,9 @@ def rendered(root=ROOT):
     files[Path(WORKFLOW_PATH).name] = (capability_request(), None)
     for filename, source_path in MOBILE_WORKFLOW_SOURCES.items():
         files[filename] = (mobile_workflow(load(root / source_path)), source_path)
+    files["onesa-public-docs-build.yml"] = (
+        docs_build_workflow(load(root / DOCS_BUILD_SOURCE)), DOCS_BUILD_SOURCE
+    )
     result = {}
     for filename, (document, source_path) in files.items():
         text = yaml.dump(

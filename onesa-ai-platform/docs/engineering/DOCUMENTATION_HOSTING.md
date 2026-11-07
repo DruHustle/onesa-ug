@@ -53,6 +53,27 @@ expiry and unchanged custody after reading. Legacy two-archive inspection remain
 available separately; it cannot satisfy the new check mode. These local checks
 never claim an owner-run receipt, a hosted PASS or deployment authority.
 
+The consolidated repository has a separate generated, public build-only entrypoint:
+`onesa-public-docs-build.yml`. After reviewed source reaches canonical Main, the
+owner can dispatch it with `gh workflow run onesa-public-docs-build.yml --repo
+DruHustle/onesa-ug --ref main`. It has no Preview target, provider credential,
+deployment step or private source input. It preserves the existing classified
+build and local acceptance commands, uses the pinned imported Portal and Robot
+contracts, and uploads exactly the two public site archives and the local-check
+archive. Reference-only internal checks remain local to CI and are not uploaded.
+
+Its schema-2 local-check envelope binds numeric repository identity, exact root
+commit/tree and the `onesa-ai-platform` subtree, with verification-only status and
+all release grants false. The external reader requires the complete public trio
+and the separately pinned canonical Platform source-artifact ZIPs, reuses exact
+current-Main source/CI verification before and after the read, and retains all
+existing freshness, successful-step, archive, classification and context checks.
+Canonical build evidence cannot use the legacy two-archive inspection mode or
+contain provider steps. Schema-1 legacy evidence remains unchanged. This is public
+build support only: the Docs installer, component policy, owner contexts, native
+Preview/production executor and protected Engineering publication still require
+their separately reviewed source transition and commissioned authority.
+
 The public Docs owner adapter extends the existing external Oracle verifier. Its
 installation is checked against reviewed Main and fresh CI; installation, issuer
 commissioning and native-observer commissioning remain separate actions. A new
