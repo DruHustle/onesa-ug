@@ -133,7 +133,8 @@ def validate(bundle, manifest_pin, github, *, uid=0):
         "Only reviewed verifier and component runner may be installed",
     )
     require(
-        not consolidated or not is_docs, "Canonical Docs installation is not qualified"
+        not consolidated or not is_private_docs,
+        "Canonical protected Docs installation is not qualified",
     )
     policy_bytes = checked_file(bundle / "policy.json", m["policy_sha256"], uid)
     policy = json.loads(policy_bytes)
@@ -256,7 +257,14 @@ def validate(bundle, manifest_pin, github, *, uid=0):
     tool = policy["toolchain"]
     if is_docs:
         target = INSTALL_PARENT / (
-            ("ai-docs-internal-" if is_private_docs else "ai-docs-") + m["source_tree"]
+            (
+                "ai-docs-internal-"
+                if is_private_docs
+                else "ai-docs-canonical-"
+                if consolidated
+                else "ai-docs-"
+            )
+            + m["source_tree"]
         )
         if is_private_docs:
             validate_private_docs_policy(bundle, m, policy, files, target)
@@ -344,21 +352,25 @@ def validate(bundle, manifest_pin, github, *, uid=0):
 def validate_docs_policy(bundle, manifest, policy, files, target):
     """Docs extends this installer; it creates no separate trust or release store."""
     tool = policy["toolchain"]
+    consolidated = manifest["repository"] == verifier.CONSOLIDATED_REPOSITORY
     require(
         set(tool)
-        == {
-            "source_commit",
-            "source_tree",
-            "source_sha256",
-            "cli_image",
-            "cli_image_security_path",
-            "transport_guard_sha256",
-            "docs_project_id",
-            "vercel_team_id",
-            "native_source_pins",
-            "native_runtime_pins",
-            "native_producer_sha256",
-        }
+        == (
+            {
+                "source_commit",
+                "source_tree",
+                "source_sha256",
+                "cli_image",
+                "cli_image_security_path",
+                "transport_guard_sha256",
+                "docs_project_id",
+                "vercel_team_id",
+                "native_source_pins",
+                "native_runtime_pins",
+                "native_producer_sha256",
+            }
+            | ({"source_binding", "source_archives"} if consolidated else set())
+        )
         and tool["source_commit"] == manifest["candidate_commit"]
         and tool["source_tree"] == manifest["source_tree"]
         and tool["source_sha256"] == manifest["tool_source_sha256"]
@@ -387,7 +399,9 @@ def validate_docs_policy(bundle, manifest, policy, files, target):
         == tool["native_producer_sha256"],
         "Native observer source/runtime closure differs from reviewed source",
     )
-    profile = policy["components"][manifest["repository"] + ":docs-public"]
+    profile = policy["components"][
+        verifier.component_scope({**manifest, "component": "docs-public"})
+    ]
     require(
         set(profile)
         == {
@@ -402,6 +416,7 @@ def validate_docs_policy(bundle, manifest, policy, files, target):
     )
     verifier.binding_valid(
         {
+            **(verifier.ai_operational_source(manifest) if consolidated else {}),
             "repository": manifest["repository"],
             "component": "docs-public",
             "candidate_commit": manifest["candidate_commit"],

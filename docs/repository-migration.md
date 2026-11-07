@@ -157,9 +157,20 @@ Docs build on owner-dispatched canonical Main. It preserves classified build and
 local acceptance commands and the exact three public artifacts. Its schema-2
 producer and external reader bind the root identity and Platform subtree, reuse
 canonical source/CI verification and retain unsigned, nonauthorizing results.
-Legacy schema-1 evidence remains supported separately. This does not transition
-the Docs installer, owner component policy, provider executor, protected source
-bundle or native hosted acceptance; those operational consumers remain separate.
+Legacy schema-1 evidence remains supported separately. This build workflow grants
+no installation, owner, provider or native hosted authority.
+
+Public Docs has a separate opt-in schema-2 operational consumer. Its installer,
+component policy, build reader, provider metadata and native observer bind the
+same numeric repository, exact current-main root identity and Platform subtree.
+It accepts only `docs-public`; AI application profiles and protected Docs cannot
+borrow that policy. Existing source/CI rechecks reread the fixed installed source
+ZIPs. Legacy records and the shared publication journal and lock remain visible,
+so an old uncertain outcome blocks a new publication across installations.
+Provider inspection remains read-only outcome evidence, not acceptance. New
+issuer and observer commissioning, real Preview/native checks, current rollback
+readback and owner authorization remain required. This source support claims no
+controller cutover, provider change, protected-source transition or deployment.
 
 ## Publication boundaries
 

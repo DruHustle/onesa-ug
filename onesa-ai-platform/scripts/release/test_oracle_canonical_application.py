@@ -176,8 +176,15 @@ class CanonicalInstallTests(unittest.TestCase):
                     profiles.PROFILES[name][1],
                     policy,
                 )
+        # Public Docs now has a separate canonical source consumer. It still
+        # cannot enter any literal AI application profile or borrow its policy.
+        with self.assertRaises(profiles.ProfileError):
+            profiles.validate_mode(
+                {**self.source.source, "component": "docs-public"},
+                "foundation",
+                self.fixture.policy,
+            )
         for component in (
-            "docs-public",
             "docs-internal",
             "worker",
             "portal",
