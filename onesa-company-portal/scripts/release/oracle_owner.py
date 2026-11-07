@@ -823,10 +823,11 @@ PORTAL_SOURCE_FIELDS = {
     "schema_version", "repository", "repository_id", "product", "source_path",
     "candidate_commit", "source_tree", "product_source_tree", "branch",
 }
+PORTAL_COMPONENTS = {"frontend", "api", "worker", "scanner", "identity", "identity-acceptance"}
 
 
 def portal_operational_source(value):
-    """The sole canonical operational opt-in is exact-main Portal frontend."""
+    """Literal Portal profiles share source proof, never component authority."""
     require(isinstance(value, dict) and PORTAL_SOURCE_FIELDS <= set(value),
             "Complete canonical Portal source identity required")
     source = {key: value[key] for key in PORTAL_SOURCE_FIELDS}
@@ -837,17 +838,17 @@ def portal_operational_source(value):
             and source["product"] == "portal"
             and source["source_path"] == CONSOLIDATED_PRODUCTS["portal"]
             and source["branch"] == "main"
-            and value.get("component", "frontend") == "frontend"
+            and value.get("component", "frontend") in PORTAL_COMPONENTS
             and all(isinstance(source[key], str) and re.fullmatch(r"[a-f0-9]{40}", source[key])
                     for key in ("candidate_commit", "source_tree", "product_source_tree")),
-            "Canonical exact-main Portal frontend scope refused")
+            "Canonical exact-main Portal component scope refused")
     return source
 
 
 def component_scope(binding):
     if binding.get("repository") == CONSOLIDATED_REPOSITORY:
         portal_operational_source(binding)
-        return CONSOLIDATED_REPOSITORY + ":portal:frontend"
+        return CONSOLIDATED_REPOSITORY + ":portal:" + binding["component"]
     return binding["repository"] + ":" + binding["component"]
 
 
@@ -856,7 +857,7 @@ def lifecycle_scope(binding):
         portal_operational_source(binding)
         # Repository migration cannot create a second controller for the same
         # resource or discard an old controller's unresolved global hold.
-        return "DruHustle/onesa-company-portal:frontend"
+        return "DruHustle/onesa-company-portal:" + binding["component"]
     return component_scope(binding)
 
 
@@ -941,6 +942,12 @@ def binding_valid(value, policy):
                 "Separately commissioned exact canonical component source required")
         portal_archive_pins(tool)
     profile = policy["components"].get(component_scope(value))
+    if consolidated:
+        require(set(policy["components"]) == {component_scope(value)}
+                and isinstance(profile, dict)
+                and type(profile.get("qualification_attempt_limit")) is int
+                and profile["qualification_attempt_limit"] == 1,
+                "One separately commissioned canonical component and context required")
     require(
         profile and set(profile["runners"]) == set(PHASES),
         "Component is not commissioned",

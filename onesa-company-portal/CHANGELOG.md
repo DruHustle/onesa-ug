@@ -1,5 +1,13 @@
 # Changelog
 
+- Add separately pinned canonical source consumers for Portal API, worker, scanner,
+  identity migration and identity acceptance. Preserve one component/context per
+  installation, full root/product provenance, the existing lifecycle holds and
+  original accepted dependency namespaces. Runtime helpers and source archives
+  are rechecked before observations; private plans retain the existing component
+  and environment restrictions. Controller commissioning, hosted qualification
+  and original recovery reconciliation remain separate release requirements.
+
 - Add a build-only ARM64 K3s runtime recipe with pinned source archives, dependency
   locks, compiler packages and executable hashes. Retain upstream license notices
   and selected runtime tests, with bounded archive extraction and source-integrity

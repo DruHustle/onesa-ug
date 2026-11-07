@@ -132,24 +132,37 @@ deployment-provider mutation. The existing custody pins and separate owner commi
 still apply. Changing source or policy files in an older installation cannot
 activate it.
 
-The Portal frontend has a separate, explicit schema-2 operational source path.
-Its immutable installer and component policy bind canonical repository ID,
+Portal has separate, explicit schema-2 operational source paths for frontend,
+API, worker, scanner, identity migration and identity acceptance. Each immutable
+installer profile and component policy bind canonical repository ID,
 exact current-main commit/root tree, Portal subtree and the three pinned source
 artifact ZIPs. Every existing owner qualification boundary rereads those private
 installed bytes and reuses the source verifier above. Its unsigned result remains
 verification-only; signed owner contexts, hosted staging, current operations,
 authorization, custody and rollback are still separate gates. The product-relative
 build archive retains the root identity and the fixed canonical provider root.
+Each backend installation contains exactly its reviewed executable closure, one
+component and one qualification context. Canonical backend plans use their
+original fixed filename with `-canonical` before `.json`, schema version 2 and
+the complete `source_binding`. Their artifact directory is under the component's
+`canonical-portal` namespace; deployment journals and lifecycle locks retain the
+original shared component locations. Native build and Node/browser observations
+carry the complete root/product identity while preserving original runtime,
+configuration, migration, processing and environment restrictions.
 
 Legacy schema-1 installations and accepted records remain unchanged. Canonical
-Portal frontend records have a distinct product namespace while sharing the
-existing frontend lifecycle resource, so an old unresolved hold still blocks.
-This source path does not migrate API/worker/scanner/identity controllers, other
-products, historical Git-triggered provider workflows or recovery readers. Those
-consumers retain their original bindings pending their own reviewed transitions.
+Portal component records have distinct product namespaces while sharing each
+existing lifecycle resource, so an old unresolved hold still blocks. The API's
+retained comparison baseline keeps its original repository and artifact identity.
+Integrated identity acceptance reads each product's independently signed original
+or canonical namespace, verifies its exact accepted binding and source proof, and
+does not convert one product's authority into another's.
 Actual controller/provider cutover and retained operations must be inspected and
 new custody separately commissioned; source support does not retire an old
-controller or repository. Source verification alone does not establish hosted
+controller or repository. Historical provider workflows, recovery readers and
+exclusive issuer handoff remain separate transitions; original signed records,
+issuers and valid recovery tools must be retained and reconciled before retirement.
+Source verification alone does not establish hosted
 acceptance, deployment, recovery readiness or hardware qualification.
 
 The generated `onesa-public-docs-build.yml` adds only a credential-free public

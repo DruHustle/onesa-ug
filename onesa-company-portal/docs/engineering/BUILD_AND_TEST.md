@@ -1313,7 +1313,7 @@ fixture arrangement. It never accepts provider credentials or authorizes a relea
 
 From the consolidated repository root, run
 `python3 -m unittest discover -s scripts/ci -p 'test_portal_component_consumer.py'`
-for the canonical frontend transition. These tests reuse the original disposable
+for the canonical component transitions. These tests reuse the original disposable
 installer and Ed25519 Store fixtures with the strict consolidated source API
 fixture. They check root/subtree archive separation, exact-main promotion,
 fixed private artifact pins at all four CI rechecks, source-only refusal,
@@ -1325,6 +1325,26 @@ container response; it does not claim an actual image build or hosted acceptance
 The existing real loopback transport suite additionally rejects mismatched
 canonical source metadata before the sole provider request. Legacy source,
 signature, custody, uncertain-operation and rollback suites remain required.
+
+The backend transition covers the independent API, worker, scanner, identity
+migration and identity acceptance profiles. It compares complete immutable helper
+closures to their actual source tar, retains the legacy API comparison baseline,
+refuses extra components or renewed contexts, and binds every private plan to the
+root/product source. Adverse cases change installed executable/source/CI bytes,
+substitute source dimensions, preserve old lifecycle holds, and verify real
+Ed25519 dependency records with revocation and signed CI-source mismatch cases.
+The Node worker/API/scanner and identity-browser suites also exercise canonical
+source input without changing their original component/environment limits.
+
+Run the complete release suite and the five affected Node suites:
+`oracle_portal_worker_probe.test.mjs`, `oracle_portal_worker_production.test.mjs`,
+`oracle_portal_api_production.test.mjs`, `oracle_portal_scanner_workflows.test.mjs`,
+and `oracle_portal_identity_browser.test.mjs`. The actual Compose interpolation
+case requires the real Compose CLI; an unreachable daemon socket is sufficient
+because the test performs only configuration rendering. Local fixtures do not
+commission a controller, migrate a hosted database, connect Mobile, or establish
+hosted component/identity acceptance. Existing issuer/recovery history and
+exclusive controller handoff remain required before a legacy repository retires.
 
 The anonymous Portal browser probe checks EN/DE presentation, mobile and desktop,
 system appearance, reduced motion, accessibility, existing contact navigation and
