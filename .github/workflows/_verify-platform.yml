@@ -581,7 +581,7 @@ jobs:
           onesa-ai-platform/data/acceptance-005/ci-load.json
           onesa-ai-platform/data/acceptance-005/operations-recovery.json
         retention-days: 3
-    - if: always() && hashFiles('data/acceptance-005/staging.env') != ''
+    - if: always() && hashFiles('onesa-ai-platform/data/acceptance-005/staging.env') != ''
       run: docker compose --env-file data/acceptance-005/staging.env -p onesa-acceptance-005 -f compose.yaml -f
         compose.production.yaml -f compose.acceptance.yaml down
       working-directory: onesa-ai-platform

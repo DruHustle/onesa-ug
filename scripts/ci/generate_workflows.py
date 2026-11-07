@@ -328,6 +328,14 @@ def adapt(source, key, pipeline=False):
         else:
             # adapt_steps starts from original values to apply workspace prefixes once.
             job["steps"] = adapt_steps(source["jobs"][name].get("steps", []), key)
+            if key == "platform" and name == "tls-acceptance":
+                # hashFiles uses the repository workspace, not working-directory.
+                cleanup = job["steps"][-1]
+                if (
+                    cleanup.get("if") == "always() && hashFiles('data/acceptance-005/staging.env') != ''"
+                    and cleanup.get("run", "").endswith(" down")
+                ):
+                    cleanup["if"] = f"always() && hashFiles('{product}/data/acceptance-005/staging.env') != ''"
             if "defaults" in job:
                 raise ValueError(
                     "Source workflow defaults need explicit migration review"
