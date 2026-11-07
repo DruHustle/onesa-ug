@@ -198,7 +198,10 @@ def main():
     }:
         owner.require(
             set(store.policy["components"])
-            == {"DruHustle/onesa-ai-platform:docs-internal"},
+            in (
+                {"DruHustle/onesa-ai-platform:docs-internal"},
+                {owner.CONSOLIDATED_REPOSITORY + ":platform:docs-internal"},
+            ),
             "PRIVATE_CONDITIONAL_OWNER_SCOPE_ONLY",
         )
         import oracle_docs_internal_conditional as conditional

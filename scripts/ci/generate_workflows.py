@@ -565,6 +565,80 @@ def capability_request():
     }
 
 
+def protected_docs_metadata():
+    """Count/hash custody only; private builds and publication stay external."""
+    inputs = {
+        "action": {
+            "description": "Qualify metadata, approve its exact digest, or revoke the prior handoff",
+            "type": "choice",
+            "options": ["revoke", "qualify", "approve"],
+            "default": "revoke",
+            "required": True,
+        },
+    }
+    for name, description in {
+        "native_metadata": "Qualify only: sanitized counts/hashes, at most 32 KiB; never private files or credentials",
+        "producer_sha256": "Qualify only: independently reviewed native producer hash",
+        "qualification_run": "Approve only: exact successful metadata qualification run ID",
+        "evidence_digest": "Approve only: exact reviewed qualification record SHA256",
+    }.items():
+        inputs[name] = {
+            "description": description,
+            "type": "string",
+            "default": "",
+            "required": False,
+        }
+    return {
+        "name": "Onesa protected Docs metadata",
+        "on": {"workflow_dispatch": {"inputs": inputs}},
+        "permissions": {"contents": "read", "actions": "read", "pull-requests": "read"},
+        "concurrency": {
+            "group": "onesa-protected-docs-metadata",
+            "cancel-in-progress": False,
+        },
+        "jobs": {
+            "metadata": {
+                "name": "Protected Docs metadata custody",
+                "if": (
+                    "github.event_name == 'workflow_dispatch' && "
+                    f"github.repository == '{REPOSITORY}' && github.repository_id == '{REPOSITORY_ID}' && "
+                    f"github.actor == '{OWNER}' && github.triggering_actor == '{OWNER}' && "
+                    "github.ref == 'refs/heads/main' && github.run_attempt == 1"
+                ),
+                "runs-on": "ubuntu-24.04",
+                "timeout-minutes": 15,
+                "steps": [
+                    hosted_policy_step(),
+                    {
+                        "uses": CHECKOUT,
+                        "with": {
+                            "persist-credentials": False,
+                            "ref": "${{ github.sha }}",
+                            "fetch-depth": 0,
+                        },
+                    },
+                    {"uses": SETUP_PYTHON, "with": {"python-version": "3.11"}},
+                    {
+                        "name": "Validate source-bound metadata without publication authority",
+                        "env": {"GH_TOKEN": "${{ github.token }}"},
+                        "run": 'python3 onesa-ai-platform/scripts/release/oracle_docs_internal_canonical.py --output "$RUNNER_TEMP/protected-docs-metadata/record.json"',
+                    },
+                    {
+                        "name": "Retain count and hash metadata only",
+                        "uses": UPLOAD_ARTIFACT,
+                        "with": {
+                            "name": "onesa-protected-docs-metadata",
+                            "path": "${{ runner.temp }}/protected-docs-metadata/record.json",
+                            "if-no-files-found": "error",
+                            "retention-days": 7,
+                        },
+                    },
+                ],
+            }
+        },
+    }
+
+
 def rendered(root=ROOT):
     files = {}
     for key, product in PRODUCTS.items():
@@ -579,6 +653,7 @@ def rendered(root=ROOT):
             )
     files["verify.yml"] = (orchestrator(root), None)
     files[Path(WORKFLOW_PATH).name] = (capability_request(), None)
+    files["onesa-protected-docs-metadata.yml"] = (protected_docs_metadata(), None)
     for filename, source_path in MOBILE_WORKFLOW_SOURCES.items():
         files[filename] = (mobile_workflow(load(root / source_path)), source_path)
     files["onesa-public-docs-build.yml"] = (

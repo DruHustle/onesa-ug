@@ -184,8 +184,13 @@ class CanonicalInstallTests(unittest.TestCase):
                 "foundation",
                 self.fixture.policy,
             )
+        with self.assertRaises(profiles.ProfileError):
+            profiles.validate_mode(
+                {**self.source.source, "component": "docs-internal"},
+                "foundation",
+                self.fixture.policy,
+            )
         for component in (
-            "docs-internal",
             "worker",
             "portal",
             "unknown",
