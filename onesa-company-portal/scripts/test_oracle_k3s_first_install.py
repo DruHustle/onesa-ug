@@ -23,7 +23,7 @@ def plan():
             "machine_id_sha256": installer.digest(b"synthetic-machine"),
             "private_ip": "10.12.0.3", "pod_cidr": "10.120.0.0/16", "service_cidr": "10.121.0.0/16",
             "reserved_cidrs": ["10.12.0.0/16", "172.18.0.0/16", "100.64.0.0/10"],
-            "workload_memory_mib": 0, "workload_disk_gib": 0}
+            "dns_upstream_ipv4": ["169.254.169.254"], "workload_memory_mib": 0, "workload_disk_gib": 0}
 
 
 def firewall():
@@ -46,8 +46,8 @@ COMMIT
     return {family: installer.parse_rules(text) for family in ("iptables", "ip6tables")}
 
 
-def installed_rules():
-    result = firewall()
+def installed_rules(before=None):
+    result = copy.deepcopy(before) if before is not None else firewall()
     for family, chains in installer.firewall_rules(plan(), ["172.18.0.0/16"]).items():
         current = result[family]["filter"]
         for name, rules in chains.items():
@@ -90,6 +90,19 @@ class PlanTests(unittest.TestCase):
         self.assertNotIn("docker", settings)
         self.assertNotIn("flannel-external-ip", settings)
         self.assertIn("nodeport-addresses=127.0.0.0/8", settings["kube-proxy-arg"])
+        self.assertIn("proxy-mode=nftables", settings["kube-proxy-arg"])
+        self.assertEqual(settings["resolv-conf"], str(installer.STATE / "resolv.conf"))
+
+    def test_upstream_dns_requires_observed_nonloopback_ipv4_without_provider_substitution(self):
+        for upstream in ([], ["127.0.0.53"], ["::1"], ["10.120.0.2"], ["224.0.0.1"],
+                         ["169.254.169.254", "169.254.169.254"]):
+            with self.subTest(upstream=upstream), self.assertRaises(installer.Refused):
+                installer.validate_plan({**plan(), "dns_upstream_ipv4": upstream})
+        with patch.object(installer.Path, "is_file", return_value=True), \
+                patch.object(installer.Path, "read_text", return_value="nameserver 169.254.169.254\n"):
+            installer.require_observed_dns(plan())
+            with self.assertRaisesRegex(installer.Refused, "DNS_CHANGED_OR_UNAPPROVED"):
+                installer.require_observed_dns({**plan(), "dns_upstream_ipv4": ["192.0.2.53"]})
 
     def test_release_lock_excludes_prerelease_and_has_real_architecture_hashes(self):
         lock = installer.releases()
@@ -125,16 +138,68 @@ class PlanTests(unittest.TestCase):
 
 
 class FirewallTests(unittest.TestCase):
+    def test_mark_reservation_refuses_existing_netfilter_consumers_and_output_restrictions(self):
+        installer.require_netpol_mark_reservation(firewall(), "table inet retained { chain input { } }")
+        for rule in (["-A", "FORWARD", "-m", "mark", "--mark", "0x80000/0xff0000", "-j", "ACCEPT"],
+                     ["-A", "FORWARD", "-j", "CONNMARK", "--restore-mark"],
+                     ["-A", "OUTPUT", "-j", "DROP"]):
+            changed = firewall()
+            changed["iptables"]["filter"]["rules"].append(rule)
+            with self.subTest(rule=rule), self.assertRaises(installer.Refused):
+                installer.require_netpol_mark_reservation(changed, "")
+        with self.assertRaisesRegex(installer.Refused, "NETFILTER_MARK"):
+            installer.require_netpol_mark_reservation(firewall(), "meta mark & 0xff0000 == 0x80000 accept")
+
+    def test_actual_builtin_netpol_accept_is_authorized_but_generic_parent_accept_is_not(self):
+        before, after = firewall(), installed_rules()
+        comment = "KUBE-ROUTER rule to explicitly ACCEPT traffic that comply to network policies"
+        parent_rule = ["-A", "FORWARD", "-m", "comment", "--comment", comment,
+                       "-m", "mark", "--mark", "0x20000/0x20000", "-j", "ACCEPT"]
+        after["iptables"]["filter"]["rules"].insert(0, parent_rule)
+        installer.preserved_firewall(before, after)
+        with patch.object(installer, "snapshot_firewall", return_value=after):
+            installer.verify_firewall(plan(), ["172.18.0.0/16"], before)
+        for index, value in ((5, "unrelated controller"), (9, "0x4000/0x4000")):
+            changed = copy.deepcopy(after)
+            changed["iptables"]["filter"]["rules"][0][index] = value
+            with self.subTest(value=value), self.assertRaises(installer.Refused):
+                installer.preserved_firewall(before, changed)
+
+    def test_actual_controller_dispatch_can_reconcile_but_must_keep_exact_pod_scope(self):
+        before, after = firewall(), installed_rules()
+        current = after["iptables"]["filter"]
+        current["chains"].update({"KUBE-ROUTER-FORWARD": "-", "KUBE-POD-FW-ABC": "-"})
+        current["rules"].insert(0, ["-A", "FORWARD", "-m", "comment", "--comment", "kube-router netpol - ABC",
+                                    "-j", "KUBE-ROUTER-FORWARD"])
+        selector = ["-A", "KUBE-ROUTER-FORWARD", "-d", "10.120.0.3/32", "-j", "KUBE-POD-FW-ABC"]
+        current["rules"].append(selector)
+        with patch.object(installer, "snapshot_firewall", return_value=after):
+            installer.verify_firewall(plan(), ["172.18.0.0/16"], before)
+        for changed in ("0.0.0.0/0", "172.18.0.3/32", "10.120.0.0/16"):
+            selector[3] = changed
+            with self.subTest(changed=changed), self.assertRaisesRegex(installer.Refused, "POLICY_FORWARD_SCOPE"):
+                installer.verify_scoped_forward_controllers(after, plan())
+
+    def test_iptables_proxy_is_refused_even_when_its_jump_follows_our_guard(self):
+        state = installed_rules()
+        state["iptables"]["filter"]["chains"]["KUBE-FORWARD"] = "-"
+        with self.assertRaisesRegex(installer.Refused, "IPTABLES_KUBE_PROXY_REFUSED"):
+            installer.verify_scoped_forward_controllers(state, plan())
+
     def test_pods_cannot_inherit_existing_docker_accepts(self):
         docker_policy = [["-s", "10.0.0.0/8", "-j", "ACCEPT"], ["-j", "RETURN"]]
         original_policy = copy.deepcopy(docker_policy)
         chains = installer.firewall_rules(plan(), ["172.18.0.0/16", "192.168.40.0/24"])["iptables"]
         chains["DOCKER-USER"] = docker_policy
 
-        def verdict(chain, interface, source, destination):
+        def verdict(chain, interface, source, destination, out_interface="br-existing"):
             for rule in chains[chain]:
                 if "-i" in rule and rule[rule.index("-i") + 1] != interface:
                     continue
+                if "-o" in rule and rule[rule.index("-o") + 1] != out_interface:
+                    continue
+                if "--ctstate" in rule:
+                    continue  # These requests initiate new connections.
                 if any(flag in rule and ipaddress.ip_address(address) not in
                        ipaddress.ip_network(rule[rule.index(flag) + 1])
                        for flag, address in (("-s", source), ("-d", destination))):
@@ -142,15 +207,18 @@ class FirewallTests(unittest.TestCase):
                 target = rule[rule.index("-j") + 1]
                 if target in {"ACCEPT", "DROP", "RETURN"}:
                     return target
-                result = verdict(target, interface, source, destination)
+                result = verdict(target, interface, source, destination, out_interface)
                 if result != "RETURN":
                     return result
             return "RETURN"
 
         for destination in ("172.18.0.2", "192.168.40.2"):
             self.assertEqual(verdict(installer.FORWARD_CHAIN, "cni0", "10.120.0.2", destination), "DROP")
-        self.assertEqual(verdict(installer.FORWARD_CHAIN, "tailscale0", "10.120.0.2", "203.0.113.2"), "DROP")
-        self.assertEqual(verdict(installer.FORWARD_CHAIN, "br-existing", "10.12.0.2", "172.18.0.2"), "ACCEPT")
+        for destination in ("10.120.0.2", "10.121.0.2"):
+            self.assertEqual(verdict(installer.FORWARD_CHAIN, "tailscale0", "100.64.0.2", destination), "DROP")
+        self.assertEqual(verdict(installer.FORWARD_CHAIN, "tailscale0", "100.64.0.2", "203.0.113.2", "cni0"), "DROP")
+        self.assertEqual(verdict(installer.FORWARD_CHAIN, "tailscale0", "100.64.0.2", "203.0.113.2"), "RETURN")
+        self.assertEqual(verdict(installer.FORWARD_CHAIN, "br-existing", "10.12.0.2", "172.18.0.2"), "RETURN")
         self.assertEqual(verdict(installer.FORWARD_CHAIN, "cni0", "10.120.0.2", "203.0.113.2"), "ACCEPT")
         self.assertEqual(verdict(installer.FORWARD_CHAIN, "br-existing", "192.0.2.2", "172.18.0.2"), "RETURN")
         self.assertEqual(docker_policy, original_policy)
@@ -175,11 +243,130 @@ class FirewallTests(unittest.TestCase):
         self.assertEqual(len(accepts), 2)
         self.assertTrue(all(row[:6] == ["-s", plan()["pod_cidr"], "-d", plan()["private_ip"] + "/32", "-i", "cni0"] for row in accepts))
         forward = desired["iptables"][installer.FORWARD_CHAIN]
-        self.assertEqual(forward[0], ["-i", "tailscale0", "-j", "DROP"])
-        self.assertEqual(forward[-2:], [["-j", "DOCKER-USER"], ["-j", "RETURN"]])
+        self.assertEqual(forward[-4:], [
+            ["-d", plan()["pod_cidr"], "-j", "DROP"],
+            ["-d", plan()["service_cidr"], "-j", "DROP"],
+            ["-o", "cni0", "-j", "DROP"], ["-j", "RETURN"],
+        ])
+        self.assertIn(["-i", "cni0", "-j", "DOCKER-USER"], forward)
+        self.assertIn(["-i", "cni0", "-j", "RETURN"], forward)
         self.assertIn(["-d", "172.18.0.0/16", "-i", "cni0", "-j", "DROP"], forward)
         self.assertFalse(any(row[-1] == "ACCEPT" for row in forward))
+        self.assertEqual(desired["ip6tables"][installer.FORWARD_CHAIN], [["-j", "RETURN"]])
         self.assertNotIn("51820", json.dumps(desired))
+
+    def test_existing_owner_tunnels_keep_their_actual_forward_rule_order(self):
+        # Synthetic addresses preserve the deployed rule shape: each owner/peer
+        # pair has TCP, echo, related ICMP and conntrack-bound reply permits
+        # before the original blanket overlay drop. No private host data is used.
+        owner, peers = "100.64.10.2", ("10.90.254.2", "10.90.254.3")
+        before = firewall()
+        table = before["iptables"]["filter"]
+        permissions = []
+        for peer in peers:
+            common = ["-i", "tailscale0", "-o", "owner-hub", "-s", owner + "/32", "-d", peer + "/32"]
+            permissions += [
+                [*common, "-p", "tcp", "-m", "multiport", "--dports", "22,80,8291",
+                 "-m", "conntrack", "--ctstate", "NEW,ESTABLISHED", "-j", "ACCEPT"],
+                [*common, "-p", "icmp", "--icmp-type", "echo-request",
+                 "-m", "conntrack", "--ctstate", "NEW,ESTABLISHED", "-j", "ACCEPT"],
+                [*common, "-p", "icmp", "-m", "conntrack", "--ctstate", "RELATED", "-j", "ACCEPT"],
+                ["-i", "owner-hub", "-o", "tailscale0", "-s", peer + "/32", "-d", owner + "/32",
+                 "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "--ctorigsrc", owner + "/32",
+                 "--ctorigdst", peer + "/32", "-j", "ACCEPT"],
+            ]
+        # An existing non-overlay permit must not be preempted by the new
+        # DOCKER-USER jump either; that chain deliberately rejects this ingress.
+        permissions.append(["-i", "eth0", "-o", "br-existing", "-s", "192.0.2.10/32",
+                            "-d", "172.18.0.2/32", "-p", "tcp", "--dport", "443", "-j", "ACCEPT"])
+        table["rules"][1:1] = [["-A", "FORWARD", *rule] for rule in permissions]
+        after = installed_rules(before)
+        # Kubernetes/Flannel can accept cluster traffic before the legacy parent
+        # chain is reached. The new guard must protect this real ordering too.
+        table = after["iptables"]["filter"]
+        table["chains"]["FLANNEL-FWD"] = "-"
+        jump = table["rules"].index(["-A", "FORWARD", "-j", installer.FORWARD_CHAIN])
+        table["rules"].insert(jump + 1, ["-A", "FORWARD", "-j", "FLANNEL-FWD"])
+        table["rules"] += [["-A", "FLANNEL-FWD", "-d", plan()["pod_cidr"], "-j", "ACCEPT"],
+                           ["-A", "FLANNEL-FWD", "-s", plan()["pod_cidr"], "-j", "ACCEPT"]]
+        installer.require_existing_firewall(before)
+        installer.preserved_firewall(before, after)
+
+        def verdict(snapshot, packet, family="iptables"):
+            state = snapshot[family]["filter"]
+
+            def traverse(chain):
+                for row in state["rules"]:
+                    if row[1] != chain:
+                        continue
+                    rule, matched, offset = row[2:], True, 0
+                    while offset < len(rule):
+                        flag, value = rule[offset:offset + 2]
+                        offset += 2
+                        if flag == "-j":
+                            if not matched:
+                                break
+                            if value in {"ACCEPT", "DROP", "RETURN"}:
+                                return value
+                            result = traverse(value)
+                            if result != "RETURN":
+                                return result
+                            break
+                        if flag == "-m":
+                            self.assertIn(value, {"conntrack", "multiport", "tcp", "udp"})
+                        elif flag in {"-s", "-d", "--ctorigsrc", "--ctorigdst"}:
+                            address = packet.get(flag)
+                            matched &= address is not None and ipaddress.ip_address(address) in ipaddress.ip_network(value)
+                        elif flag == "--ctstate":
+                            matched &= packet.get(flag) in value.split(",")
+                        elif flag == "--dports":
+                            matched &= str(packet.get("--dport")) in value.split(",")
+                        else:
+                            self.assertIn(flag, {"-i", "-o", "-p", "--dport", "--icmp-type", "--ctdir"})
+                            matched &= str(packet.get(flag)) == value
+                return "RETURN"
+
+            result = traverse("FORWARD")
+            return state["chains"]["FORWARD"] if result == "RETURN" else result
+
+        for peer in peers:
+            request = {"-i": "tailscale0", "-o": "owner-hub", "-s": owner, "-d": peer,
+                       "-p": "tcp", "--dport": 22, "--ctstate": "NEW"}
+            permitted = [{**request, "--dport": port} for port in (22, 80, 8291)]
+            permitted += [{**request, "-p": "icmp", "--icmp-type": "echo-request"},
+                          {**request, "-p": "icmp", "--icmp-type": "destination-unreachable", "--ctstate": "RELATED"},
+                          {**request, "-i": "owner-hub", "-o": "tailscale0", "-s": peer, "-d": owner,
+                           "--ctstate": "ESTABLISHED", "--ctorigsrc": owner, "--ctorigdst": peer}]
+            denied = [{**request, "-s": "100.64.10.99"}, {**request, "-d": "10.90.254.99"},
+                      {**request, "--dport": 23}, {**request, "-o": "br-existing"},
+                      {**permitted[-1], "--ctorigsrc": "100.64.10.99"}]
+            for packet, expected in [(p, "ACCEPT") for p in permitted] + [(p, "DROP") for p in denied]:
+                with self.subTest(packet=packet):
+                    self.assertEqual(verdict(before, packet), expected)
+                    self.assertEqual(verdict(after, packet), expected)
+            for destination in ("10.120.0.2", "10.121.0.10"):
+                self.assertEqual(verdict(after, {**request, "-d": destination, "-o": "cni0"}), "DROP")
+        permitted = {"-i": "eth0", "-o": "br-existing", "-s": "192.0.2.10", "-d": "172.18.0.2",
+                     "-p": "tcp", "--dport": 443, "--ctstate": "NEW"}
+        self.assertEqual(verdict(before, permitted), "ACCEPT")
+        self.assertEqual(verdict(after, permitted), "ACCEPT")
+        pod_request = {"-i": "cni0", "-o": "eth0", "-s": "10.120.0.7", "-d": "203.0.113.5",
+                       "-p": "tcp", "--dport": 443, "--ctstate": "NEW", "--ctdir": "ORIGINAL"}
+        reply = {**pod_request, "-i": "eth0", "-o": "cni0", "-s": "203.0.113.5", "-d": "10.120.0.7",
+                 "--ctstate": "ESTABLISHED", "--ctdir": "REPLY", "--ctorigsrc": "10.120.0.7", "--ctorigdst": "203.0.113.5"}
+        self.assertEqual(verdict(after, pod_request), "ACCEPT")
+        self.assertEqual(verdict(after, reply), "ACCEPT")
+        for packet in ({**reply, "--ctstate": "NEW"}, {**reply, "--ctdir": "ORIGINAL"},
+                       {**reply, "--ctorigsrc": "192.0.2.10"},
+                       {**reply, "-i": "tailscale0", "--ctstate": "NEW"},
+                       {**reply, "-i": "br-existing", "--ctstate": "NEW"},
+                       {**pod_request, "-o": "br-existing", "-d": "172.18.0.2"}):
+            with self.subTest(packet=packet):
+                self.assertEqual(verdict(after, packet), "DROP")
+        # The IPv4-only installation leaves every existing IPv6 policy in place.
+        v6 = {"-i": "tailscale0", "-o": "owner-hub", "-s": "2001:db8::1", "-d": "2001:db8::2"}
+        self.assertEqual(verdict(before, v6, "ip6tables"), "DROP")
+        self.assertEqual(verdict(after, v6, "ip6tables"), "DROP")
 
     def test_saved_rule_serialization_matches_private_rule_readback(self):
         saved = """*filter
@@ -211,6 +398,121 @@ COMMIT
         state["iptables"]["filter"]["rules"].insert(0, ["-A", "FORWARD", "-j", "KUBE-FORWARD"])
         with patch.object(installer, "snapshot_firewall", return_value=state), self.assertRaisesRegex(installer.Refused, "ORDER_CHANGED"):
             installer.verify_firewall(plan(), ["172.18.0.0/16"], firewall())
+
+    def test_only_exact_retained_noncluster_owner_permits_may_precede_guard(self):
+        permit = ["-A", "FORWARD", "-i", "tailscale0", "-o", "owner-hub", "-s", "100.64.10.2/32",
+                  "-d", "10.90.254.2/32", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"]
+        before = firewall()
+        before["iptables"]["filter"]["rules"].insert(0, permit)
+        after = installed_rules(before)
+        rows = after["iptables"]["filter"]["rules"]
+        rows.remove(permit)
+        rows.insert(0, permit)
+        with patch.object(installer, "snapshot_firewall", return_value=after):
+            installer.verify_firewall(plan(), ["172.18.0.0/16"], before)
+        for changed in (
+            [value if value != "10.90.254.2/32" else "10.120.0.2/32" for value in permit],
+            [value if value != "owner-hub" else "cni0" for value in permit],
+            [value if value != "owner-hub" else "owner+" for value in permit],
+            permit[:2] + ["-j", "ACCEPT"],
+            permit[:2] + ["!"] + permit[2:],
+        ):
+            self.assertFalse(installer.outside_cluster_permit(changed, plan()))
+        # A newly inserted, otherwise narrow permit has no retained authority.
+        unexpected = [value if value != "100.64.10.2/32" else "100.64.10.99/32" for value in permit]
+        rows.insert(0, unexpected)
+        with patch.object(installer, "snapshot_firewall", return_value=after), self.assertRaises(installer.Refused):
+            installer.verify_firewall(plan(), ["172.18.0.0/16"], before)
+
+
+class NetworkPolicyTests(unittest.TestCase):
+    def allowed(self, namespace, labels, destination, port, protocol="TCP", destination_namespace=None, destination_labels=None):
+        def matches(selector, values):
+            return all(values.get(key) == value for key, value in selector.get("matchLabels", {}).items())
+
+        policies = [item["spec"] for item in installer.network_policies(plan())["items"]
+                    if item["metadata"]["namespace"] == namespace and matches(item["spec"]["podSelector"], labels)]
+        if not policies:
+            return True  # Kubernetes additive policy semantics, not a default-deny assumption.
+        for policy in policies:
+            for rule in policy.get("egress", []):
+                if not any(item["port"] == port and item["protocol"] == protocol for item in rule["ports"]):
+                    continue
+                for peer in rule["to"]:
+                    if "ipBlock" in peer:
+                        if ipaddress.ip_address(destination) in ipaddress.ip_network(peer["ipBlock"]["cidr"]):
+                            return True
+                    else:
+                        namespace_labels = {"kubernetes.io/metadata.name": destination_namespace}
+                        if (matches(peer.get("namespaceSelector", {}), namespace_labels)
+                                and matches(peer.get("podSelector", {}), destination_labels or {})):
+                            return True
+        return False
+
+    def test_only_coredns_in_the_system_namespace_can_use_the_observed_upstream(self):
+        identity = {"k8s-app": "kube-dns"}
+        for protocol in ("TCP", "UDP"):
+            self.assertTrue(self.allowed("kube-system", identity, "169.254.169.254", 53, protocol))
+            for namespace, labels in (("portainer", installer.portainer.LABELS), ("default", identity),
+                                      ("portainer", identity), ("kube-system", {"k8s-app": "metrics-server"})):
+                with self.subTest(namespace=namespace, labels=labels, protocol=protocol):
+                    self.assertFalse(self.allowed(namespace, labels, "169.254.169.254", 53, protocol))
+        self.assertFalse(self.allowed("kube-system", identity, "169.254.169.254", 80))
+        self.assertFalse(self.allowed("kube-system", identity, "192.0.2.53", 53, "UDP"))
+
+    def test_portainer_uses_cluster_dns_and_the_api_without_inheriting_node_or_upstream_access(self):
+        self.assertTrue(self.allowed("portainer", installer.portainer.LABELS, "10.120.0.3", 53, "UDP",
+                                     "kube-system", {"k8s-app": "kube-dns"}))
+        for namespace, labels in (("default", {"k8s-app": "kube-dns"}), ("kube-system", {"app": "unrelated"})):
+            self.assertFalse(self.allowed("portainer", installer.portainer.LABELS, "10.120.0.3", 53, "UDP", namespace, labels))
+        for namespace, labels in (("portainer", installer.portainer.LABELS), ("kube-system", {"k8s-app": "kube-dns"}),
+                                  ("kube-system", {"k8s-app": "metrics-server"})):
+            self.assertTrue(self.allowed(namespace, labels, plan()["private_ip"], 6443))
+            self.assertTrue(self.allowed(namespace, labels, "10.121.0.1", 443))
+        self.assertFalse(self.allowed("portainer", installer.portainer.LABELS, plan()["private_ip"], 10250))
+        self.assertTrue(self.allowed("kube-system", {"k8s-app": "metrics-server"}, plan()["private_ip"], 10250))
+
+    def observation(self):
+        expected = installer.network_policies(plan())["items"]
+        expected += [item for item in installer.manifests(installer.releases(), "onesa-test")[0]["items"] if item["kind"] == "NetworkPolicy"]
+        mapping = {("namespaces", None): {"items": [{"metadata": {"name": name}} for name in sorted({item["metadata"]["namespace"] for item in expected})]},
+                   ("deployment/coredns", "kube-system"): {"spec": {"template": {"metadata": {"labels": {"k8s-app": "kube-dns"}},
+                                                                             "spec": {"serviceAccountName": "coredns"}}},
+                                                            "status": {"availableReplicas": 1}}}
+        for item in expected:
+            value = copy.deepcopy(item)
+            for direction in ("ingress", "egress"):
+                if value["spec"].get(direction) == []:
+                    del value["spec"][direction]
+            mapping.setdefault(("networkpolicies", value["metadata"]["namespace"]), {"items": []})["items"].append(value)
+        return mapping
+
+    def test_readback_normalizes_empty_arrays_and_rejects_additive_policy_widening(self):
+        mapping = self.observation()
+        with patch.object(installer, "get_resource", side_effect=lambda resource, namespace=None: mapping[resource, namespace]):
+            installer.verify_network_policies(plan())
+            mapping["networkpolicies", "portainer"]["items"].append({"metadata": {"name": "unexpected-allow"}, "spec": {"egress": [{}]}})
+            with self.assertRaisesRegex(installer.Refused, "UNREVIEWED_NETWORK_POLICY"):
+                installer.verify_network_policies(plan())
+        mapping = self.observation()
+        mapping["networkpolicies", "kube-system"]["items"][0]["spec"]["egress"] = [{}]
+        with patch.object(installer, "get_resource", side_effect=lambda resource, namespace=None: mapping[resource, namespace]), self.assertRaises(installer.Refused):
+            installer.verify_network_policies(plan())
+
+    def test_pod_api_endpoints_must_use_the_private_node_address(self):
+        service = {"spec": {"type": "ClusterIP", "clusterIP": "10.121.0.1",
+                            "ports": [{"name": "https", "port": 443, "protocol": "TCP", "targetPort": 6443}]}}
+        endpoint = {"metadata": {"labels": {"kubernetes.io/service-name": "kubernetes"}}, "addressType": "IPv4",
+                    "ports": [{"name": "https", "port": 6443, "protocol": "TCP"}],
+                    "endpoints": [{"conditions": {"ready": True}, "addresses": [plan()["private_ip"]]}]}
+        def observe(resource, namespace):
+            return service if resource == "service/kubernetes" else {"items": [endpoint]}
+        with patch.object(installer, "get_resource", side_effect=observe):
+            installer.verify_api_service(plan())
+            for address in ("127.0.0.1", "192.0.2.10"):
+                endpoint["endpoints"][0]["addresses"] = [address]
+                with self.subTest(address=address), self.assertRaisesRegex(installer.Refused, "API_ENDPOINT"):
+                    installer.verify_api_service(plan())
 
 
 class FileAndLifecycleTests(unittest.TestCase):
@@ -245,7 +547,7 @@ class FileAndLifecycleTests(unittest.TestCase):
             source[kind] = path
             self.lock["k3s"]["platforms"]["arm64"][kind] = {"name": name, "size": len(value), "sha256": installer.digest(value)}
         self.facts = {"node": "onesa-test", "interface": "ens3", "observation": {"architecture": "aarch64"},
-                      "firewall": firewall(), "docker_subnets": ["172.18.0.0/16"], "sources": source}
+                      "firewall": firewall(), "native": {}, "policy_routes": {"-4": [], "-6": []}, "docker_subnets": ["172.18.0.0/16"], "sources": source}
         self.commands = []
 
     def shared_lifecycle(self):
@@ -271,7 +573,7 @@ class FileAndLifecycleTests(unittest.TestCase):
             stack.enter_context(patch.object(installer, "command", side_effect=fake_command))
             stack.enter_context(patch.object(installer, "run", side_effect=lambda args, **kwargs: (self.commands.append(args) or (0, ""))))
             stack.enter_context(patch.object(installer.preflight, "docker_snapshot", return_value={"count": 2, "fingerprint": "synthetic"}))
-            for function in ("apply_private_firewall", "verify_firewall", "verify_node", "verify_portainer"):
+            for function in ("apply_private_firewall", "ensure_native_guard", "verify_firewall", "verify_node", "verify_portainer"):
                 stack.enter_context(patch.object(installer, function))
             stack.enter_context(patch.object(installer, "verify_installation", return_value={"status": "SYNTHETIC_PASS"}))
             yield
@@ -286,6 +588,34 @@ class FileAndLifecycleTests(unittest.TestCase):
         self.facts["sources"]["binary"].symlink_to(self.facts["sources"]["airgap"])
         with self.assertRaisesRegex(installer.Refused, "FILE_INVALID"):
             installer.artifacts(directory, "aarch64", self.lock)
+
+    def test_native_guard_creation_pins_readback_and_never_overwrites_existing_table(self):
+        installer.STATE.mkdir(mode=0o700)
+        path = installer.STATE / "private-firewall.nft"
+        path.write_bytes(installer.native_guard_source(plan(), ["172.18.0.0/16"]))
+        path.chmod(0o600)
+        native = {"retained_guard": "a" * 64}
+        receipt = {"native_before": native, "docker_subnets": ["172.18.0.0/16"]}
+        with patch.object(installer, "snapshot_native_guards", return_value=native), \
+                patch.object(installer, "native_tables", return_value=[]), \
+                patch.object(installer, "native_digest", return_value="b" * 64), \
+                patch.object(installer, "save_receipt") as save, patch.object(installer, "command") as command:
+            installer.ensure_native_guard(plan(), receipt, first_install=True)
+        self.assertEqual(receipt["native_guard_sha256"], "b" * 64)
+        command.assert_called_once_with(["nft", "--file", str(path)])
+        save.assert_called_once_with(receipt)
+        with patch.object(installer, "snapshot_native_guards", return_value=native), \
+                patch.object(installer, "native_tables", return_value=[installer.NATIVE_TABLE]), \
+                patch.object(installer, "native_digest", return_value="c" * 64), \
+                patch.object(installer, "command") as command, \
+                self.assertRaisesRegex(installer.Refused, "PRIVATE_NATIVE_FIREWALL_DRIFT"):
+            installer.ensure_native_guard(plan(), receipt)
+        command.assert_not_called()
+        with patch.object(installer, "snapshot_native_guards", return_value={"retained_guard": "c" * 64}), \
+                patch.object(installer, "command") as command, \
+                self.assertRaisesRegex(installer.Refused, "EXISTING_NATIVE_FIREWALL_CHANGED"):
+            installer.ensure_native_guard(plan(), receipt)
+        command.assert_not_called()
 
     def test_artifact_replacement_after_open_cannot_supply_unverified_copy(self):
         original = self.facts["sources"]["binary"]
