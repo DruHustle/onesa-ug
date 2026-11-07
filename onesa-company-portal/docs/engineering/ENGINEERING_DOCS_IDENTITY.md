@@ -43,5 +43,6 @@ sign-out/revocation or expiry remains required; no Portal response claims to cle
 that cookie or retract an issued ID token. Current
 exact membership and external-email policy checks remain in force. Disabling shared
 identity does not silently reactivate the independent password for linked accounts.
-Migration 015 and these source changes require their own qualified release; no live
-account, approval, credential, provider or policy change is claimed here.
+Published Mobile migration 015 precedes Engineering account-link migration 016.
+The migrations and these source changes require their own qualified release; no
+live account, approval, credential, provider or policy change is claimed here.
