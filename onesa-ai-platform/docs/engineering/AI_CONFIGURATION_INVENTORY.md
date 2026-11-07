@@ -173,6 +173,22 @@ independently qualified supported serving option before promotion. No hosted
 generation, private configuration update or production acceptance is implied by
 this source candidate.
 
+The canonical owner application adapter exposes one opt-in configuration transition,
+`cloudflare-qwen3-to-gemma4`. It permits only the reviewed generation-name change
+and the existing separate staging-origin selection. Provider/account settings,
+credentials, embedding settings, identity settings and every enabled native
+feature must match the current and configuration-bound retained release. The
+literal foundation, Twins and Cybersecurity profiles keep their existing gates;
+identity activation cannot be combined with this generation transition.
+
+An original accepted source/configuration rollback remains mandatory, including
+the existing recovery and availability evidence. A rollback still selecting the
+old Qwen model is refused once its remaining catalog lifetime is less than the
+maximum 24-hour owner authorization interval. That date check is not an availability
+probe and does not establish a supported rollback after retirement. If no genuinely
+qualified supported source/configuration pair exists, promotion remains blocked.
+Their presence in source does not establish or change the installed configuration.
+
 ## Historical Cloudflare release profile — 2026-10-12
 
 The implemented model selectors include `ONESA_MODEL_BACKEND=cloudflare` and
