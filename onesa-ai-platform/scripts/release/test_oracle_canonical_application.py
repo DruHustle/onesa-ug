@@ -184,8 +184,13 @@ class CanonicalInstallTests(unittest.TestCase):
                 "foundation",
                 self.fixture.policy,
             )
+        with self.assertRaises(profiles.ProfileError):
+            profiles.validate_mode(
+                {**self.source.source, "component": "docs-internal"},
+                "foundation",
+                self.fixture.policy,
+            )
         for component in (
-            "docs-internal",
             "worker",
             "portal",
             "unknown",
@@ -404,6 +409,11 @@ class RetainedVerifierTests(unittest.TestCase):
         accepted = f.store.deploy(authorization)
         self.operation = accepted["record"]["parent"]
         self.context = context
+        self.qualification = qualification
+        self.authorization = authorization
+        self.authorization_envelope = f.store.get(authorization)
+        self.authorization_record = self.authorization_envelope["record"]
+        self.attempt = self.authorization_record["details"]["attempt_id"]
         self.consumer = {
             **f.binding,
             **SourceFixture(owner, product="platform", branch="main").source,
@@ -436,6 +446,25 @@ class RetainedVerifierTests(unittest.TestCase):
             self.consumer, self.retained, {"verifier_store": "not-the-original-store"}
         )
 
+    def signed_authorization(self, details):
+        """Issue malformed fixture bytes signed with the original synthetic key."""
+        envelope = copy.deepcopy(self.authorization_envelope)
+        envelope["record"] = {
+            **copy.deepcopy(self.authorization_record),
+            "details": details,
+        }
+        envelope["signature"]["value"] = base64.b64encode(
+            self.original_owner.signed_bytes(
+                self.fixture.root / "signing.pem",
+                self.fixture.root / "public.pem",
+                owner.canonical(envelope["record"]),
+            )
+        ).decode()
+        self.fixture.store.db.execute(
+            "UPDATE records SET envelope=? WHERE id=?",
+            (owner.canonical(envelope).decode(), self.authorization),
+        )
+
     def test_original_verifier_key_and_chain_are_read_without_new_authority_or_store_writes(
         self,
     ):
@@ -455,6 +484,9 @@ class RetainedVerifierTests(unittest.TestCase):
         records = self.inspect()
         self.assertEqual(records[0]["kind"], "production-verification")
         self.assertTrue(all(r["binding"] == self.retained["binding"] for r in records))
+        attempts = [r for r in records if r["kind"] == "authorization-attempt"]
+        self.assertEqual([r["id"] for r in attempts], [self.attempt])
+        self.assertEqual(attempts[0]["parent"], self.qualification)
         self.assertEqual(
             before,
             {
@@ -500,6 +532,88 @@ class RetainedVerifierTests(unittest.TestCase):
                     consumer_binding=self.consumer,
                 )
         self.fixture.store.revoke(self.context)
+        with self.assertRaises(runner.Refused):
+            self.inspect()
+
+    def test_original_attempt_revocation_refuses_an_accepted_dependency(self):
+        self.assertEqual(self.inspect()[0]["kind"], "production-verification")
+        self.fixture.store.revoke(self.attempt)
+        row = self.fixture.store.db.execute(
+            "SELECT kind,revoked FROM records WHERE id=?", (self.attempt,)
+        ).fetchone()
+        self.assertEqual(row, ("authorization-attempt", 1))
+        with self.assertRaisesRegex(runner.Refused, "MISSING_OR_REVOKED"):
+            self.inspect()
+
+    def test_missing_malformed_and_ancestor_attempt_references_are_refused(self):
+        original = self.authorization_record["details"]
+        cases = [
+            None,
+            [],
+            {k: v for k, v in original.items() if k != "attempt_id"},
+            {**original, "decision": "reject"},
+            {**original, "physical_hardware_authorized": True},
+            *(
+                {**original, "attempt_id": value}
+                for value in [None, [], "not-a-uuid", self.qualification]
+            ),
+        ]
+        for details in cases:
+            with self.subTest(details=details):
+                self.signed_authorization(details)
+                with self.assertRaises(ValueError):
+                    self.inspect()
+                self.signed_authorization(original)
+        self.fixture.store.db.execute("DELETE FROM records WHERE id=?", (self.attempt,))
+        with self.assertRaisesRegex(runner.Refused, "MISSING_OR_REVOKED"):
+            self.inspect()
+
+    def test_signed_companion_must_match_kind_source_parent_and_pending_decision(self):
+        binding = self.retained["binding"]
+        for change in [
+            {"kind": "authorization-companion"},
+            {"binding": {**binding, "candidate_commit": "f" * 40}},
+            {"parent": self.context},
+            {"details": {"decision": "approve"}},
+            {"details": []},
+        ]:
+            with self.subTest(change=change):
+                value = {
+                    "kind": "authorization-attempt",
+                    "binding": binding,
+                    "details": {"decision": "PENDING"},
+                    "parent": self.qualification,
+                    **change,
+                }
+                companion = self.fixture.store.put(**value)["record"]["id"]
+                self.signed_authorization(
+                    {**self.authorization_record["details"], "attempt_id": companion}
+                )
+                with self.assertRaises(runner.Refused):
+                    self.inspect()
+                self.signed_authorization(self.authorization_record["details"])
+
+    def test_attempt_signature_is_checked_and_unrelated_new_attempt_is_not_authority(
+        self,
+    ):
+        newer = self.fixture.store.put(
+            "authorization-attempt",
+            self.retained["binding"],
+            {"decision": "PENDING"},
+            parent=self.qualification,
+        )["record"]["id"]
+        with patch.object(
+            runner, "now", return_value=owner.timestamp() + dt.timedelta(days=2)
+        ):
+            records = self.inspect()
+        self.assertIn(self.attempt, {r["id"] for r in records})
+        self.assertNotIn(newer, {r["id"] for r in records})
+        envelope = self.fixture.store.get(self.attempt, historical=True)
+        envelope["record"]["details"]["decision"] = "changed without signature"
+        self.fixture.store.db.execute(
+            "UPDATE records SET envelope=? WHERE id=?",
+            (owner.canonical(envelope).decode(), self.attempt),
+        )
         with self.assertRaises(runner.Refused):
             self.inspect()
 

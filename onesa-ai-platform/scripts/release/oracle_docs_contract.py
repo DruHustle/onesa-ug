@@ -34,7 +34,7 @@ PRIVATE_SOURCE_CLOSURE = SOURCE_CLOSURE | frozenset(
 
 
 def source_identity(binding):
-    """Bind public canonical source without extending protected Docs authority."""
+    """Bind either independent Docs source; source identity confers no authority."""
     owner.require(owner.is_docs_binding(binding), "EXACT_DOCS_SOURCE_SCOPE_REQUIRED")
     if binding["repository"] == owner.CONSOLIDATED_REPOSITORY:
         return owner.docs_operational_source(binding)

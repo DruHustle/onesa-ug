@@ -378,6 +378,7 @@ def unpack(folder, build, destination, plan, binding=None):
 def source_metadata(binding):
     if binding.get("repository") != r.CANONICAL_REPOSITORY:
         return {}
+    r.frontend_component_scope(binding)
     source = r.portal_source_binding(binding)
     return {"onesaSource" + suffix: str(source[key]) for suffix, key in [
         ("Schema", "schema_version"), ("Repository", "repository"),

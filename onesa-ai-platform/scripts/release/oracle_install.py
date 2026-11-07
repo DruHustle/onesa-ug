@@ -57,6 +57,8 @@ PRIVATE_DOCS_ALLOWED = {
             "oracle_docs_internal_provider.py",
             "oracle_docs_internal_publish.py",
             "oracle_docs_internal_conditional.py",
+            "oracle_docs_internal_canonical.py",
+            "oracle_docs_internal_history.py",
             "oracle_cloudflare_transport_guard.cjs",
         ]
     },
@@ -131,10 +133,6 @@ def validate(bundle, manifest_pin, github, *, uid=0):
     require(
         set(m["files"]) == set(allowed),
         "Only reviewed verifier and component runner may be installed",
-    )
-    require(
-        not consolidated or not is_private_docs,
-        "Canonical protected Docs installation is not qualified",
     )
     policy_bytes = checked_file(bundle / "policy.json", m["policy_sha256"], uid)
     policy = json.loads(policy_bytes)
@@ -258,7 +256,7 @@ def validate(bundle, manifest_pin, github, *, uid=0):
     if is_docs:
         target = INSTALL_PARENT / (
             (
-                "ai-docs-internal-"
+                ("ai-docs-internal-canonical-" if consolidated else "ai-docs-internal-")
                 if is_private_docs
                 else "ai-docs-canonical-"
                 if consolidated
@@ -440,24 +438,28 @@ def validate_docs_policy(bundle, manifest, policy, files, target):
 
 def validate_private_docs_policy(bundle, manifest, policy, files, target):
     tool = policy["toolchain"]
+    consolidated = manifest["schema_version"] == 2
     require(
         set(tool)
-        == {
-            "source_commit",
-            "source_tree",
-            "source_sha256",
-            "cli_image",
-            "cli_image_security_path",
-            "cli_distribution_sha256",
-            "transport_guard_sha256",
-            "docs_project_id",
-            "cloudflare_account_id",
-            "protected_source_bundle_sha256",
-            "conditional_source_pins",
-            "native_source_pins",
-            "native_runtime_pins",
-            "native_producer_sha256",
-        },
+        == (
+            {
+                "source_commit",
+                "source_tree",
+                "source_sha256",
+                "cli_image",
+                "cli_image_security_path",
+                "cli_distribution_sha256",
+                "transport_guard_sha256",
+                "docs_project_id",
+                "cloudflare_account_id",
+                "protected_source_bundle_sha256",
+                "conditional_source_pins",
+                "native_source_pins",
+                "native_runtime_pins",
+                "native_producer_sha256",
+            }
+            | ({"source_binding", "source_archives"} if consolidated else set())
+        ),
         "Closed independent protected Docs toolchain required",
     )
     require(
@@ -515,11 +517,15 @@ def validate_private_docs_policy(bundle, manifest, policy, files, target):
         "scripts/release/evidence.py",
         "scripts/release/qualify.py",
     }
+    if consolidated:
+        conditional.add("scripts/release/oracle_docs_internal_canonical.py")
     require(
         tool["conditional_source_pins"] == {name: files[name] for name in conditional},
         "Existing conditional verifier must remain independently source-pinned",
     )
-    profile = policy["components"][manifest["repository"] + ":docs-internal"]
+    profile = policy["components"][
+        verifier.component_scope({**manifest, "component": "docs-internal"})
+    ]
     require(
         set(profile)
         == {
@@ -535,6 +541,7 @@ def validate_private_docs_policy(bundle, manifest, policy, files, target):
     )
     verifier.binding_valid(
         {
+            **(verifier.ai_operational_source(manifest) if consolidated else {}),
             "repository": manifest["repository"],
             "component": "docs-internal",
             "candidate_commit": manifest["candidate_commit"],

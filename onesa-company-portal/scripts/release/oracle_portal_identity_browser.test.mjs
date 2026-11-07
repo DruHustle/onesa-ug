@@ -318,3 +318,18 @@ test('CLI refuses caller PASS receipts and never prints input credentials or exc
     assert.match(result.stderr, /^[A-Z_]+\n$/); assert.ok(!result.stderr.includes('synthetic-private'));
   }
 });
+
+test('Canonical identity and integration observations retain full source and artifact bindings',()=>{
+ for(const component of ['identity','identity-acceptance']){
+  const value=request();value.scope=component==='identity'?'account':'integrated';
+  Object.assign(value.binding,{repository:'DruHustle/onesa-ug',schema_version:2,repository_id:1444746154,product:'portal',source_path:'onesa-company-portal',product_source_tree:'9'.repeat(40),branch:'main'},{component,source_sha256:'c'.repeat(64),build_sha256:'d'.repeat(64),artifact_digest:'sha256:'+'e'.repeat(64),configuration_sha256:{staging:'1'.repeat(64),production:'2'.repeat(64)},target_environment:'production'});
+  assert.equal(validateRequest(value).scope,value.scope);
+  for(const [key,replacement] of Object.entries({schema_version:1,repository_id:'1444746154',product:'robot',source_path:'onesa-robot',product_source_tree:'bad',branch:'dev',component:'frontend',target_environment:'staging',release_authorized:true})){
+   const changed=structuredClone(value);changed.binding[key]=replacement;
+   assert.throws(()=>validateRequest(changed));
+  }
+  for(const key of ['schema_version','repository_id','product','source_path','product_source_tree','branch','source_sha256','configuration_sha256']){
+   const changed=structuredClone(value);delete changed.binding[key];assert.throws(()=>validateRequest(changed));
+  }
+ }
+});

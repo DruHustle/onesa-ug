@@ -25,9 +25,62 @@ class WorkflowTests(unittest.TestCase):
                 {"unexpected.yaml", "other.yml"},
             )
 
+    def test_protected_docs_metadata_has_only_read_permissions_and_fixed_data_output(
+        self,
+    ):
+        value = workflows.protected_docs_metadata()
+        self.assertEqual(set(value["on"]), {"workflow_dispatch"})
+        self.assertEqual(
+            value["permissions"],
+            {"contents": "read", "actions": "read", "pull-requests": "read"},
+        )
+        job = value["jobs"]["metadata"]
+        for boundary in (
+            "github.repository_id == '1444746154'",
+            "github.ref == 'refs/heads/main'",
+            "github.actor == 'DruHustle'",
+            "github.triggering_actor == 'DruHustle'",
+            "github.run_attempt == 1",
+        ):
+            self.assertIn(boundary, job["if"])
+        self.assertEqual(job["steps"][0], workflows.hosted_policy_step())
+        self.assertFalse(value["concurrency"]["cancel-in-progress"])
+        self.assertEqual(
+            value["on"]["workflow_dispatch"]["inputs"]["action"]["default"], "revoke"
+        )
+        uploads = [
+            s["with"]
+            for s in job["steps"]
+            if s.get("uses") == workflows.UPLOAD_ARTIFACT
+        ]
+        self.assertEqual(
+            uploads,
+            [
+                {
+                    "name": "onesa-protected-docs-metadata",
+                    "path": "${{ runner.temp }}/protected-docs-metadata/record.json",
+                    "if-no-files-found": "error",
+                    "retention-days": 7,
+                }
+            ],
+        )
+        text = workflows.yaml.dump(value)
+        for forbidden in (
+            "secrets.",
+            "${{ inputs.",
+            "deploy --",
+            "signing.pem",
+            "build:internal",
+            "self-hosted",
+            "contents: write",
+            "actions: write",
+        ):
+            self.assertNotIn(forbidden, text)
+
+
     def test_generated_files_match_reviewed_inputs(self):
         expected = workflows.rendered()
-        self.assertEqual(len(expected), 12)
+        self.assertEqual(len(expected), 13)
         for name, text in expected.items():
             self.assertEqual((ROOT / ".github/workflows" / name).read_text(), text)
 

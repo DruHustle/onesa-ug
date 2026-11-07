@@ -1538,7 +1538,7 @@ def verify_invocation(
     records = []
     visited = set()
 
-    def record(identifier, kind=None, historical=False):
+    def signed_record(identifier, kind=None, historical=False):
         require(
             identifier not in visited and len(visited) < 12,
             "SIGNED_RECORD_CHAIN_CYCLE_OR_BOUND",
@@ -1615,8 +1615,35 @@ def verify_invocation(
             "SIGNED_RECORD_EXPIRED",
         )
         records.append(r)
-        if r["parent"]:
-            record(r["parent"], historical=historical)
+        return r
+
+    def record(identifier, kind=None, historical=False):
+        r = signed_record(identifier, kind, historical)
+        parent = record(r["parent"], historical=historical) if r["parent"] else None
+        if dependency and r["kind"] == "authorization":
+            details = r["details"]
+            require(
+                parent
+                and parent["kind"] == "qualification"
+                and isinstance(details, dict)
+                and details.get("decision") == "approve"
+                and details.get("physical_hardware_authorized") is False
+                and isinstance(details.get("attempt_id"), str),
+                "RETAINED_AUTHORIZATION_COMPANION_REQUIRED",
+            )
+            # The attempt is a signed sibling of this authorization, not an
+            # ancestor. Read it under the same original custody and revocation
+            # checks, then bind it to the already verified qualification. Do not
+            # traverse that shared parent again or execute the old issuer.
+            attempt = signed_record(
+                details["attempt_id"], "authorization-attempt", historical
+            )
+            require(
+                attempt["parent"] == parent["id"]
+                and isinstance(attempt["details"], dict)
+                and attempt["details"].get("decision") == "PENDING",
+                "RETAINED_AUTHORIZATION_COMPANION_MISMATCH",
+            )
         return r
 
     try:

@@ -1,5 +1,13 @@
 # Onesa AI Platform
 
+The protected Docs source candidate supports its own canonical repository binding
+and manual count/hash metadata custody. It retains the existing private project,
+approved document provenance, independent native observer and original release
+journals. Unresolved original outcomes still block publication. The new metadata
+workflow carries no private document bytes or deployment authority; commissioning,
+hosted qualification and a controller cutover remain separate requirements. See
+[repository migration](../docs/repository-migration.md) for the source boundary.
+
 The shared-account source candidate adds **Continue with Onesa**, one central
 account/access hub, explicit existing-account linking and MFA-protected cross-product
 administration. It remains disabled until the existing owner-controlled staging and

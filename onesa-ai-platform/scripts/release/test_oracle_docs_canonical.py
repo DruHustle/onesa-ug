@@ -174,13 +174,13 @@ class CanonicalDocsInstallTests(unittest.TestCase):
                 app.fixture.policy,
             )
 
-    def test_canonical_protected_installer_remains_explicitly_unsupported(self):
+    def test_canonical_protected_installer_cannot_relabel_a_legacy_policy(self):
         private = private_install_fixture.PrivateInstallTests()
         application.private_fixture_setup(private)
         self.addCleanup(private.doCleanups)
         private.manifest.update(self.source.source)
         private.seal()
-        with self.assertRaisesRegex(owner.Rejected, "Canonical protected Docs"):
+        with self.assertRaises(owner.Rejected):
             private.validate()
 
 
