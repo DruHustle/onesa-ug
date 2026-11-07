@@ -303,6 +303,7 @@ class CanonicalRuntimeTests(InstallFixture):
         self.binding["source_sha256"] = self.manifest["tool_source_sha256"]
         self.plan["source_binding"] = copy.deepcopy(self.source.source)
         self.plan["source_archive"] = str(self.bundle / "tool-source.tar")
+        self.plan["transport_guard"] = str(self.target / "runners/vercel_transport_guard.cjs")
         self.plan["bindings"]["frontend"] = {**self.binding, "component": "frontend"}
         path = Path(self.plan["build_manifests"]["backend"])
         native = json.loads(path.read_bytes())
@@ -353,6 +354,19 @@ class CanonicalRuntimeTests(InstallFixture):
             self.policy["toolchain"]["files"]["runners/hosted_probe.mjs"] = pin
             self.plan["tool_sha256"][str(path)] = pin
             with self.assertRaisesRegex(ValueError, "product source"):
+                runner.canonical_custody(self.plan, self.binding, self.policy, self.target / "oracle_owner.py")
+
+    def test_genuine_helper_pins_cannot_select_a_different_private_transport_guard(self):
+        self.materialize()
+        self.plan["tool_sha256"] = {str(self.target / name): pin for name, pin in self.pins.items()}
+        other = self.root / "different-guard.cjs"
+        other.write_bytes((self.target / "runners/vercel_transport_guard.cjs").read_bytes())
+        other.chmod(0o600)
+        with patch.object(runner, "CANONICAL_INSTALL_PARENT", self.parent), \
+             patch.object(runner, "__file__", str(self.target / "runners/oracle_drone.py")):
+            runner.canonical_custody(self.plan, self.binding, self.policy, self.target / "oracle_owner.py")
+            self.plan["transport_guard"] = str(other)
+            with self.assertRaisesRegex(ValueError, "selected transport guard"):
                 runner.canonical_custody(self.plan, self.binding, self.policy, self.target / "oracle_owner.py")
 
     def test_canonical_invocation_selects_the_separate_fixed_plan(self):

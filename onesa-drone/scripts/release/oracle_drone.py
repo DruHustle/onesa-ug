@@ -237,6 +237,8 @@ def canonical_custody(plan, binding, policy, verifier):
             and all(isinstance(pin, str) and re.fullmatch(r"[a-f0-9]{64}", pin) for pin in files.values())
             and plan["tool_sha256"] == {str(root / name): pin for name, pin in files.items()},
             "Canonical Drone complete helper custody required")
+    require(plan.get("transport_guard") == str(root / "runners/vercel_transport_guard.cjs"),
+            "Canonical Drone selected transport guard differs from immutable installation")
     for name, pin in files.items():
         require(digest(private(root / name)) == pin, "Canonical Drone immutable helper changed")
     names = {CANONICAL_REPOSITORY + ":drone:" + component for component in DRONE_COMPONENTS}

@@ -57,6 +57,9 @@ Canonical runtime invocations select
 `/etc/onesa/oracle-drone-canonical-release.json`. Its `source_binding` and both
 component bindings must agree. `tool_sha256` contains every immutable installed
 executable at its exact path, including rollback and identity helpers. The
+selected `transport_guard` must be that installation's literal
+`runners/vercel_transport_guard.cjs` path; genuine helper pins cannot authorize
+another selected private file, even if its bytes are identical. The
 private native build manifests retain canonical repository/path/root/subtree
 identity and their nonauthorizing simulation flags. The source tar and CI ZIPs
 are checked again by the runner and owner at their respective boundaries.
@@ -93,6 +96,13 @@ PostgreSQL-only skips in the local SQLite environment. All 36 Node packaging,
 transport and identity cases and 13 frontend units passed, as did Ruff,
 TypeScript/build, the actual built-output package audit, generated-workflow
 verification and publication hygiene.
+
+The first hosted consumer run exposed a synthetic-owner fixture omission:
+real owner custody correctly refused Actions. The fixture now supplies its
+explicit synthetic owner identity, and a separate adverse case asserts the real
+refusal before API access. Independent source review also found and closed the
+selected transport-guard path gap described above. The final 139 release cases
+pass with `GITHUB_ACTIONS=true`, with Ruff and publication hygiene still clean.
 
 The Playwright CDN returned truncated archives. The same pinned Chrome for
 Testing 156.0.8078.4 was obtained from Google's official distribution and its
