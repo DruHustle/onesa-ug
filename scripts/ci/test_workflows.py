@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -156,7 +157,37 @@ class WorkflowTests(unittest.TestCase):
                     self.assertEqual(len(original["steps"]), len(adapted["steps"]))
                     for before, after in zip(original["steps"], adapted["steps"]):
                         for field in ("if", "continue-on-error", "timeout-minutes"):
-                            self.assertEqual(before.get(field), after.get(field))
+                            expected = before.get(field)
+                            if (
+                                key == "platform" and name == "tls-acceptance"
+                                and before is original["steps"][-1] and field == "if"
+                            ):
+                                expected = "always() && hashFiles('onesa-ai-platform/data/acceptance-005/staging.env') != ''"
+                            self.assertEqual(expected, after.get(field))
+
+    def test_tls_cleanup_guard_resolves_only_the_product_environment(self):
+        source = workflows.load(
+            ROOT / PRODUCTS["platform"] / ".github/workflows" / SOURCE_WORKFLOWS["platform"]
+        )
+        original = copy.deepcopy(source)
+        cleanup = workflows.adapt(source, "platform")["jobs"]["tls-acceptance"]["steps"][-1]
+        match = re.fullmatch(r"always\(\) && hashFiles\('([^']+)'\) != ''", cleanup["if"])
+        self.assertIsNotNone(match, "Teardown must retain always() and its file-existence guard")
+        self.assertEqual(cleanup["run"], original["jobs"]["tls-acceptance"]["steps"][-1]["run"])
+        self.assertEqual(cleanup["working-directory"], PRODUCTS["platform"])
+        self.assertEqual(source, original, "The product workflow input must not be rewritten")
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            misplaced = workspace / "data/acceptance-005/staging.env"
+            misplaced.parent.mkdir(parents=True)
+            misplaced.write_text("synthetic root configuration\n")
+            self.assertEqual(list(workspace.glob(match.group(1))), [])
+            actual = workspace / PRODUCTS["platform"] / "data/acceptance-005/staging.env"
+            actual.parent.mkdir(parents=True)
+            actual.write_text("synthetic product configuration\n")
+            self.assertEqual(list(workspace.glob(match.group(1))), [actual])
+            actual.unlink()
+            self.assertEqual(list(workspace.glob(match.group(1))), [])
 
     def test_no_precheckout_step_uses_missing_product_directory(self):
         for key, product in PRODUCTS.items():
