@@ -39,6 +39,48 @@ class FrontendIdentityScopeTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "REVIEWED_SOURCE_CHANGED"):
                 identity.reviewed_delta(old, new)
 
+    def test_original_and_final_diagnostic_closures_are_coherent_not_individual_pin_choices(self):
+        old, current = self.inventories()
+        original = dict(current)
+        for name, checksum in identity.DIAGNOSTIC_VARIANTS[1]:
+            if checksum is None:
+                original.pop(name)
+            else:
+                original[name] = checksum
+        baseline = dict(original)
+        baseline[identity.PREFIX + "src/features/account/account.tsx"] = "1" * 64
+        self.assertEqual(identity.reviewed_delta(baseline, original),
+                         [identity.PREFIX + "src/features/account/account.tsx"])
+        self.assertIn(identity.PREFIX + "scripts/drone-product-diagnostics.mjs",
+                      identity.reviewed_delta(original, current))
+        for name, previous in identity.DIAGNOSTIC_VARIANTS[1]:
+            mixed = dict(current)
+            if previous is None:
+                mixed.pop(name)
+            else:
+                mixed[name] = previous
+            with self.subTest(path=name), self.assertRaisesRegex(ValueError, "REVIEWED_SOURCE_CHANGED"):
+                identity.reviewed_delta(old, mixed)
+        for name in identity.DIAGNOSTIC_PATHS[2:]:
+            for value in [current[name], None]:
+                with self.subTest(extra=name, value=value), self.assertRaisesRegex(ValueError, "REVIEWED_SOURCE_CHANGED"):
+                    identity.reviewed_delta(baseline, original | {name: value})
+
+    def test_diagnostic_member_mutation_deletion_or_unreviewed_addition_is_refused(self):
+        for name in identity.DIAGNOSTIC_PATHS:
+            for delete in [False, True]:
+                old, new = self.inventories()
+                if delete:
+                    del new[name]
+                else:
+                    new[name] = "e" * 64
+                with self.subTest(path=name, delete=delete), self.assertRaisesRegex(ValueError, "REVIEWED_SOURCE_CHANGED"):
+                    identity.reviewed_delta(old, new)
+        old, new = self.inventories()
+        new[identity.PREFIX + "scripts/drone-product-extra.mjs"] = "e" * 64
+        with self.assertRaisesRegex(ValueError, "CHANGED_SCOPE"):
+            identity.reviewed_delta(old, new)
+
     def test_unrelated_hero_or_runtime_changes_and_deletions_are_rejected(self):
         for path in ["src/components/home-hero.tsx", "src/app/layout.tsx", "next.config.ts"]:
             old, new = self.inventories()
