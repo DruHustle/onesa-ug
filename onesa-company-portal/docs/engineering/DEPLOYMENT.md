@@ -87,6 +87,32 @@ Repository code or an unsigned JSON file supplies no release authority.
 The protected guide contains installation, qualification and recovery instructions;
 source implementation alone does not establish commissioning or deployment.
 
+The frontend installer also accepts an explicit canonical Portal schema-2 profile.
+It binds `DruHustle/onesa-ug` by numeric repository ID, exact current-main commit,
+root tree and `onesa-company-portal` subtree. The separately pinned component
+policy retains all three original source-verification ZIPs; each existing CI
+recheck verifies their private installed bytes against the current hosted run.
+This does not turn an unsigned source proof into release authority. The original
+schema-1 path, historical baseline pins and signed records remain unchanged.
+
+The canonical frontend build uses the exact product subtree archive while binding
+the full root source identity. Its provider root is fixed to
+`onesa-company-portal/onesa-company-portal-frontend`; complete source identity is
+checked in build, preview and provider observations. Optional Git integration is
+not inferred from an explicit prebuilt CLI deployment. Existing Git-triggered
+workflows and provider bindings need their own cutover readback.
+
+Source qualification and normal promotion produce the reviewed exact-main input
+required by this installer. Actual hosted preview qualification follows immutable
+installation and separate owner commissioning, and remains mandatory before
+runtime production authorization. API, worker, scanner and identity controllers
+are not enabled by the canonical frontend profile. Their retained live snapshots,
+readiness, backup and rollback checks remain in force. The canonical record
+namespace is separate; its lifecycle resource remains the existing Portal
+frontend, preserving earlier holds and revocations. Before changing controllers,
+the owner must inspect retained operations and commission new custody; this source
+change does not deactivate, replace or relabel an existing installation.
+
 The independent shared-scanner adapter is new source. Its installation profile
 retains the existing verifier and separate owner commissioning. It requires exact
 source, image bytes and current security evidence, isolated streaming/access and

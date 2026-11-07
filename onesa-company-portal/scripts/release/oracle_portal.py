@@ -57,6 +57,53 @@ def canonical(value):
     ).encode()
 
 
+CANONICAL_REPOSITORY = "DruHustle/onesa-ug"
+PORTAL_SOURCE_FIELDS = {
+    "schema_version", "repository", "repository_id", "product", "source_path",
+    "candidate_commit", "source_tree", "product_source_tree", "branch",
+}
+
+
+def portal_source_binding(binding):
+    # The credential-free tar reader never loads an owner module or private Store.
+    require(isinstance(binding, dict) and PORTAL_SOURCE_FIELDS <= set(binding),
+            "COMPLETE_CANONICAL_PORTAL_SOURCE_REQUIRED")
+    source = {key: binding[key] for key in PORTAL_SOURCE_FIELDS}
+    require(type(source["schema_version"]) is int and source["schema_version"] == 2
+            and source["repository"] == CANONICAL_REPOSITORY
+            and type(source["repository_id"]) is int and source["repository_id"] == 1444746154
+            and source["product"] == "portal" and source["source_path"] == "onesa-company-portal"
+            and source["branch"] == "main" and binding.get("component", "frontend") == "frontend"
+            and all(isinstance(source[key], str) and re.fullmatch(r"[a-f0-9]{40}", source[key])
+                    for key in ("candidate_commit", "source_tree", "product_source_tree")),
+            "CANONICAL_PORTAL_FRONTEND_SOURCE_SCOPE")
+    return source
+
+
+def frontend_component_scope(binding):
+    if binding.get("repository") == CANONICAL_REPOSITORY:
+        portal_source_binding(binding)
+        return CANONICAL_REPOSITORY + ":portal:frontend"
+    require(binding["repository"] == "DruHustle/onesa-company-portal"
+            and binding["component"] == "frontend", "PORTAL_FRONTEND_COMPONENT_SCOPE")
+    return binding["repository"] + ":frontend"
+
+
+def frontend_provider_root(binding=None):
+    if binding and binding.get("repository") == CANONICAL_REPOSITORY:
+        portal_source_binding(binding)
+        return "onesa-company-portal/onesa-company-portal-frontend"
+    return "onesa-company-portal-frontend"
+
+
+def frontend_source_identity(binding):
+    fields = {"repository", "candidate_commit", "source_tree", "source_sha256"}
+    if binding.get("repository") == CANONICAL_REPOSITORY:
+        portal_source_binding(binding)
+        fields |= PORTAL_SOURCE_FIELDS | {"component", "target_environment"}
+    return {key: binding[key] for key in fields}
+
+
 def sha(path):
     with Path(path).open("rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
@@ -587,8 +634,11 @@ def source_inventory(archive_path, binding):
             b"tree " + str(len(value)).encode() + b"\0" + value
         ).digest()
 
+    expected_tree = binding["source_tree"]
+    if binding.get("repository") == CANONICAL_REPOSITORY:
+        expected_tree = portal_source_binding(binding)["product_source_tree"]
     require(
-        git_tree(tree).hex() == binding["source_tree"],
+        git_tree(tree).hex() == expected_tree,
         "ARCHIVE_DIFFERS_FROM_QUALIFIED_GIT_TREE",
     )
     require(
@@ -650,10 +700,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def verify_toolchain(plan, binding):
+    scope = frontend_component_scope(binding)
     require(
-        binding["repository"] == "DruHustle/onesa-company-portal"
-        and binding["component"] == "frontend"
-        and binding["target_environment"] == "production",
+        binding["target_environment"] == "production",
         "PORTAL_FRONTEND_COMPONENT_SCOPE",
     )
     store = private(Path(plan["verifier_store"]), directory=True)
@@ -677,9 +726,7 @@ def verify_toolchain(plan, binding):
         "COMMISSIONED_TOOLCHAIN_CHANGED",
     )
     policy = read(store / "policy.json")
-    profile = policy["components"].get(
-        binding["repository"] + ":" + binding["component"]
-    )
+    profile = policy["components"].get(scope)
     require(
         profile and profile["qualification_attempt_limit"] == 1,
         "COMPONENT_NOT_COMMISSIONED_WITH_ONE_CONTEXT",
@@ -701,6 +748,14 @@ def verify_toolchain(plan, binding):
         and installation["source"] == policy["toolchain"]["source_commit"],
         "INSTALLED_SOURCE_IDENTITY",
     )
+    if binding["repository"] == CANONICAL_REPOSITORY:
+        source = portal_source_binding(binding)
+        require(policy.get("schema_version") == 2
+                and policy["toolchain"].get("source_binding") == source
+                and installation.get("source_binding") == source
+                and policy["toolchain"]["source_tree"] == binding["source_tree"]
+                and policy["toolchain"]["source_sha256"] == binding["source_sha256"],
+                "CANONICAL_COMPONENT_SOURCE_NOT_COMMISSIONED")
     for name, pin in installation["files"].items():
         p = private(VERIFIER.parent / name)
         require(sha(p) == pin, "INSTALLED_EXECUTABLE_CHANGED")
@@ -730,6 +785,9 @@ def validate_frontend_builds(folder, binding, plan):
         for name in ["archive", "receipt"]:
             require(Path(build[name]).name == build[name], "BUILD_RECEIPT_PATH_SCOPE")
         receipt = read(folder / build["receipt"])
+        if binding.get("repository") == CANONICAL_REPOSITORY:
+            require(frontend_source_identity(receipt["binding"]) == frontend_source_identity(binding),
+                    "CANONICAL_BUILD_SOURCE_IDENTITY")
         require(
             sha(private(folder / build["receipt"])) == build["receipt_sha256"]
             and receipt["binding"]["candidate_commit"] == binding["candidate_commit"]
@@ -865,15 +923,15 @@ PUBLIC_SERVER_KEYS = {
 
 
 def component_folder(binding):
+    frontend_component_scope(binding)
     require(
-        binding["repository"] == "DruHustle/onesa-company-portal"
-        and binding["component"] == "frontend"
-        and re.fullmatch("[a-f0-9]{40}", binding["candidate_commit"]),
+        re.fullmatch("[a-f0-9]{40}", binding["candidate_commit"]),
         "PORTAL_FRONTEND_COMPONENT_SCOPE",
     )
-    return private(
-        ROOT / "frontend" / "artifacts" / binding["candidate_commit"], directory=True
-    )
+    directory = ROOT / "frontend"
+    if binding["repository"] == CANONICAL_REPOSITORY:
+        directory /= "canonical-portal"
+    return private(directory / "artifacts" / binding["candidate_commit"], directory=True)
 
 
 PRESENTATION_PROFILE = "presentation-v1"
@@ -978,6 +1036,8 @@ def probe_source_files(files, selected=PRESENTATION_PROFILE):
 def configuration_value(binding, plan, env):
     require(env in ENV, "FRONTEND_CONFIGURATION_SCOPE")
     return {
+        **({"source_binding": portal_source_binding(binding)}
+           if binding.get("repository") == CANONICAL_REPOSITORY else {}),
         **(
             {
                 "qualification_profile": qualification_profile(plan),
@@ -1713,7 +1773,7 @@ def preflight(binding):
     retained_services(plan)
     import oracle_portal_frontend as frontend
 
-    project = frontend.protection(plan)
+    project = frontend.protection(plan, binding)
     require(
         project["targets"]["production"]["id"]
         == plan["retained_frontend"]["deployment_id"],
