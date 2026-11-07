@@ -73,6 +73,9 @@ class InstallFixture(unittest.TestCase):
             self.source.repack(name)
         self.github = self.source.github
         self.github.api = self.api
+        # The disposable GitHub API fixture has no owner credentials. Keep its
+        # synthetic identity explicit; the real Actions refusal is tested below.
+        self.github.owner = lambda: owner.OWNER
         for name, encoded in self.source.archives.items():
             self.put("source-artifacts/" + name + ".zip", base64.b64decode(encoded))
         self.target = self.parent / ("drone-canonical-" + tree)
@@ -152,6 +155,14 @@ class InstallFixture(unittest.TestCase):
 
 
 class CanonicalInstallationTests(InstallFixture):
+    def test_real_owner_refuses_actions_before_any_api_request(self):
+        github = owner.GitHub("synthetic-owner-refusal")
+        with (patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}),
+              patch.object(github, "api") as api):
+            with self.assertRaisesRegex(owner.Rejected, "Owner custody cannot run in Actions"):
+                github.owner()
+            api.assert_not_called()
+
     def test_exact_main_source_archive_and_bootstrap_blobs_are_independent_proofs(self):
         manifest, target, payloads, evidence = self.validate()
         self.assertNotEqual(manifest["source_tree"], manifest["product_source_tree"])
@@ -401,6 +412,7 @@ class CanonicalStoreTests(unittest.TestCase):
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         self.source = source = SourceFixture(owner, product="drone", branch="main")
+        source.github.owner = fixture.ci.owner
         fixture.binding.update(source.source, component="backend")
         native_profile = next(iter(fixture.policy["components"].values()))
         native_profile["qualification_attempt_limit"] = 1
