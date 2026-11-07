@@ -53,6 +53,37 @@ permission and deadline checks. The bridge never exposes mission, hardware, arbi
 HTTP, file, shell, or administrative tools. Standard input/output carry only bounded
 JSON-RPC lines; no network listener or remote OAuth server is introduced.
 
+The version 1.1 context adapter additionally accepts private
+`ONESA_MCP_ALLOWED_RESOURCES` and `ONESA_MCP_ALLOWED_PROMPTS` lists. Both default
+empty and are independent of the tool allowlist. Resource entries are the exact
+URI `onesa://models/default` or `onesa://knowledge/documents/<canonical-uuid>`;
+at most eight resources may be enrolled. Document enrollment permits only the
+existing caller-owned API read: it cannot grant another user's document. List
+and read operations revalidate current identity and document access, preserve
+model/embedding metadata, and refuse incomplete, malformed or oversized responses.
+Deleted documents and revoked sessions cannot reuse a cached result. Discovery
+does not enumerate other documents or grant access to URLs or local files.
+
+The only prompt is `summarize-text`, with one required `text` argument of at most
+4,000 characters. It returns a user-role prompt containing separately JSON-encoded
+untrusted input. It does not execute instructions in that input, call a tool, or
+invoke an inference provider. Prompt discovery and retrieval both reauthenticate.
+Resources/prompts are advertised only when explicitly enrolled; no subscriptions,
+list-change notifications or pagination are advertised. Each context operation has
+one 25-second budget, including authentication and all enrolled resource reads.
+Cancellation closes the owned HTTP operation; there are no retries or fallbacks.
+
+Version 1.2 keeps pipe input responsive while requests are in flight. At most four
+requests may execute concurrently, each with a 25-second total deadline. Further
+requests receive a bounded busy error before contacting the API; ping and lifecycle
+notifications remain responsive. A valid `notifications/cancelled` targets only its
+outstanding request ID and produces no response for that request. Invalid, unknown
+or completed IDs cannot cancel other work, and initialization cannot be cancelled.
+Cancellation closes local HTTP work; it cannot reverse a remote record that was
+already committed and must never trigger replay. Oversized lines are drained in
+full before another frame is accepted. EOF drains already accepted bounded work;
+process cancellation closes every outstanding task.
+
 This is an opt-in software candidate, with synthetic fixtures only. Hosted activation,
 dedicated credentials, provider/privacy processing approval and external MCP-client
 acceptance require the existing qualified release process. No model is downloaded.
@@ -84,7 +115,65 @@ application URL, account, token or package is required. They are not production 
 Optional MQTT credentials remain in separate private operator configuration/environment,
 outside browsers and this Settings inventory. See [Digital Twins](DIGITAL_TWINS.md).
 
-## Current supported Cloudflare release profile — 2026-10-12
+## Cloudflare generation transition candidate — 2026-11-06
+
+Cloudflare's [2026-11-05 retirement notice](https://developers.cloudflare.com/changelog/post/2026-11-05-planned-model-deprecations/)
+lists `@cf/qwen/qwen3-30b-a3b-fp8` for removal on **2026-11-20**. Its
+[2026-11-06 revision](https://github.com/cloudflare/cloudflare-docs/commit/a5a271f2fc6de7009ef4eec2af393ada7c8a3269)
+moved the originally published 2026-11-15 date to 2026-11-20 and states that
+requests will then fail with HTTP `410 Gone` and error code `5028`. The model
+remains in the historical acceptance records below; those records do not qualify
+a replacement or establish the current private runtime configuration.
+
+The source candidate now accepts only
+`ONESA_MODEL_NAME=@cf/google/gemma-4-26b-a4b-it` when
+`ONESA_MODEL_BACKEND=cloudflare`. The existing account URL, private credential
+fields, mock/Ollama/vLLM selectors and local-model defaults are unchanged. The
+retired Qwen model and unreviewed alternatives fail configuration validation;
+there is no automatic model substitution or mock fallback. The bounded staging
+context diagnostic selects the same candidate and still cannot deploy, change
+configuration or establish hosted qualification.
+
+The [Gemma 4 catalog](https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/)
+documents native `/ai/run/` message requests, `stream: true`, SSE output,
+`stream_options`, bounded `max_tokens` (deprecated but supported), and temperature
+from 0 to 2. Its separate synchronous JSON response is not the application's
+streaming contract. The adapter retains native SSE, strict textual choice deltas,
+usage and terminal handling, output/deadline bounds and cancellation. It does not
+coerce numeric output, expose reasoning fields or accept synchronous JSON as a
+completed stream. Catalog compatibility and synthetic tests do not prove an
+actual model's streamed response or language quality.
+
+At this review, Cloudflare lists Gemma 4 at **$0.10 per million input tokens and
+$0.30 per million output tokens**, compared with **$0.45/$3.20** for the suggested
+[Qwen 3.8 alternative](https://developers.cloudflare.com/workers-ai/models/qwen3.8-27b/).
+These published rates explain the candidate selection, not a spending approval.
+The existing free-only policy remains in force; the
+[Workers AI allowance and pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/)
+must be checked before activation. Review the linked model terms and existing
+privacy/content requirements during the normal hosted qualification.
+
+`@cf/qwen/qwen3-embedding-0.6b` is not named in this retirement notice. Its native
+1024-dimensional response, reviewed normalized MRL256 prefix, vector index and
+`cf-qwen3-mrl256-v1` namespace remain unchanged. No embedding migration, reindex,
+speech model, image model or new provider fallback is part of this transition.
+
+Before any runtime change, use the authorized owner path to verify the actual
+serving source, configured model, credential validity and available allowance
+without recording secret values. Changing the generation selector is an explicit
+release configuration change, not a silent startup repair. Qualify exact source
+and that configuration through `dev → staging → main`, with existing real
+streaming/Stop, persisted history and recall, retrieval, ownership/isolation,
+readiness, privacy and rollback checks. Preserve embeddings and existing records.
+Install the accepted source and model override together: the old source rejects
+Gemma 4, and this candidate rejects the old Qwen override. Do not change either
+side independently on the serving runtime.
+The previous model is not a viable rollback after its removal; retain an
+independently qualified supported serving option before promotion. No hosted
+generation, private configuration update or production acceptance is implied by
+this source candidate.
+
+## Historical Cloudflare release profile — 2026-10-12
 
 The implemented model selectors include `ONESA_MODEL_BACKEND=cloudflare` and
 `ONESA_EMBEDDING_BACKEND=cloudflare`. The release preflight now accepts these real

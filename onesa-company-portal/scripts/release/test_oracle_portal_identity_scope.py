@@ -30,6 +30,8 @@ class FrontendIdentityScopeTests(unittest.TestCase):
 
     def test_account_proxy_or_manifest_changes_require_an_explicit_new_review(self):
         for name in ["src/features/account/account.tsx", "src/lib/domains.ts",
+                     "src/features/engineering/sign-in.tsx", "src/lib/account-return.ts",
+                     "src/lib/engineering-sign-in-errors.ts",
                      "src/app/api/v1/[...path]/route.ts", "package.json", "package-lock.json",
                      "public/models/nvidia/manifest.json"]:
             old, new = self.inventories()

@@ -1,5 +1,119 @@
 # Separate application builds and tests
 
+## ARM64 runtime candidate build
+
+`infra/oracle/runtime_builds/build.py` rebuilds a pinned, containerd-only K3s
+candidate in an unprivileged Linux ARM64 Docker builder. The lock binds upstream
+archives, module locks, compiler packages, runtime payload and expected executable
+hashes. Before executing a builder or vendor client, it also requires the private
+inputs pinned by `vendor-custody.lock.json`. That manifest covers every regular
+vendor runtime file: copied userspace tools, their configured Buildroot dependency
+closure, the separately built CNI and its embedded Go module graph, and the
+attributed `check-config` script. The three replaced executables, generated metadata
+and empty extraction lock have explicit, checked dispositions.
+
+The gate retains original source archives, notices, upstream recipes, configuration,
+patches and provenance in `vendor-custody.tar.gz`. It rejects missing or altered
+bytes, symlink/file-type/path substitutions and incomplete coverage, then reads back
+every archive member before accepting the bundle. Original package archives remain
+opaque; the gate never extracts or executes them. Source archives and operational
+evidence stay in private custody; only hashes and public provenance are tracked.
+
+The build also collects original rebuilt-component dependency notices and fails on
+missing notices, changed sources or different output bytes. At least 24 GiB of free local
+space is required; source/module downloads need HTTPS access. The final builds
+and vendor-client extraction run without network access.
+
+From this product directory:
+
+```sh
+python3 -m unittest discover -s infra/oracle/runtime_builds -p 'test_*.py'
+python3 infra/oracle/runtime_builds/build.py \
+  --output /absolute/new/runtime-build \
+  --cache /absolute/private/runtime-module-cache \
+  --vendor-custody /absolute/private/vendor-custody-inputs
+```
+
+The custody gate can be checked independently without Docker, network access or a
+runtime rebuild. The output directory must be new:
+
+```sh
+python3 infra/oracle/runtime_builds/custody.py \
+  --inputs /absolute/private/vendor-custody-inputs \
+  --output /absolute/new/vendor-custody-check
+```
+
+Arrange original inputs using the manifest's relative paths and verify their hashes;
+do not substitute reconstructed notices or grant a missing source an exception.
+The bundle preserves the 43 configured target packages conservatively, including
+the pinned Buildroot and K3s-root archives and overlay recipes. CNI custody follows
+its own embedded revision, Go version, module versions and Flannel overlay, not the
+separately rebuilt K3s module graph. Its recorded dirty build is not claimed to have
+been reproduced bit for bit. The `check-config` custody includes its exact K3s source
+and the explicitly attributed Moby/LXC sources. Source/notice coverage is not a legal
+completeness certification; redistribution review remains separate.
+
+An existing exact builder can be supplied with `--builder-image sha256:...`;
+architecture and compiler-package hashes are still checked. `--retained-inputs`
+accepts a directory containing the three component `.archive` files,
+`vendor-k3s-arm64`, and the two chart filenames from the lock. Their original
+hashes remain mandatory. Preserve `build-result.json`, `build.log`, both locks,
+source inputs, `licenses/` and the hash-bound `vendor-custody.tar.gz` with the
+candidate. The custody archive is separate from the runtime payload, preserving
+the reviewed payload and wrapper hashes. A wrapper alone is not a complete retained
+build result. The custody-only command records archive/readback results separately;
+it does not certify a rebuild or change an earlier build record.
+
+The recipe runs selected upstream tests. Its containerd test-only fixture separates
+the file-size and line-size limits and adds explicit oversized-line rejection;
+production Go source hashes and module locks must remain unchanged. These checks
+do not cover a running cluster or all upstream tests. The result remains
+`BUILT_NOT_INSTALL_QUALIFIED`: no installation, publication, owner-policy update or
+deployment authorization occurs. Security assessment, independent review, disabled
+embedded registry and vendor add-ons, real workload/network/storage acceptance,
+Portainer compatibility and VM recovery remain separate requirements.
+
+## Dependency-patched Kubernetes component builds
+
+`infra/oracle/component_builds/build.py` prepares local ARM64 runtime images for
+the reviewed upstream CoreDNS, Metrics Server and Local Path Provisioner sources.
+Its lock binds the exact upstream archive, original and resolved Go module locks, Go builder,
+certificate image, patch versions and reproducible binary hashes. It runs upstream
+race tests and retains source/module license notices in non-root scratch images.
+The builder uses no provider credentials or Docker socket inside the build container,
+and does not install, publish, modify a cluster or grant deployment authority.
+
+Run the archive-custody refusal tests with:
+
+```sh
+python3 -m unittest discover -s scripts -p test_oracle_component_sources.py
+```
+
+After retaining the exact builder and certificate image from `sources.lock.json`,
+run a component with a new absolute private output directory:
+
+```sh
+python3 infra/oracle/component_builds/build.py coredns --output /absolute/private/new-dns-build
+python3 infra/oracle/component_builds/build.py metrics-server --output /absolute/private/new-metrics-build
+python3 infra/oracle/component_builds/build.py local-path-provisioner --output /absolute/private/new-storage-build
+```
+
+`--source-archive` accepts a retained archive only when its SHA-256 matches the lock.
+`--cache` may reuse a dedicated absolute public Go-module cache. Existing output
+directories are refused. Only the three exact CoreDNS document aliases listed in
+the source lock may be materialized as regular copies of their reviewed in-archive
+files. All other links, link chains and traversal remain refused; no archive link
+is created on disk. Upstream and resolved module hashes, package checksums,
+binary bytes and actual runtime version must all match; a changed graph requires
+reviewed source updates. Local logs, images and build results remain private.
+
+Scan the resulting exact image IDs with the reviewed vulnerability tool and database.
+Retain raw findings and package-level applicability evidence; do not suppress a
+whole advisory because another image was reviewed. These builds do not change
+`k3s_release_lock.json` or the installed component manifests. Actual cluster DNS,
+storage retention/recovery, metrics TLS and resource behavior must be qualified
+before adopting an image. Command-line version/help checks are not that acceptance.
+
 ## NVIDIA reference asset gallery
 
 The product index and Drone product page contain three browser derivatives from
@@ -849,6 +963,50 @@ configuration, keys, receipts and timers, and never rerun the bootstrap installe
 Observe the next normal scheduled backup rather than triggering a production backup
 to test cleanup.
 
+## Private PostgreSQL target preparation
+
+Run the credential-free target and backup regressions from the Portal directory:
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_oracle_database_target.py'
+python3 -m unittest discover -s scripts -p 'test_oracle_backup*.py'
+python3 -m unittest discover -s scripts -p 'test_oracle_database_snapshots.py'
+node --test scripts/test_oracle_backup_payload.mjs
+```
+
+The target tests use synthetic environment files, resource observations and a public
+certificate fixture. They reject changed source/role/database/TLS settings, unequal
+API/worker credentials, unreviewed runtime hashes, duplicate keys, unsafe file custody,
+mutable/wrong-architecture images, recreated volumes, changed bridge IDs, exposed
+ports, foreign mounts, unsafe HBA rules and an unenrolled primary. They also exercise
+the actual backup failure cleanup with a temporary CA and prove that local inspection
+and execution select the same local Docker daemon. No test connects to a provider,
+starts a database, sends email or changes application data.
+
+`infra/oracle/operations/database_target.py` has only read-only `render` and `check`
+actions. Rendering reads the ignored extension from the complete qualified source
+tree and validates existing resource/TLS custody before emitting a separate Compose
+model. It never invokes Compose or initializes a cluster. A missing optional profile
+retains the existing Neon behavior; a present invalid profile fails closed. The
+profile contains digests and target identities, not database passwords. Runtime
+files and the CA remain root-private; server certificate/key/HBA mounts are
+root-owned, readable by the pinned PostgreSQL group and inaccessible to others.
+
+The ordinary Compose model has no new active service or top-level network/volume.
+The rendered model requires its explicit `container-primary` profile, immutable
+ARM64 image, existing external volume/bridges and private read-only TLS mounts.
+Its direct PostgreSQL entrypoint deliberately cannot bootstrap an empty volume.
+Backup encryption, off-instance readback, existing retention and restore quarantine
+are retained; no second application writer or automatic recovery actuator is added.
+
+Real Docker Compose rendering/startup, initialized-volume ownership, certificate
+hostname/expiry, PostgreSQL major-version compatibility, restart persistence,
+restricted-role readiness, snapshot/restore and private-network reachability still
+require the approved isolated host and protected procedure. Unit success is not
+live database acceptance. An eventual cutover must stop all writers, preserve a
+verified recovery snapshot, coordinate both private runtime files and the backup
+binding, and retain the old primary fenced until recovery is resolved.
+
 ## Operations notification regression
 
 ### Bounded process recovery
@@ -1096,13 +1254,20 @@ escaping, trusted-origin buttons, malformed-link rejection, embedded owner artwo
 secret-free preheaders, stable Resend retry bodies and actual text/HTML/inline-image
 SMTP MIME. They send no email. `tests/mail-claim.test.ts` uses the guarded disposable
 PostgreSQL database in the full backend suite to exercise real row locks, competing
-workers, commit/rollback, interrupted claims and legacy/versioned retries. A first
-claim persists the presentation before any provider request; existing attempted jobs
-stay plain. No schema migration, remote font, image tracker or external dependency
-is needed. Browser previews establish layout only; inbox/client acceptance and the
-independently released worker need genuine hosted evidence. Retain the deployed
-renderer for versioned retries during upgrades or rollback; never reset attempts or
-change provider keys to obtain a new design.
+workers, commit/rollback, interrupted claims and immutable encrypted request custody.
+It checks byte-identical replay through a new client/transport, sender/recipient/key
+drift, legacy-attempt reconciliation, expiry, clock rollback, independent queued
+jobs, and SMTP ambiguity. `tests/mail-worker.test.ts` exercises the actual worker
+against the guarded disposable database with a synthetic provider callback: that
+callback verifies committed custody through an independent database read before
+returning an ambiguous outcome. The recovered worker claim replays exactly the same
+bytes/key, preserves retry cooldown and marks acceptance only after a valid receipt.
+All delivery is synthetic; no provider credential, mailbox or production database
+is used. Run the ordinary Node 24 backend `npm test`, lint, typecheck and build.
+No schema migration, remote font, tracker or new dependency is needed. Hosted worker
+qualification and inbox/client acceptance remain separate release requirements.
+Custody-aware workers must be retained when rolling back other components; reconcile
+legacy or ambiguous attempts without resetting counts, bytes or provider keys.
 
 The maintained `test:engineering-sign-in` renderer suite checks that no MFA field
 appears before credential proof, enrolled accounts receive the factor step and
@@ -1317,6 +1482,23 @@ An explicitly supplied `ONESA_TEST_CHROMIUM_EXECUTABLE` with
 `ONESA_TEST_BROWSERS=chromium` supports a supplemental local engine when the pinned
 browser download is unavailable. That run is labeled supplemental and never
 substitutes for native three-engine CI or hosted end-to-end acceptance.
+The Engineering sign-in renderer also accepts `ONESA_TEST_CHROMIUM_EXECUTABLE`
+and reports the actual browser version and supplemental status; its default
+continues to use the pinned Chromium installation.
+`ONESA_SIGNIN_BROWSER=firefox` or `webkit` selects that pinned engine explicitly
+for additional local coverage; it does not change the default Chromium CI gate.
+
+Account renderer regressions keep unconnected catalog entries out of registration,
+access requests and launch links, including for administrators. The current
+three-product claims remain unchanged. Docs can return from central sign-in only
+to a validated local Engineering interaction; a fresh sign-in request uses the
+existing password/MFA flow. Linking an existing Docs identity requires an unchecked
+opt-in with its password or confirmed emailed-link proof. Email-link requests do
+not perform that link. If MFA enrollment is required, the same validated Docs return
+survives setup and routes through fresh central login; enrollment creates no session.
+Local renderer fixtures verify these controls without mail,
+database or provider requests; backend approval, identity-binding and concurrency
+tests remain separate.
 
 The feature remains off until complete owner-held issuer/client configuration,
 additive migrations, restricted grants, exact frontend callback allowlisting and
@@ -1365,6 +1547,12 @@ simulation workspace and Robot's read-only simulator, then observes permission
 and global-session revocation. Each product's own complete workflow qualification
 remains required; this combined check neither starts physical operations nor
 substitutes read-only identity results for simulation or AI workflow tests.
+Those product journeys must reuse the already verified central browser session:
+only the matching account continuation or an automatic protocol continuation is
+accepted. A password/MFA prompt or central login POST fails the SSO observation;
+the helper never re-enters fixture credentials to conceal lost session recognition.
+Separate denial observations still require an unapproved product to refuse access,
+and explicit protected-action MFA remains a distinct observation.
 
 The owner-held fixtures contain an existing owner credential, two operation-unique
 synthetic email aliases/passwords, an approved Drone workspace and a TLS IMAP inbox
@@ -1394,11 +1582,16 @@ Portal API and worker. Installation compares the complete backend source closure
 including authentication, migrations, dependency locks and build inputs, with the
 reviewed current-main tree. The existing narrow API and worker profiles retain
 their original rejection of authentication and migration changes. The new profile
-admits only the checksummed 012-to-014 additive migration, grants the existing
+admits only the checksummed 012, 014 or published Mobile 015 transition to 016, grants the existing
 restricted runtime role without creating or rotating credentials, and keeps schema
-014 during the staged compatible fallback and candidate reapplication. The fallback
+016 during the staged compatible fallback and candidate reapplication. Published
+Mobile migration 015 retains its exact bytes; migration 016 adds immutable Docs
+account links and linked-grant revocation while preserving
+existing credentials and approvals. The fallback
 uses the exact candidate image with identity disabled; historical images are not
-qualified merely because they start or can read the additive schema.
+qualified merely because they start or can read the additive schema. An unshipped
+Engineering migration recorded under number 015 fails the exact baseline checks;
+the adapter never infers its equivalence or rewrites migration history.
 
 Its restore observation reads the actual encrypted off-instance backup and escrow,
 compares every restored table with the original snapshot manifest, rehearses the
@@ -1443,3 +1636,24 @@ real signature verification and revocation, interruption without retry, atomic
 migration failure, checksum drift, idempotence, credential preservation, recovered
 archive integrity and read-only production inspection. These tests use disposable
 fixtures and do not issue live release records.
+
+
+### Optional Onesa Mobile identity regression
+
+The Mobile product extension adds `tests/identity-mobile-policy.test.ts` and
+Mobile cases to `tests/onesa-identity.test.ts`. With an isolated loopback
+`TEST_DATABASE_URL` whose database name ends `_test`, run from the backend:
+
+```sh
+node --import tsx --import ./tests/local-environment.ts --test --test-concurrency=1 tests/identity-mobile-policy.test.ts tests/onesa-identity.test.ts
+```
+
+The suite runs all migrations, including 015, against disposable data. It verifies
+pending customer defaults, all Mobile role constraints, staff MFA at login and
+continuation, live revocation, absence of implicit client enablement and unchanged
+three-product assertions for existing consumers. The frontend domain tests also
+cover the optional fourth exact callback and rejection of absent/extra callbacks.
+Run backend typecheck/build/lint/contracts and frontend API generation/typecheck/
+lint with these changes. The Onesa Mobile CI workflow adds an isolated PostgreSQL
+service for the complete focused identity suite; local PGlite results do not replace
+PostgreSQL concurrency or separate hosted release qualification.

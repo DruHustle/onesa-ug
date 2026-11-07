@@ -1,11 +1,35 @@
 # Changelog
 
+- Add a build-only ARM64 K3s runtime recipe with pinned source archives, dependency
+  locks, compiler packages and executable hashes. Retain upstream license notices
+  and selected runtime tests, with bounded archive extraction and source-integrity
+  guards. Require a hash-pinned, readback-verified source/notice bundle covering
+  copied vendor userspace, CNI, `check-config`, recipes and configured dependency
+  closure before any builder execution. Preserve the reviewed payload and wrapper
+  bytes; custody is not legal-completeness or vendor rebuild certification.
+  The recipe grants no installation or deployment authority; cluster,
+  workload and recovery qualification remain separate.
+
 - Add a versioned Onesa email presentation for new account and operations messages,
   retaining plain alternatives and original bytes for earlier delivery attempts.
   Mobile/dark rendering and delivery-version regressions are covered locally;
   deployment and mailbox-client acceptance remain separate release requirements.
 
 ## Unreleased — Shared sending domain
+
+- Prepare immutable encrypted Portal mail custody before the first external send.
+  Persist exact Resend JSON or SMTP MIME and bind sender, recipient, provider and
+  credentials across recovery. Hold changed or legacy attempted requests for
+  reconciliation; SMTP ambiguity cannot be safely replayed automatically.
+  Real PostgreSQL and worker regressions cover commit-before-send, competing
+  claims, byte-identical retry, cooldown and expiry. No runtime change is claimed;
+  rollout requires a quiesced, reconciled queue and a compatible retained worker.
+
+- Add pinned, local-only ARM64 builds for dependency-patched CoreDNS, Metrics Server
+  and Local Path Provisioner, retaining upstream race tests and license notices.
+  Source/module/binary hashes and non-root runtime version checks bind each build.
+  This does not change the Kubernetes installer, install a cluster or establish
+  DNS, metrics, storage or workload acceptance.
 
 - Authorize `it-infrastructure@onesa.eu` for infrastructure notifications. Keep
   its `OPERATIONS_NOTIFY_EMAIL` setting separate from application mail. Keep
@@ -47,6 +71,16 @@
   common product naming policy, existing Zoho reply inbox and safe reconciliation
   of pending messages before a deployed sender/domain change. No DNS change,
   mailbox creation, external email or live rollout is implied by this source.
+
+## Unreleased — Optional Onesa Mobile identity
+
+- Add an explicitly configured fourth confidential product client and exact callback
+  support. Existing three-client configuration and legacy assertion vocabularies remain
+  compatible; an unconfigured Mobile client cannot accept access requests or sign-in.
+- Add Mobile customer/staff roles with pending customer defaults and MFA for all
+  staff. Migration 015 changes constraints only and grants no access.
+- Update generated contracts, account/admin choices and identity regressions. This
+  is source preparation; no deployed migration, client provision or access grant is claimed.
 
 ## Unreleased — Identity deployment and hosted observation integration
 
